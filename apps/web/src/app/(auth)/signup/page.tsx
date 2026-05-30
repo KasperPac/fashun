@@ -29,10 +29,16 @@ export default function SignupPage() {
       return
     }
 
-    const { error: signupError } = await supabase.auth.signUp({ email, password })
+    const { data: signupData, error: signupError } = await supabase.auth.signUp({ email, password })
     if (signupError) {
       setError(signupError.message)
       setLoading(false)
+      return
+    }
+
+    // If session is null, Supabase sent a confirmation email — tell the user
+    if (!signupData.session) {
+      router.push('/signup/confirm')
       return
     }
 

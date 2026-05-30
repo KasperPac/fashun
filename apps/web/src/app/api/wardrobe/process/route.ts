@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
-import { removeBackground, PhotoroomError } from '@/lib/photoroom'
 import { tagImage } from '@/lib/tagger'
 import { z } from 'zod'
 import { randomUUID } from 'crypto'
@@ -16,26 +15,22 @@ export async function POST(req: Request) {
   const parsed = schema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: 'Invalid image' }, { status: 400 })
 
-  // 1. Remove background via Photoroom
-  let processedBase64: string
-  try {
-    processedBase64 = await removeBackground(parsed.data.imageBase64)
-  } catch (err) {
-    if (err instanceof PhotoroomError) {
-      return NextResponse.json({ error: 'bg_removal_failed' }, { status: 502 })
-    }
-    throw err
-  }
+  // 1. Use original image (Photoroom bg removal disabled — add PHOTOROOM_API_KEY to enable)
+  const processedBase64 = parsed.data.imageBase64
 
   // 2. Tag with Claude Vision (soft failure — returns fallback on error)
   const tags = await tagImage(processedBase64)
 
-  // 3. Upload processed PNG to Supabase Storage
-  const filename = `${user.id}/${randomUUID()}.png`
+  // 3. Upload to Supabase Storage
+  // Detect format from base64 header (JPEG starts with /9j, PNG with iVBOR)
+  const isJpeg = processedBase64.startsWith('/9j') || processedBase64.startsWith('data:image/jpeg')
+  const ext = isJpeg ? 'jpg' : 'png'
+  const contentType = isJpeg ? 'image/jpeg' : 'image/png'
+  const filename = `${user.id}/${randomUUID()}.${ext}`
   const imageBytes = Buffer.from(processedBase64, 'base64')
   const { error: uploadError } = await supabase.storage
     .from('wardrobe-images')
-    .upload(filename, imageBytes, { contentType: 'image/png', upsert: false })
+    .upload(filename, imageBytes, { contentType, upsert: false })
 
   if (uploadError) {
     return NextResponse.json({ error: 'Upload failed' }, { status: 500 })
