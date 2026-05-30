@@ -1,4 +1,4 @@
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+-- gen_random_uuid() is built into Postgres 13+ — no extension needed
 
 -- User profiles (extends auth.users)
 CREATE TABLE public.users (
@@ -15,7 +15,7 @@ CREATE TABLE public.users (
 );
 
 CREATE TABLE public.wardrobe_items (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   ownership TEXT NOT NULL CHECK (ownership IN ('owned', 'wishlist')),
   category TEXT NOT NULL CHECK (category IN ('tops','bottoms','shoes','outerwear','bags','accessories')),
@@ -33,7 +33,7 @@ CREATE TABLE public.wardrobe_items (
 );
 
 CREATE TABLE public.outfits (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   name TEXT,
   item_ids UUID[] DEFAULT '{}',
@@ -48,7 +48,7 @@ CREATE TABLE public.outfits (
 );
 
 CREATE TABLE public.invite_codes (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   code TEXT UNIQUE NOT NULL,
   used_by UUID REFERENCES public.users(id),
   used_at TIMESTAMPTZ,
