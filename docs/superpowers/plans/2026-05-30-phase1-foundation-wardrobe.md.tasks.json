@@ -1,0 +1,75 @@
+{
+  "planPath": "docs/superpowers/plans/2026-05-30-phase1-foundation-wardrobe.md",
+  "tasks": [
+    {
+      "id": 1,
+      "subject": "Task 0: Monorepo Scaffold",
+      "status": "pending",
+      "description": "**Goal:** Working Turborepo monorepo with Next.js web app, Expo mobile app, and shared types package.\n\n**Files:**\n- Create: `turbo.json`, `package.json`, `pnpm-workspace.yaml`\n- Create: `apps/web/` (Next.js 15)\n- Create: `apps/mobile/` (Expo SDK 52)\n- Create: `packages/shared/src/types.ts`, `palette.ts`, `index.ts`\n\n**Acceptance Criteria:**\n- [ ] `pnpm dev` starts both apps\n- [ ] shared types importable with no TS errors\n- [ ] `pnpm build` completes\n\n```json:metadata\n{\"files\":[\"turbo.json\",\"package.json\",\"apps/web/\",\"apps/mobile/\",\"packages/shared/src/types.ts\",\"packages/shared/src/palette.ts\"],\"verifyCommand\":\"pnpm --filter shared build\",\"acceptanceCriteria\":[\"pnpm dev starts both apps\",\"shared types importable\",\"pnpm build completes\"]}\n```"
+    },
+    {
+      "id": 2,
+      "subject": "Task 1: Supabase Schema & Storage",
+      "status": "pending",
+      "blockedBy": [1],
+      "description": "**Goal:** Supabase project with DB schema, RLS, storage buckets, generated types.\n\n**Files:**\n- Create: `supabase/migrations/001_initial_schema.sql`\n- Create: `supabase/migrations/002_rls_policies.sql`\n- Create: `supabase/migrations/003_storage_buckets.sql`\n- Create: `packages/shared/src/database.types.ts`\n\n**Acceptance Criteria:**\n- [ ] 4 tables created\n- [ ] RLS enabled\n- [ ] 2 storage buckets\n- [ ] TS types generated\n\n```json:metadata\n{\"files\":[\"supabase/migrations/001_initial_schema.sql\",\"supabase/migrations/002_rls_policies.sql\",\"supabase/migrations/003_storage_buckets.sql\",\"packages/shared/src/database.types.ts\"],\"verifyCommand\":\"supabase db diff\",\"acceptanceCriteria\":[\"4 tables created\",\"RLS enabled\",\"2 storage buckets\",\"TS types generated\"]}\n```"
+    },
+    {
+      "id": 3,
+      "subject": "Task 2: Auth — Invite-Only Signup",
+      "status": "pending",
+      "blockedBy": [2],
+      "description": "**Goal:** Signup/login gated by invite code with protected routes.\n\n**Acceptance Criteria:**\n- [ ] Signup rejects invalid invite codes\n- [ ] Login redirects correctly\n- [ ] Protected routes enforce auth\n\n```json:metadata\n{\"files\":[\"apps/web/src/lib/supabase/server.ts\",\"apps/web/src/middleware.ts\",\"apps/web/src/app/(auth)/signup/page.tsx\",\"apps/web/src/app/api/auth/invite/route.ts\"],\"verifyCommand\":\"pnpm --filter web test src/app/api/auth/invite/\",\"acceptanceCriteria\":[\"Invite validation works\",\"Signup creates user\",\"Protected routes redirect\"]}\n```"
+    },
+    {
+      "id": 4,
+      "subject": "Task 3: Onboarding Shell + Skin Tone Analysis",
+      "status": "pending",
+      "blockedBy": [3],
+      "description": "**Goal:** 5-step onboarding wizard with skin tone selfie and colour season assignment.\n\n**Acceptance Criteria:**\n- [ ] 9 palette unit tests pass\n- [ ] Skin tone API returns valid season\n- [ ] DB updated with season\n\n```json:metadata\n{\"files\":[\"apps/web/src/app/(app)/onboarding/layout.tsx\",\"apps/web/src/app/api/onboarding/skin-tone/route.ts\",\"packages/shared/src/palette.test.ts\"],\"verifyCommand\":\"pnpm --filter shared test\",\"acceptanceCriteria\":[\"9 palette tests pass\",\"Skin tone API works\",\"DB updated\"]}\n```"
+    },
+    {
+      "id": 5,
+      "subject": "Task 4: Onboarding — Style Prefs & Budgets",
+      "status": "pending",
+      "blockedBy": [4],
+      "description": "**Goal:** Style archetype multi-select and per-category budget sliders saved to profile.\n\n```json:metadata\n{\"files\":[\"apps/web/src/components/StyleGrid.tsx\",\"apps/web/src/components/BudgetSliders.tsx\",\"apps/web/src/app/api/onboarding/profile/route.ts\"],\"verifyCommand\":\"pnpm --filter web test src/app/api/onboarding/profile/\",\"acceptanceCriteria\":[\"3 profile tests pass\",\"Style and budget saved to DB\"]}\n```"
+    },
+    {
+      "id": 6,
+      "subject": "Task 5: Wardrobe Screen",
+      "status": "pending",
+      "blockedBy": [5],
+      "description": "**Goal:** Wardrobe page with category carousel, owned/wishlist toggle, grid, delete.\n\n```json:metadata\n{\"files\":[\"apps/web/src/app/(app)/wardrobe/page.tsx\",\"apps/web/src/app/api/wardrobe/route.ts\",\"apps/web/src/components/wardrobe/CategoryCarousel.tsx\",\"apps/web/src/components/wardrobe/WardrobeGrid.tsx\"],\"verifyCommand\":\"pnpm --filter web test src/app/api/wardrobe/\",\"acceptanceCriteria\":[\"Wardrobe API tests pass\",\"Category filter works\",\"Owned/wishlist toggle works\"]}\n```"
+    },
+    {
+      "id": 7,
+      "subject": "Task 6: Add-Item Processing Pipeline (API)",
+      "status": "pending",
+      "blockedBy": [6],
+      "description": "**Goal:** /api/wardrobe/process — BG removal + Claude Vision tagging + Supabase Storage upload.\n\n```json:metadata\n{\"files\":[\"apps/web/src/app/api/wardrobe/process/route.ts\",\"apps/web/src/lib/photoroom.ts\",\"apps/web/src/lib/tagger.ts\"],\"verifyCommand\":\"pnpm --filter web test src/lib/tagger.test.ts\",\"acceptanceCriteria\":[\"2 tagger tests pass\",\"BG removal works\",\"Claude Vision tags item\",\"Upload to Supabase Storage\"]}\n```"
+    },
+    {
+      "id": 8,
+      "subject": "Task 7: Add Item — Web Upload",
+      "status": "pending",
+      "blockedBy": [7],
+      "description": "**Goal:** Drag-and-drop upload with processing state, tag confirmation, and save.\n\n```json:metadata\n{\"files\":[\"apps/web/src/app/(app)/wardrobe/add/page.tsx\",\"apps/web/src/components/wardrobe/AddItemForm.tsx\"],\"verifyCommand\":\"manual test\",\"acceptanceCriteria\":[\"Drag and drop works\",\"Processing state shown\",\"Tags editable\",\"Save redirects to wardrobe\"]}\n```"
+    },
+    {
+      "id": 9,
+      "subject": "Task 8: Add Item — Mobile Camera Flow",
+      "status": "pending",
+      "blockedBy": [7],
+      "description": "**Goal:** Expo camera captures photo, sends through pipeline, confirms and saves.\n\n```json:metadata\n{\"files\":[\"apps/mobile/app/(tabs)/wardrobe/add.tsx\",\"apps/mobile/components/CameraCapture.tsx\",\"apps/mobile/lib/api.ts\"],\"verifyCommand\":\"manual simulator test\",\"acceptanceCriteria\":[\"Camera permission requested\",\"Photo processed\",\"Item saved to wardrobe\"]}\n```"
+    },
+    {
+      "id": 10,
+      "subject": "Task 9: Save from Store (In-App Wishlist)",
+      "status": "pending",
+      "blockedBy": [6],
+      "description": "**Goal:** Save button adds product to Wishlist. Placeholder shop page for testing.\n\n```json:metadata\n{\"files\":[\"apps/web/src/components/wardrobe/SaveToWardrobeButton.tsx\",\"apps/web/src/app/(app)/shop/page.tsx\"],\"verifyCommand\":\"manual test\",\"acceptanceCriteria\":[\"Item saved as wishlist\",\"Appears in Wishlist tab\",\"Button shows Saved after success\"]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-05-30T00:00:00Z"
+}
