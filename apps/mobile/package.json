@@ -4,6 +4,7 @@
   "main": "index.ts",
   "dependencies": {
     "@fashun/shared": "workspace:*",
+    "@react-native-async-storage/async-storage": "^3.1.0",
     "@supabase/supabase-js": "^2.43.0",
     "expo": "~56.0.8",
     "expo-status-bar": "~56.0.4",
