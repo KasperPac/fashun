@@ -47,9 +47,18 @@ No explanation, no markdown, just the JSON object.`,
   try {
     const textContent = message.content[0]
     if (textContent.type !== 'text') throw new Error('unexpected response type')
-    const raw = JSON.parse(textContent.text.trim())
+    // Strip markdown code fences if Claude wraps the JSON
+    const cleaned = textContent.text
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/\s*```\s*$/i, '')
+      .trim()
+    // Extract first JSON object in case there's surrounding text
+    const jsonMatch = cleaned.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) throw new Error('no JSON found')
+    const raw = JSON.parse(jsonMatch[0])
     undertone = raw.undertone
     depth = raw.depth
+    if (!undertone || !depth) throw new Error('missing fields')
   } catch {
     return NextResponse.json({ error: 'Could not analyse skin tone' }, { status: 422 })
   }
