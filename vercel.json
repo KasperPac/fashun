@@ -1,6 +1,6 @@
 {
-  "installCommand": "npx --yes pnpm@11.5.0 install",
-  "buildCommand": "npx --yes pnpm@11.5.0 turbo run build --filter=web",
-  "outputDirectory": "apps/web/.next",
+  "installCommand": "cd ../.. && npx --yes pnpm@11.5.0 install",
+  "buildCommand": "cd ../.. && npx --yes pnpm@11.5.0 turbo run build --filter=web",
+  "outputDirectory": ".next",
   "framework": "nextjs"
 }
