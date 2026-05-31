@@ -23,13 +23,15 @@ export default function LoginPage() {
     }
 
     // Fetch user profile to determine redirect
-    const { data: profile } = await supabase
+    // Cast needed: TS 5.9 over-narrows .single() to never with complex generics
+    type ProfileRow = { onboarding_completed_at: string | null } | null
+    const { data: profileRaw } = await supabase
       .from('users')
       .select('onboarding_completed_at')
       .eq('id', data.user.id)
-      .single()
+      .single() as unknown as { data: ProfileRow; error: unknown }
 
-    router.push(profile?.onboarding_completed_at ? '/wardrobe' : '/onboarding')
+    router.push(profileRaw?.onboarding_completed_at ? '/wardrobe' : '/onboarding')
   }
 
   return (
