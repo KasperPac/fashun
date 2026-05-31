@@ -49,14 +49,18 @@ export function isColourInSeason(hex: string, season: ColourSeason): boolean {
   const isWarmEarthyHue = h <= 95 || h >= 300
   const isCoolSoftHue = h >= 90 && h <= 310
   const isCoolBlueHue = h >= 100 && h <= 280
+  // Note: spans 280–360, deliberately overlapping the warm-hue ranges (H≥300)
+  // used only for winter deep cool crimsons/purples
   const isCoolMagentaHue = h >= 280 && h <= 360
 
   switch (season) {
     case 'spring':
       return isWarmClearHue && s > 20 && l >= 40 && l <= 92
+        && !(h >= 335 && s > 60 && l < 60)   // exclude crimsons (winter reds)
 
     case 'autumn':
       return isWarmEarthyHue && s >= 15 && s <= 90 && l >= 15 && l <= 65
+        && !(h >= 335 && s > 60 && l < 60)   // exclude crimsons (winter reds)
 
     case 'summer':
       return isCoolSoftHue && s >= 5 && s <= 72 && l >= 35 && l <= 95
@@ -68,6 +72,9 @@ export function isColourInSeason(hex: string, season: ColourSeason): boolean {
              (s < 10 && l > 85) ||
              ((h <= 5 || h >= 340) && l <= 40 && s >= 30) ||
              (s < 15 && l >= 50 && l <= 80)
+
+    default:
+      return false
   }
 }
 
@@ -107,8 +114,9 @@ const SEASON_SWATCHES: Record<ColourSeason, { swatches: string[]; avoid: string[
 }
 
 /** Returns curated swatch and avoid-colour hex arrays for a given season */
-export function getSeasonSwatches(season: ColourSeason) {
-  return SEASON_SWATCHES[season]
+export function getSeasonSwatches(season: ColourSeason): { swatches: string[]; avoid: string[] } {
+  const { swatches, avoid } = SEASON_SWATCHES[season]
+  return { swatches: [...swatches], avoid: [...avoid] }
 }
 
 /** One-line descriptions for the palette page hero card */

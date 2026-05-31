@@ -20,6 +20,10 @@ describe('hexToHsl', () => {
   it('converts black', () => {
     expect(hexToHsl('#000000')).toEqual([0, 0, 0])
   })
+  it('throws on invalid hex input', () => {
+    expect(() => hexToHsl('red')).toThrow('hexToHsl: expected 6-digit hex')
+    expect(() => hexToHsl('#fff')).toThrow('hexToHsl: expected 6-digit hex')
+  })
 })
 
 describe('isColourInSeason', () => {
@@ -44,6 +48,11 @@ describe('isColourInSeason', () => {
     expect(isColourInSeason('#000000', 'winter')).toBe(true)  // black (near-black rule)
     expect(isColourInSeason('#FFFFFF', 'winter')).toBe(true)  // white (near-white rule)
     expect(isColourInSeason('#C8A96E', 'winter')).toBe(false) // camel — too warm
+  })
+  it('does not match crimson to spring or autumn', () => {
+    expect(isColourInSeason('#DC143C', 'winter')).toBe(true)
+    expect(isColourInSeason('#DC143C', 'spring')).toBe(false)
+    expect(isColourInSeason('#DC143C', 'autumn')).toBe(false)
   })
 })
 
@@ -71,6 +80,16 @@ describe('getSeasonSwatches', () => {
       }
     }
     expect(failures).toEqual([])
+  })
+
+  it('returns shallow copies to prevent mutation', () => {
+    const original = getSeasonSwatches('spring')
+    original.swatches[0] = '#000000'
+    original.avoid[0] = '#FFFFFF'
+
+    const fresh = getSeasonSwatches('spring')
+    expect(fresh.swatches[0]).toBe('#FFB347')
+    expect(fresh.avoid[0]).toBe('#B0C4DE')
   })
 })
 
