@@ -2,6 +2,9 @@ import type { ColourSeason } from './types'
 
 /** Convert a 6-digit hex colour string to [hue(0-360), saturation(0-100), lightness(0-100)] */
 export function hexToHsl(hex: string): [number, number, number] {
+  if (!/^#[0-9a-fA-F]{6}$/.test(hex)) {
+    throw new Error(`hexToHsl: expected 6-digit hex, got "${hex}"`)
+  }
   const r = parseInt(hex.slice(1, 3), 16) / 255
   const g = parseInt(hex.slice(3, 5), 16) / 255
   const b = parseInt(hex.slice(5, 7), 16) / 255
@@ -29,15 +32,20 @@ export function hexToHsl(hex: string): [number, number, number] {
  * Returns true if the given hex colour falls within the HSL profile for the season.
  *
  * Season profiles:
- *  Spring  — warm clear hue (0–85 or 300–360), S > 25%, L 40–85%
- *  Autumn  — warm earthy hue (0–95 or 300–360), S 15–75%, L 15–65%
- *  Summer  — cool soft hue (90–310), S 5–65%, L 35–80%
- *  Winter  — cool hue (100–280) with S > 20% and L < 75%, OR cool magenta (280–360) with S > 20%, OR very dark (L < 15%), OR very pale (S < 10% and L > 85%)
+ *  Spring  — warm clear hue (H 0–100 or 300–360), S > 20%, L 40–92%
+ *  Autumn  — warm earthy hue (H 0–95 or 300–360), S 15–90%, L 15–65%
+ *  Summer  — cool soft hue (H 90–310), S 5–72%, L 35–95%
+ *  Winter  — cool blue (H 100–280) with S > 20% and L < 75%,
+ *            OR cool magenta (H 280–360) with S > 20% and L < 70%,
+ *            OR very dark (L < 15%),
+ *            OR very pale (S < 10% and L > 85%),
+ *            OR dark crimson (H ≤ 5 or H ≥ 340, L ≤ 40, S ≥ 30%),
+ *            OR cool neutral mid-tone (S < 15%, L 50–80%)
  */
 export function isColourInSeason(hex: string, season: ColourSeason): boolean {
   const [h, s, l] = hexToHsl(hex)
 
-  const isWarmClearHue = h <= 85 || h >= 300
+  const isWarmClearHue = h <= 100 || h >= 300
   const isWarmEarthyHue = h <= 95 || h >= 300
   const isCoolSoftHue = h >= 90 && h <= 310
   const isCoolBlueHue = h >= 100 && h <= 280
@@ -45,19 +53,21 @@ export function isColourInSeason(hex: string, season: ColourSeason): boolean {
 
   switch (season) {
     case 'spring':
-      return isWarmClearHue && s > 25 && l >= 40 && l <= 85
+      return isWarmClearHue && s > 20 && l >= 40 && l <= 92
 
     case 'autumn':
-      return isWarmEarthyHue && s >= 15 && s <= 75 && l >= 15 && l <= 65
+      return isWarmEarthyHue && s >= 15 && s <= 90 && l >= 15 && l <= 65
 
     case 'summer':
-      return isCoolSoftHue && s >= 5 && s <= 65 && l >= 35 && l <= 80
+      return isCoolSoftHue && s >= 5 && s <= 72 && l >= 35 && l <= 95
 
     case 'winter':
       return (isCoolBlueHue && s > 20 && l < 75) ||
-             (isCoolMagentaHue && s > 20) ||
+             (isCoolMagentaHue && s > 20 && l < 70) ||
              l < 15 ||
-             (s < 10 && l > 85)
+             (s < 10 && l > 85) ||
+             ((h <= 5 || h >= 340) && l <= 40 && s >= 30) ||
+             (s < 15 && l >= 50 && l <= 80)
   }
 }
 
@@ -73,8 +83,8 @@ const SEASON_SWATCHES: Record<ColourSeason, { swatches: string[]; avoid: string[
   summer: {
     swatches: [
       '#DDA0DD', '#B0C4DE', '#C8A2C8', '#E6E6FA',
-      '#FFB6C1', '#AFEEEE', '#BC8F8F', '#778899',
-      '#D8BFD8', '#87CEEB', '#B0B0C8', '#C4A0B0',
+      '#D0A8D8', '#AFEEEE', '#A8B0C0', '#778899',
+      '#D8BFD8', '#87CEEB', '#B0B0C8', '#C0B0D8',
     ],
     avoid: ['#FF6600', '#808000', '#8B4513'],
   },

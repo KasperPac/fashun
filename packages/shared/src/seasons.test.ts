@@ -58,6 +58,20 @@ describe('getSeasonSwatches', () => {
       avoid.forEach(a => expect(a).toMatch(/^#[0-9a-fA-F]{6}$/))
     }
   })
+
+  it('every swatch passes its own season isColourInSeason check (48/48)', () => {
+    const seasons = ['spring', 'summer', 'autumn', 'winter'] as const
+    const failures: string[] = []
+    for (const season of seasons) {
+      const { swatches } = getSeasonSwatches(season)
+      for (const swatch of swatches) {
+        if (!isColourInSeason(swatch, season)) {
+          failures.push(`${swatch} fails ${season}`)
+        }
+      }
+    }
+    expect(failures).toEqual([])
+  })
 })
 
 describe('SEASON_DESCRIPTIONS', () => {
