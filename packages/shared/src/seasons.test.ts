@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { hexToHsl, isColourInSeason, getSeasonSwatches, SEASON_DESCRIPTIONS } from './seasons'
+import { hexToHsl, isColourInSeason, getSeasonSwatches, SEASON_DESCRIPTIONS, SEASON_PROMPT_CONTEXT } from './seasons'
+import type { ColourSeason } from './types'
 
 describe('hexToHsl', () => {
   it('converts pure red', () => {
@@ -99,5 +100,22 @@ describe('SEASON_DESCRIPTIONS', () => {
     expect(SEASON_DESCRIPTIONS.summer).toBeTruthy()
     expect(SEASON_DESCRIPTIONS.autumn).toBeTruthy()
     expect(SEASON_DESCRIPTIONS.winter).toBeTruthy()
+  })
+})
+
+describe('SEASON_PROMPT_CONTEXT', () => {
+  const seasons: ColourSeason[] = ['spring', 'summer', 'autumn', 'winter']
+
+  it('has an entry for every season', () => {
+    for (const s of seasons) {
+      expect(SEASON_PROMPT_CONTEXT[s]).toBeDefined()
+    }
+  })
+
+  it('each entry has non-empty suits and avoid strings', () => {
+    for (const s of seasons) {
+      expect(SEASON_PROMPT_CONTEXT[s].suits.length).toBeGreaterThan(10)
+      expect(SEASON_PROMPT_CONTEXT[s].avoid.length).toBeGreaterThan(10)
+    }
   })
 })

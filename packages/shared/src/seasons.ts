@@ -126,3 +126,23 @@ export const SEASON_DESCRIPTIONS: Record<ColourSeason, string> = {
   autumn:  'Rich, earthy and warm — rust, olive and golden tones',
   winter:  'High contrast and cool — navy, burgundy and icy white',
 }
+
+/** Palette descriptions used in the Claude outfit generation prompt. */
+export const SEASON_PROMPT_CONTEXT: Record<ColourSeason, { suits: string; avoid: string }> = {
+  spring: {
+    suits: 'warm peach, coral, warm ivory, light camel, golden yellow, warm turquoise, apple green, soft warm pink, terracotta',
+    avoid: 'cool greys, icy tones, jet black, stark white, cool purples, dusty mauve',
+  },
+  summer: {
+    suits: 'soft rose, dusty blue, lavender, cool mauve, powder pink, soft white, cool grey, muted teal, periwinkle',
+    avoid: 'warm oranges, earthy browns, bright yellows, jet black, olive green, rust',
+  },
+  autumn: {
+    suits: 'earthy tones, warm oranges, rusts, burnt sienna, olive greens, camel, chocolate brown, warm beige, terracotta, gold, moss green',
+    avoid: 'cool tones, icy blues, bright white, jet black, cool pinks, silver grey',
+  },
+  winter: {
+    suits: 'pure white, jet black, royal blue, emerald green, true red, icy pastels, sharp contrast, cool grey, navy, burgundy',
+    avoid: 'warm earthy tones, muted pastels, warm oranges, camel, warm brown, olive',
+  },
+}
