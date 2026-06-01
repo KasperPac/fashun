@@ -5,12 +5,24 @@ import type { OutfitPiece } from './OutfitSuggestionCard'
 interface SavedOutfit {
   id: string
   item_id: string | null
+  item_name?: string
   name: string
   occasion: string | null
   pieces: OutfitPiece[]
   description: string | null
   try_on_image_url: string | null
   created_at: string | null
+}
+
+function groupByItemName(outfits: SavedOutfit[]): Map<string, SavedOutfit[]> {
+  const map = new Map<string, SavedOutfit[]>()
+  for (const o of outfits) {
+    const key = o.item_name ?? 'Unknown item'
+    const arr = map.get(key) ?? []
+    arr.push(o)
+    map.set(key, arr)
+  }
+  return map
 }
 
 interface Props {
@@ -68,35 +80,42 @@ export default function SavedOutfitsSheet({ isOpen, onClose }: Props) {
 
           {!loading && outfits.length > 0 && (
             <div className="flex flex-col gap-3">
-              {outfits.map(outfit => (
-                <div key={outfit.id} className="bg-zinc-900 border border-zinc-800 rounded-xl p-3.5">
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <div>
-                      <p className="text-white font-semibold text-sm">{outfit.name}</p>
-                      {outfit.occasion && (
-                        <p className="text-purple-400 text-xs">{outfit.occasion}</p>
+              {Array.from(groupByItemName(outfits).entries()).map(([itemName, group]) => (
+                <div key={itemName}>
+                  <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-2 mt-4 first:mt-0">
+                    {itemName}
+                  </h3>
+                  {group.map(outfit => (
+                    <div key={outfit.id} className="bg-zinc-900 border border-zinc-800 rounded-xl p-3.5 mb-3 last:mb-0">
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div>
+                          <p className="text-white font-semibold text-sm">{outfit.name}</p>
+                          {outfit.occasion && (
+                            <p className="text-purple-400 text-xs">{outfit.occasion}</p>
+                          )}
+                        </div>
+                        {outfit.try_on_image_url && (
+                          <div className="w-10 h-10 rounded-lg overflow-hidden border border-zinc-700 shrink-0">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={outfit.try_on_image_url} alt="try-on" className="w-full h-full object-cover" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex gap-1.5">
+                        {(outfit.pieces ?? []).slice(0, 5).map((piece, i) => (
+                          <div
+                            key={i}
+                            className="w-6 h-6 rounded-full border-2 border-zinc-700"
+                            style={{ background: piece.colour_hex }}
+                            title={piece.label}
+                          />
+                        ))}
+                      </div>
+                      {outfit.description && (
+                        <p className="text-zinc-500 text-xs mt-2 leading-relaxed">{outfit.description}</p>
                       )}
                     </div>
-                    {outfit.try_on_image_url && (
-                      <div className="w-10 h-10 rounded-lg overflow-hidden border border-zinc-700 shrink-0">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={outfit.try_on_image_url} alt="try-on" className="w-full h-full object-cover" />
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex gap-1.5">
-                    {(outfit.pieces ?? []).slice(0, 5).map((piece, i) => (
-                      <div
-                        key={i}
-                        className="w-6 h-6 rounded-full border-2 border-zinc-700"
-                        style={{ background: piece.colour_hex }}
-                        title={piece.label}
-                      />
-                    ))}
-                  </div>
-                  {outfit.description && (
-                    <p className="text-zinc-500 text-xs mt-2 leading-relaxed">{outfit.description}</p>
-                  )}
+                  ))}
                 </div>
               ))}
             </div>
