@@ -19,12 +19,18 @@ function makeChain(result: unknown) {
 }
 
 let wardrobeItemsResult: unknown = { data: mockItem, error: null }
+let wardrobeCallCount = 0
 
 vi.mock('@/lib/supabase/server', () => ({
   createServerClient: async () => ({
     auth: { getUser: mockGetUser },
     from: (table: string) => {
-      if (table === 'wardrobe_items') return makeChain(wardrobeItemsResult)
+      if (table === 'wardrobe_items') {
+        wardrobeCallCount++
+        return wardrobeCallCount === 1
+          ? makeChain(wardrobeItemsResult)
+          : makeChain({ data: mockWardrobe, error: null })
+      }
       if (table === 'users') return makeChain({ data: mockProfile, error: null })
       return makeChain({ data: mockWardrobe, error: null })
     },
@@ -54,6 +60,7 @@ describe('POST /api/outfits/generate', () => {
     vi.clearAllMocks()
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
     wardrobeItemsResult = { data: mockItem, error: null }
+    wardrobeCallCount = 0
     mockCreate.mockResolvedValue({
       content: [{ type: 'text', text: JSON.stringify(mockSuggestions) }],
     })

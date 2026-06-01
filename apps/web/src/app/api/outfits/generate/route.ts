@@ -103,7 +103,9 @@ export async function POST(req: Request) {
   if (!itemRes.data) return NextResponse.json({ error: 'Item not found' }, { status: 404 })
 
   const item = itemRes.data
-  const season = ((profileRes.data?.colour_season) ?? 'autumn') as ColourSeason
+  const VALID_SEASONS = new Set<string>(['spring', 'summer', 'autumn', 'winter'])
+  const rawSeason = profileRes.data?.colour_season ?? ''
+  const season = (VALID_SEASONS.has(rawSeason) ? rawSeason : 'autumn') as ColourSeason
   const otherItems = Array.isArray(wardrobeRes.data) ? wardrobeRes.data : []
   const wardrobeSection = buildWardrobeSection(otherItems)
   const { system, user: userMsg } = buildPrompt(item, season, wardrobeSection)
@@ -125,6 +127,4 @@ export async function POST(req: Request) {
       if (attempt === 1) return NextResponse.json({ error: 'Failed to generate outfits' }, { status: 500 })
     }
   }
-
-  return NextResponse.json({ error: 'Failed to generate outfits' }, { status: 500 })
 }
