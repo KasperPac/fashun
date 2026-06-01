@@ -7,7 +7,6 @@ import {
   SEASON_DESCRIPTIONS,
 } from '@fashun/shared'
 import type { ColourSeason } from '@fashun/shared'
-import BottomNav from '@/components/BottomNav'
 
 const SEASON_GRADIENTS: Record<ColourSeason, string> = {
   spring:  'from-pink-900 via-rose-800 to-orange-800',
@@ -34,8 +33,11 @@ export default async function PalettePage() {
   const items: ItemRow[] = itemsRes.data ?? []
 
   // Compute stats
+  const validHex = (hex: string) => /^#[0-9a-fA-F]{6}$/.test(hex)
   const inPalette = season
-    ? items.filter(item => item.colours?.some(hex => isColourInSeason(hex, season))).length
+    ? items.filter(item =>
+        (item.colours ?? []).filter(validHex).some(hex => isColourInSeason(hex, season))
+      ).length
     : 0
   const outPalette = items.length - inPalette
   const matchPct = items.length > 0 ? Math.round((inPalette / items.length) * 100) : 0
@@ -120,7 +122,6 @@ export default async function PalettePage() {
         )}
 
       </div>
-      <BottomNav />
     </div>
   )
 }

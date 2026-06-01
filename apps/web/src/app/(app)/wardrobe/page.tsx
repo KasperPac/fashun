@@ -7,7 +7,6 @@ import type { CategoryOption } from '@/components/wardrobe/CategoryCarousel'
 import PaletteFilterToggle from '@/components/wardrobe/PaletteFilterToggle'
 import WardrobeGrid from '@/components/wardrobe/WardrobeGrid'
 import OwnershipToggle from '@/components/wardrobe/OwnershipToggle'
-import BottomNav from '@/components/BottomNav'
 import { supabase } from '@/lib/supabase/client'
 
 export default function WardrobePage() {
@@ -69,7 +68,7 @@ export default function WardrobePage() {
           <h1 className="text-2xl font-black tracking-tight">My Wardrobe</h1>
           <span className="text-zinc-500 text-sm">{displayItems.length} items</span>
         </div>
-        <OwnershipToggle active={ownership} onChange={setOwnership} />
+        <OwnershipToggle active={ownership} onChange={(o) => { setOwnership(o); setPaletteOnly(false) }} />
         <div className="mt-3">
           <CategoryCarousel active={category} onChange={setCategory} />
         </div>
@@ -80,7 +79,6 @@ export default function WardrobePage() {
       <div className="flex-1 px-4 pb-24">
         <WardrobeGrid items={displayItems} loading={loading} onDelete={handleDelete} userSeason={userSeason} />
       </div>
-      <BottomNav />
       <div className="fixed bottom-20 inset-x-4">
         <a
           href="/wardrobe/add"

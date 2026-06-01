@@ -10,6 +10,7 @@ export default function PaletteFilterToggle({ enabled, onChange }: Props) {
     <div className="flex gap-2 mt-3">
       <button
         type="button"
+        aria-pressed={!enabled}
         onClick={() => onChange(false)}
         className={`flex-shrink-0 rounded-full px-4 py-1.5 text-sm font-semibold transition-all ${
           !enabled ? 'bg-purple-600 text-white' : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-800'
@@ -19,6 +20,7 @@ export default function PaletteFilterToggle({ enabled, onChange }: Props) {
       </button>
       <button
         type="button"
+        aria-pressed={enabled}
         onClick={() => onChange(true)}
         className={`flex-shrink-0 rounded-full px-4 py-1.5 text-sm font-semibold transition-all ${
           enabled ? 'bg-purple-600 text-white' : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-800'

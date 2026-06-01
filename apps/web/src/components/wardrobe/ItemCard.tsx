@@ -40,7 +40,7 @@ export default function ItemCard({ item, onDelete, userSeason }: Props) {
       <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-2 opacity-0 group-hover:opacity-100 transition-opacity">
         <p className="text-white text-xs font-semibold truncate">{item.name}</p>
         <div className="flex gap-1 mt-1">
-          {item.colours.slice(0, 3).map(c => (
+          {(item.colours ?? []).slice(0, 3).map(c => (
             <div key={c} className="w-3 h-3 rounded-full border border-white/20" style={{ background: c }} />
           ))}
         </div>

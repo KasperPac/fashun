@@ -1,5 +1,4 @@
 import SaveToWardrobeButton from '@/components/wardrobe/SaveToWardrobeButton'
-import BottomNav from '@/components/BottomNav'
 
 // Placeholder products — replaced in Phase 4 with real Commission Factory feed
 const DEMO_PRODUCTS = [
@@ -53,7 +52,6 @@ export default function ShopPage() {
           </div>
         ))}
       </div>
-      <BottomNav />
     </div>
   )
 }
