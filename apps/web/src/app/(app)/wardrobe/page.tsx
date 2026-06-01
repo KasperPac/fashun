@@ -188,7 +188,7 @@ export default function WardrobePage() {
         onSaveOutfit={async (suggestion) => {
           const item = modal.item
           if (!item) return
-          await fetch('/api/outfits', {
+          const res = await fetch('/api/outfits', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -199,6 +199,7 @@ export default function WardrobePage() {
               description: suggestion.description,
             }),
           })
+          if (!res.ok) throw new Error('Failed to save outfit')
           setHasSavedOutfits(true)
         }}
         onViewSaved={() => setSavedSheetOpen(true)}

@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import OutfitSuggestionCard from './OutfitSuggestionCard'
 import type { OutfitSuggestion } from './OutfitSuggestionCard'
 import type { WardrobeItem } from '@fashun/shared'
@@ -16,7 +16,7 @@ interface Props {
   tryOnImageUrl?: string
   errorMessage?: string
   onRetry: () => void
-  onSaveOutfit: (suggestion: OutfitSuggestion, idx: number) => Promise<void>
+  onSaveOutfit: (suggestion: OutfitSuggestion) => Promise<void>
   onViewSaved: () => void
   hasSavedOutfits: boolean
 }
@@ -29,12 +29,19 @@ export default function OutfitModal({
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set())
   const [savingId, setSavingId] = useState<string | null>(null)
 
+  useEffect(() => {
+    if (isOpen) {
+      setSavedIds(new Set())
+      setSavingId(null)
+    }
+  }, [isOpen])
+
   if (!isOpen) return null
 
-  const handleSave = async (suggestion: OutfitSuggestion, idx: number) => {
+  const handleSave = async (suggestion: OutfitSuggestion) => {
     setSavingId(suggestion.name)
     try {
-      await onSaveOutfit(suggestion, idx)
+      await onSaveOutfit(suggestion)
       setSavedIds(prev => new Set(prev).add(suggestion.name))
     } finally {
       setSavingId(null)
@@ -101,7 +108,7 @@ export default function OutfitModal({
                 <OutfitSuggestionCard
                   key={s.name}
                   suggestion={s}
-                  onSave={() => handleSave(s, i)}
+                  onSave={() => handleSave(s)}
                   saved={savedIds.has(s.name)}
                   saving={savingId === s.name}
                 />
