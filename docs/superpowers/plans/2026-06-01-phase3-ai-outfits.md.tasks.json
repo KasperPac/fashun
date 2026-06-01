@@ -1,0 +1,65 @@
+{
+  "planPath": "docs/superpowers/plans/2026-06-01-phase3-ai-outfits.md",
+  "tasks": [
+    {
+      "id": 15,
+      "subject": "Task 0: DB migration — extend outfits table",
+      "status": "pending",
+      "description": "**Goal:** Add `item_id`, `pieces`, and `description` columns to the existing `outfits` table and update TypeScript types.\n\n**Files:**\n- Create: `supabase/migrations/004_outfits_phase3.sql`\n- Modify: `packages/shared/src/database.types.ts`\n\n**Verify:** `npx supabase db push`\n\n```json:metadata\n{\"files\": [\"supabase/migrations/004_outfits_phase3.sql\", \"packages/shared/src/database.types.ts\"], \"verifyCommand\": \"npx supabase db push\", \"acceptanceCriteria\": [\"Migration applies cleanly\", \"outfits table has item_id, pieces, description columns\", \"database.types.ts updated\"]}\n```"
+    },
+    {
+      "id": 16,
+      "subject": "Task 1: Add SEASON_PROMPT_CONTEXT to shared package",
+      "status": "pending",
+      "blockedBy": [15],
+      "description": "**Goal:** Export `SEASON_PROMPT_CONTEXT` from `@fashun/shared`.\n\n**Files:**\n- Modify: `packages/shared/src/seasons.ts`\n- Modify: `packages/shared/src/seasons.test.ts`\n\n**Verify:** `pnpm --filter @fashun/shared test`\n\n```json:metadata\n{\"files\": [\"packages/shared/src/seasons.ts\", \"packages/shared/src/seasons.test.ts\"], \"verifyCommand\": \"pnpm --filter @fashun/shared test\", \"acceptanceCriteria\": [\"SEASON_PROMPT_CONTEXT exported\", \"All 4 seasons have suits and avoid\", \"Tests pass\"]}\n```"
+    },
+    {
+      "id": 17,
+      "subject": "Task 2: POST /api/outfits/generate",
+      "status": "pending",
+      "blockedBy": [15, 16],
+      "description": "**Goal:** Server route that calls Claude and returns 3 outfit suggestions.\n\n**Files:**\n- Create: `apps/web/src/app/api/outfits/generate/route.ts`\n- Create: `apps/web/src/app/api/outfits/generate/route.test.ts`\n\n**Verify:** `pnpm --filter web test`\n\n```json:metadata\n{\"files\": [\"apps/web/src/app/api/outfits/generate/route.ts\", \"apps/web/src/app/api/outfits/generate/route.test.ts\"], \"verifyCommand\": \"pnpm --filter web test\", \"acceptanceCriteria\": [\"401 when unauthenticated\", \"400 for invalid item_id\", \"Returns suggestions on success\", \"Tests pass\"]}\n```"
+    },
+    {
+      "id": 18,
+      "subject": "Task 3: GET + POST /api/outfits",
+      "status": "pending",
+      "blockedBy": [15],
+      "description": "**Goal:** Routes to save and list outfits.\n\n**Files:**\n- Create: `apps/web/src/app/api/outfits/route.ts`\n- Create: `apps/web/src/app/api/outfits/route.test.ts`\n\n**Verify:** `pnpm --filter web test`\n\n```json:metadata\n{\"files\": [\"apps/web/src/app/api/outfits/route.ts\", \"apps/web/src/app/api/outfits/route.test.ts\"], \"verifyCommand\": \"pnpm --filter web test\", \"acceptanceCriteria\": [\"GET returns outfits\", \"POST saves and returns 201\", \"Tests pass\"]}\n```"
+    },
+    {
+      "id": 19,
+      "subject": "Task 4: POST /api/outfits/try-on",
+      "status": "pending",
+      "blockedBy": [15],
+      "description": "**Goal:** Server route that calls Fashn.ai and returns `{ image_url }`.\n\n**Files:**\n- Create: `apps/web/src/app/api/outfits/try-on/route.ts`\n- Create: `apps/web/src/app/api/outfits/try-on/route.test.ts`\n\n**Verify:** `pnpm --filter web test`\n\n```json:metadata\n{\"files\": [\"apps/web/src/app/api/outfits/try-on/route.ts\", \"apps/web/src/app/api/outfits/try-on/route.test.ts\"], \"verifyCommand\": \"pnpm --filter web test\", \"acceptanceCriteria\": [\"401 when unauthenticated\", \"400 with error codes for missing photos\", \"Returns image_url on success\", \"Tests pass\"]}\n```"
+    },
+    {
+      "id": 20,
+      "subject": "Task 5: ItemCard tap interaction + action bar",
+      "status": "pending",
+      "description": "**Goal:** Tapping a card reveals Style it / Try on action bar.\n\n**Files:**\n- Modify: `apps/web/src/components/wardrobe/WardrobeGrid.tsx`\n- Modify: `apps/web/src/components/wardrobe/ItemCard.tsx`\n\n**Verify:** `pnpm --filter web build`\n\n```json:metadata\n{\"files\": [\"apps/web/src/components/wardrobe/WardrobeGrid.tsx\", \"apps/web/src/components/wardrobe/ItemCard.tsx\"], \"verifyCommand\": \"pnpm --filter web build\", \"acceptanceCriteria\": [\"Tap shows action bar\", \"Tap outside collapses\", \"Try on disabled without photo\", \"Build passes\"]}\n```"
+    },
+    {
+      "id": 21,
+      "subject": "Task 6: OutfitModal + OutfitSuggestionCard",
+      "status": "pending",
+      "description": "**Goal:** Full-screen overlay with loading/results/error states.\n\n**Files:**\n- Create: `apps/web/src/components/outfits/OutfitModal.tsx`\n- Create: `apps/web/src/components/outfits/OutfitSuggestionCard.tsx`\n\n**Verify:** `pnpm --filter web build`\n\n```json:metadata\n{\"files\": [\"apps/web/src/components/outfits/OutfitModal.tsx\", \"apps/web/src/components/outfits/OutfitSuggestionCard.tsx\"], \"verifyCommand\": \"pnpm --filter web build\", \"acceptanceCriteria\": [\"Loading state works\", \"Results show correctly\", \"Error state with retry\", \"Build passes\"]}\n```"
+    },
+    {
+      "id": 22,
+      "subject": "Task 7: SavedOutfitsSheet",
+      "status": "pending",
+      "description": "**Goal:** Sheet listing saved outfits.\n\n**Files:**\n- Create: `apps/web/src/components/outfits/SavedOutfitsSheet.tsx`\n\n**Verify:** `pnpm --filter web build`\n\n```json:metadata\n{\"files\": [\"apps/web/src/components/outfits/SavedOutfitsSheet.tsx\"], \"verifyCommand\": \"pnpm --filter web build\", \"acceptanceCriteria\": [\"Fetches outfits on mount\", \"Renders outfit list\", \"Empty state shown\", \"Build passes\"]}\n```"
+    },
+    {
+      "id": 23,
+      "subject": "Task 8: Wire everything into wardrobe page",
+      "status": "pending",
+      "blockedBy": [17, 18, 19, 20, 21, 22],
+      "description": "**Goal:** Connect action bar → modal → API → save → saved sheet in wardrobe/page.tsx.\n\n**Files:**\n- Modify: `apps/web/src/app/(app)/wardrobe/page.tsx`\n\n**Verify:** `pnpm --filter web build` then smoke test on dev server\n\n```json:metadata\n{\"files\": [\"apps/web/src/app/(app)/wardrobe/page.tsx\"], \"verifyCommand\": \"pnpm --filter web build\", \"acceptanceCriteria\": [\"Style it flow works end-to-end\", \"Try on flow works end-to-end\", \"Save and saved sheet work\", \"Build passes\"]}\n```"
+    }
+  ],
+  "lastUpdated": "2026-06-01T00:00:00Z"
+}
