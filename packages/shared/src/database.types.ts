@@ -75,13 +75,16 @@ export type Database = {
         Row: {
           ai_generated: boolean | null
           created_at: string | null
+          description: string | null
           id: string
+          item_id: string | null
           item_ids: string[] | null
           last_recommended_at: string | null
           last_worn_at: string | null
           name: string | null
           occasion: string | null
           palette_match_pct: number | null
+          pieces: Json
           try_on_image_url: string | null
           user_id: string
           worn_count: number | null
@@ -89,13 +92,16 @@ export type Database = {
         Insert: {
           ai_generated?: boolean | null
           created_at?: string | null
+          description?: string | null
           id?: string
+          item_id?: string | null
           item_ids?: string[] | null
           last_recommended_at?: string | null
           last_worn_at?: string | null
           name?: string | null
           occasion?: string | null
           palette_match_pct?: number | null
+          pieces?: Json
           try_on_image_url?: string | null
           user_id: string
           worn_count?: number | null
@@ -103,13 +109,16 @@ export type Database = {
         Update: {
           ai_generated?: boolean | null
           created_at?: string | null
+          description?: string | null
           id?: string
+          item_id?: string | null
           item_ids?: string[] | null
           last_recommended_at?: string | null
           last_worn_at?: string | null
           name?: string | null
           occasion?: string | null
           palette_match_pct?: number | null
+          pieces?: Json
           try_on_image_url?: string | null
           user_id?: string
           worn_count?: number | null
