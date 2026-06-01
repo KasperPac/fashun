@@ -22,13 +22,16 @@ export default async function PalettePage() {
   if (!user) redirect('/login')
 
   // Fetch season and owned items in parallel
-  const [profileRes, itemsRes] = await Promise.all([
-    supabase.from('users').select('colour_season').eq('id', user.id).single(),
-    supabase.from('wardrobe_items').select('colours').eq('user_id', user.id).eq('ownership', 'owned'),
-  ])
+  type ProfileRow = { colour_season: string | null } | null
+  type ItemRow = { colours: string[] | null }
 
-  const season = profileRes.data?.colour_season as ColourSeason | null
-  const items = itemsRes.data ?? []
+  const profileQuery = (supabase.from('users').select('colour_season').eq('id', user.id).single() as unknown as { data: ProfileRow; error: unknown })
+  const itemsQuery = (supabase.from('wardrobe_items').select('colours').eq('user_id', user.id).eq('ownership', 'owned') as unknown as { data: ItemRow[] | null; error: unknown })
+
+  const [profileRes, itemsRes] = await Promise.all([profileQuery, itemsQuery])
+
+  const season = (profileRes.data?.colour_season ?? null) as ColourSeason | null
+  const items: ItemRow[] = itemsRes.data ?? []
 
   // Compute stats
   const inPalette = season

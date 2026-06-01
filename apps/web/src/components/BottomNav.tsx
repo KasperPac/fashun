@@ -11,7 +11,7 @@ const TABS = [
 export default function BottomNav() {
   const pathname = usePathname()
   return (
-    <nav className="fixed bottom-0 inset-x-0 bg-black/90 backdrop-blur border-t border-zinc-800 flex safe-pb">
+    <nav className="fixed bottom-0 inset-x-0 bg-black/90 backdrop-blur border-t border-zinc-800 flex pb-[env(safe-area-inset-bottom,0px)]">
       {TABS.map(tab => {
         const active = pathname.startsWith(tab.href)
         return (
