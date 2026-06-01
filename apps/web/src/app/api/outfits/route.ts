@@ -31,10 +31,9 @@ export async function GET(_req: Request) {
   if (error) return NextResponse.json({ error: 'Failed to fetch outfits' }, { status: 500 })
 
   // Flatten the join: move wardrobe_items.name → item_name
-  const outfits = (data ?? []).map(o => ({
-    ...o,
-    item_name: o.wardrobe_items?.name ?? null,
-    wardrobe_items: undefined,
+  const outfits = (data ?? []).map(({ wardrobe_items, ...rest }) => ({
+    ...rest,
+    item_name: wardrobe_items?.name ?? null,
   }))
 
   return NextResponse.json({ outfits })
