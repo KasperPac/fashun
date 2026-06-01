@@ -27,7 +27,7 @@ const SuggestionSchema = z.object({
   description: z.string(),
 })
 
-const SuggestionsSchema = z.array(SuggestionSchema).min(1)
+const SuggestionsSchema = z.array(SuggestionSchema).min(1).max(3)
 
 type DbItem = { id: string; name: string; category: string; colours: string[] | null }
 

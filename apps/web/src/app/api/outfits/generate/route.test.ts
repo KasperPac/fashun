@@ -18,16 +18,14 @@ function makeChain(result: unknown) {
   return chain
 }
 
+let wardrobeItemsResult: unknown = { data: mockItem, error: null }
+
 vi.mock('@/lib/supabase/server', () => ({
   createServerClient: async () => ({
     auth: { getUser: mockGetUser },
     from: (table: string) => {
-      if (table === 'wardrobe_items') {
-        return makeChain({ data: mockItem, error: null })
-      }
-      if (table === 'users') {
-        return makeChain({ data: mockProfile, error: null })
-      }
+      if (table === 'wardrobe_items') return makeChain(wardrobeItemsResult)
+      if (table === 'users') return makeChain({ data: mockProfile, error: null })
       return makeChain({ data: mockWardrobe, error: null })
     },
   }),
@@ -39,13 +37,13 @@ const mockSuggestions = [
   { name: 'Evening Out', occasion: 'Dinner', pieces: [{ label: 'Black crew neck', colour_hex: '#111111', item_id: null, in_wardrobe: false }], description: 'Minimal and sharp.' },
 ]
 
+const mockCreate = vi.fn().mockResolvedValue({
+  content: [{ type: 'text', text: JSON.stringify(mockSuggestions) }],
+})
+
 vi.mock('@anthropic-ai/sdk', () => ({
   default: class {
-    messages = {
-      create: vi.fn().mockResolvedValue({
-        content: [{ type: 'text', text: JSON.stringify(mockSuggestions) }],
-      }),
-    }
+    messages = { create: mockCreate }
   },
 }))
 
@@ -55,6 +53,10 @@ describe('POST /api/outfits/generate', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
+    wardrobeItemsResult = { data: mockItem, error: null }
+    mockCreate.mockResolvedValue({
+      content: [{ type: 'text', text: JSON.stringify(mockSuggestions) }],
+    })
   })
 
   it('returns 401 when unauthenticated', async () => {
@@ -76,6 +78,25 @@ describe('POST /api/outfits/generate', () => {
     expect(res.status).toBe(400)
   })
 
+  it('returns 400 when item_id is missing', async () => {
+    const req = new Request('http://localhost/api/outfits/generate', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    })
+    const res = await POST(req)
+    expect(res.status).toBe(400)
+  })
+
+  it('returns 404 when item not found', async () => {
+    wardrobeItemsResult = { data: null, error: null }
+    const req = new Request('http://localhost/api/outfits/generate', {
+      method: 'POST',
+      body: JSON.stringify({ item_id: '00000000-0000-0000-0000-000000000001' }),
+    })
+    const res = await POST(req)
+    expect(res.status).toBe(404)
+  })
+
   it('returns suggestions on success', async () => {
     const req = new Request('http://localhost/api/outfits/generate', {
       method: 'POST',
@@ -86,5 +107,18 @@ describe('POST /api/outfits/generate', () => {
     const json = await res.json()
     expect(json.suggestions).toHaveLength(3)
     expect(json.suggestions[0].name).toBe('Smart Casual')
+  })
+
+  it('returns 500 when Claude returns invalid JSON twice', async () => {
+    mockCreate.mockResolvedValue({
+      content: [{ type: 'text', text: 'not valid json {{' }],
+    })
+    const req = new Request('http://localhost/api/outfits/generate', {
+      method: 'POST',
+      body: JSON.stringify({ item_id: '00000000-0000-0000-0000-000000000001' }),
+    })
+    const res = await POST(req)
+    expect(res.status).toBe(500)
+    expect(mockCreate).toHaveBeenCalledTimes(2) // retried once
   })
 })
