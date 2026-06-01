@@ -1,17 +1,19 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import type { WardrobeItem, WardrobeCategory } from '@fashun/shared'
+import type { WardrobeItem, WardrobeCategory, ColourSeason } from '@fashun/shared'
 import CategoryCarousel from '@/components/wardrobe/CategoryCarousel'
 import type { CategoryOption } from '@/components/wardrobe/CategoryCarousel'
 import WardrobeGrid from '@/components/wardrobe/WardrobeGrid'
 import OwnershipToggle from '@/components/wardrobe/OwnershipToggle'
 import BottomNav from '@/components/BottomNav'
+import { supabase } from '@/lib/supabase/client'
 
 export default function WardrobePage() {
   const [items, setItems] = useState<WardrobeItem[]>([])
   const [loading, setLoading] = useState(true)
   const [category, setCategory] = useState<CategoryOption>('all')
   const [ownership, setOwnership] = useState<'owned' | 'wishlist'>('owned')
+  const [userSeason, setUserSeason] = useState<ColourSeason | undefined>(undefined)
 
   const fetchItems = useCallback(async () => {
     setLoading(true)
@@ -24,6 +26,21 @@ export default function WardrobePage() {
   }, [category, ownership])
 
   useEffect(() => { fetchItems() }, [fetchItems])
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return
+      supabase
+        .from('users')
+        .select('colour_season')
+        .eq('id', user.id)
+        .single()
+        .then(({ data }) => {
+          const season = (data as { colour_season: string | null } | null)?.colour_season
+          if (season) setUserSeason(season as ColourSeason)
+        })
+    })
+  }, [])
 
   async function handleDelete(id: string) {
     await fetch('/api/wardrobe', {
@@ -47,7 +64,7 @@ export default function WardrobePage() {
         </div>
       </div>
       <div className="flex-1 px-4 pb-24">
-        <WardrobeGrid items={items} loading={loading} onDelete={handleDelete} />
+        <WardrobeGrid items={items} loading={loading} onDelete={handleDelete} userSeason={userSeason} />
       </div>
       <BottomNav />
       <div className="fixed bottom-20 inset-x-4">

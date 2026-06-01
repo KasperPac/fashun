@@ -1,14 +1,15 @@
 'use client'
-import type { WardrobeItem } from '@fashun/shared'
+import type { WardrobeItem, ColourSeason } from '@fashun/shared'
 import ItemCard from './ItemCard'
 
 interface Props {
   items: WardrobeItem[]
   loading: boolean
   onDelete: (id: string) => void
+  userSeason?: ColourSeason
 }
 
-export default function WardrobeGrid({ items, loading, onDelete }: Props) {
+export default function WardrobeGrid({ items, loading, onDelete, userSeason }: Props) {
   if (loading) {
     return (
       <div className="grid grid-cols-3 gap-2 pt-3">
@@ -32,7 +33,7 @@ export default function WardrobeGrid({ items, loading, onDelete }: Props) {
   return (
     <div className="grid grid-cols-3 gap-2 pt-3">
       {items.map(item => (
-        <ItemCard key={item.id} item={item} onDelete={onDelete} />
+        <ItemCard key={item.id} item={item} onDelete={onDelete} userSeason={userSeason} />
       ))}
     </div>
   )
