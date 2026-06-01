@@ -73,6 +73,16 @@ describe('POST /api/outfits/try-on', () => {
     expect(json.code).toBe('NO_PERSON_PHOTO')
   })
 
+  it('returns 400 with UNSUPPORTED_CATEGORY for shoes', async () => {
+    itemResult = { data: { image_url: 'https://cdn.example.com/shoe.jpg', category: 'shoes' }, error: null }
+    const res = await POST(new Request('http://localhost/api/outfits/try-on', {
+      method: 'POST', body: JSON.stringify({ item_id: '00000000-0000-0000-0000-000000000001' }),
+    }))
+    expect(res.status).toBe(400)
+    const json = await res.json()
+    expect(json.code).toBe('UNSUPPORTED_CATEGORY')
+  })
+
   it('returns image_url on success', async () => {
     mockFetch
       .mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'pred-123' }) } as Response)

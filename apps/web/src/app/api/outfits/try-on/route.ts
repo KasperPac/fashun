@@ -12,10 +12,9 @@ const CATEGORY_MAP: Record<string, string> = {
   dresses: 'one-pieces',
   jumpsuits: 'one-pieces',
   outerwear: 'tops',
-  shoes: 'tops',
-  bags: 'tops',
-  accessories: 'tops',
 }
+
+const UNSUPPORTED_CATEGORIES = new Set(['shoes', 'bags', 'accessories'])
 
 async function pollFashn(predictionId: string): Promise<string> {
   for (let i = 0; i < 30; i++) {
@@ -49,6 +48,13 @@ export async function POST(req: Request) {
   }
   if (!profileRes.data?.try_on_photo_url) {
     return NextResponse.json({ error: 'No try-on photo found — add one in your profile settings', code: 'NO_PERSON_PHOTO' }, { status: 400 })
+  }
+
+  if (UNSUPPORTED_CATEGORIES.has(itemRes.data.category)) {
+    return NextResponse.json(
+      { error: 'Try-on is not supported for this item type', code: 'UNSUPPORTED_CATEGORY' },
+      { status: 400 }
+    )
   }
 
   try {
