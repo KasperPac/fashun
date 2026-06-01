@@ -22,6 +22,14 @@ export default function ItemCard({ item, onDelete, onAction, userSeason, isActiv
     <div
       className="relative group rounded-xl overflow-hidden bg-zinc-900 border border-zinc-800 aspect-[3/4] cursor-pointer"
       onClick={onActivate}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onActivate?.(e as unknown as React.MouseEvent)
+        }
+      }}
+      role="button"
+      tabIndex={0}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img

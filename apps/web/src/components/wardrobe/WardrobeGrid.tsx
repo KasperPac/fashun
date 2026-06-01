@@ -20,6 +20,10 @@ export default function WardrobeGrid({ items, loading, onDelete, onAction, userS
     return () => document.removeEventListener('click', collapse)
   }, [])
 
+  useEffect(() => {
+    setActiveCardId(null)
+  }, [items])
+
   if (loading) {
     return (
       <div className="grid grid-cols-3 gap-2 pt-3">
