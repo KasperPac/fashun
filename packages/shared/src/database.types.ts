@@ -84,7 +84,7 @@ export type Database = {
           name: string | null
           occasion: string | null
           palette_match_pct: number | null
-          pieces: Json
+          pieces: Json[]
           try_on_image_url: string | null
           user_id: string
           worn_count: number | null
@@ -101,7 +101,7 @@ export type Database = {
           name?: string | null
           occasion?: string | null
           palette_match_pct?: number | null
-          pieces?: Json
+          pieces?: Json[]
           try_on_image_url?: string | null
           user_id: string
           worn_count?: number | null
@@ -118,12 +118,19 @@ export type Database = {
           name?: string | null
           occasion?: string | null
           palette_match_pct?: number | null
-          pieces?: Json
+          pieces?: Json[]
           try_on_image_url?: string | null
           user_id?: string
           worn_count?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "outfits_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "wardrobe_items"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "outfits_user_id_fkey"
             columns: ["user_id"]
