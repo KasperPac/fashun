@@ -9,9 +9,10 @@ interface Props {
 }
 
 export default function ItemCard({ item, onDelete, userSeason }: Props) {
+  const validHexes = (item.colours ?? []).filter(hex => /^#[0-9a-fA-F]{6}$/.test(hex))
   const paletteMatch: boolean | null =
-    userSeason && item.colours?.length
-      ? item.colours.some(hex => isColourInSeason(hex, userSeason))
+    userSeason && validHexes.length
+      ? validHexes.some(hex => isColourInSeason(hex, userSeason))
       : null
 
   return (
@@ -25,12 +26,12 @@ export default function ItemCard({ item, onDelete, userSeason }: Props) {
 
       {/* Palette match badge — top-right */}
       {paletteMatch === true && (
-        <div className="absolute top-2 right-2 bg-green-500/90 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-tight">
+        <div className="absolute top-2 right-2 z-10 bg-green-500/90 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-tight">
           ✓ In palette
         </div>
       )}
       {paletteMatch === false && (
-        <div className="absolute top-2 right-2 bg-amber-500/90 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-tight">
+        <div className="absolute top-2 right-2 z-10 bg-amber-500/90 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-tight">
           Off palette
         </div>
       )}
@@ -49,14 +50,14 @@ export default function ItemCard({ item, onDelete, userSeason }: Props) {
       <button
         onClick={() => onDelete(item.id)}
         aria-label={`Delete ${item.name}`}
-        className="absolute top-2 left-2 w-6 h-6 rounded-full bg-red-600/80 text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500 flex items-center justify-center"
+        className="absolute top-2 left-2 z-10 w-6 h-6 rounded-full bg-red-600/80 text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500 flex items-center justify-center"
       >
         ×
       </button>
 
       {/* Wishlist badge — bottom-left (moved from top-left to avoid conflict with delete) */}
       {item.ownership === 'wishlist' && (
-        <div className="absolute bottom-2 left-2 bg-amber-400/90 text-black text-[9px] font-bold px-1.5 py-0.5 rounded-full">
+        <div className="absolute bottom-8 left-2 bg-amber-400/90 text-black text-[9px] font-bold px-1.5 py-0.5 rounded-full">
           WISHLIST
         </div>
       )}

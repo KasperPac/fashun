@@ -28,15 +28,16 @@ export default function WardrobePage() {
   useEffect(() => { fetchItems() }, [fetchItems])
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return
+    supabase.auth.getUser().then(({ data, error }) => {
+      if (error || !data.user) return
       supabase
         .from('users')
         .select('colour_season')
-        .eq('id', user.id)
+        .eq('id', data.user.id)
         .single()
-        .then(({ data }) => {
-          const season = (data as { colour_season: string | null } | null)?.colour_season
+        .then(({ data: profile, error: profileError }) => {
+          if (profileError || !profile) return
+          const season = (profile as { colour_season: string | null }).colour_season
           if (season) setUserSeason(season as ColourSeason)
         })
     })
