@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import type { WardrobeItem, WardrobeCategory, ColourSeason } from '@fashun/shared'
 import { isColourInSeason } from '@fashun/shared'
 import CategoryCarousel from '@/components/wardrobe/CategoryCarousel'
@@ -38,6 +38,7 @@ export default function WardrobePage() {
   const [userSeason, setUserSeason] = useState<ColourSeason | undefined>(undefined)
   const [paletteOnly, setPaletteOnly] = useState(false)
   const [modal, setModal] = useState<ModalState>(MODAL_CLOSED)
+  const inFlightRef = useRef<AbortController | null>(null)
   const [savedSheetOpen, setSavedSheetOpen] = useState(false)
   const [hasSavedOutfits, setHasSavedOutfits] = useState(false)
 
@@ -72,33 +73,42 @@ export default function WardrobePage() {
   // Check if user has any saved outfits (for the modal footer link)
   useEffect(() => {
     fetch('/api/outfits')
-      .then(r => r.json())
+      .then(r => r.ok ? r.json() : { outfits: [] })
       .then(json => setHasSavedOutfits((json.outfits ?? []).length > 0))
       .catch(() => {})
   }, [])
 
   async function handleDelete(id: string) {
-    await fetch('/api/wardrobe', {
+    const res = await fetch('/api/wardrobe', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id }),
     })
-    setItems(prev => prev.filter(i => i.id !== id))
+    if (res.ok) {
+      setItems(prev => prev.filter(i => i.id !== id))
+    }
   }
 
   async function handleAction(item: WardrobeItem, action: 'style' | 'tryon') {
+    // Abort any in-flight request
+    inFlightRef.current?.abort()
+    const controller = new AbortController()
+    inFlightRef.current = controller
+
     setModal({ isOpen: true, action, mode: 'loading', item, suggestions: [], tryOnImageUrl: null, errorMessage: null })
-    await runAction(item, action)
+    await runAction(item, action, controller.signal)
   }
 
-  async function runAction(item: WardrobeItem, action: 'style' | 'tryon') {
+  async function runAction(item: WardrobeItem, action: 'style' | 'tryon', signal?: AbortSignal) {
     try {
       if (action === 'style') {
         const res = await fetch('/api/outfits/generate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ item_id: item.id }),
+          signal,
         })
+        if (signal?.aborted) return
         const json = await res.json()
         if (!res.ok) throw new Error(json.error ?? 'Failed to generate outfits')
         setModal(prev => ({ ...prev, mode: 'results', suggestions: json.suggestions ?? [] }))
@@ -107,32 +117,20 @@ export default function WardrobePage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ item_id: item.id }),
+          signal,
         })
+        if (signal?.aborted) return
         const json = await res.json()
         if (!res.ok) throw new Error(json.error ?? 'Try-on failed')
         setModal(prev => ({ ...prev, mode: 'results', tryOnImageUrl: json.image_url }))
       }
     } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return
       const message = err instanceof Error ? err.message : 'Something went wrong'
       setModal(prev => ({ ...prev, mode: 'error', errorMessage: message }))
     }
   }
 
-  async function handleSaveOutfit(suggestion: OutfitSuggestion, _idx: number) {
-    if (!modal.item) return
-    await fetch('/api/outfits', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        item_id: modal.item.id,
-        name: suggestion.name,
-        occasion: suggestion.occasion,
-        pieces: suggestion.pieces,
-        description: suggestion.description,
-      }),
-    })
-    setHasSavedOutfits(true)
-  }
 
   const validHex = (hex: string) => /^#[0-9a-fA-F]{6}$/.test(hex)
   const displayItems = paletteOnly && userSeason
@@ -183,8 +181,26 @@ export default function WardrobePage() {
         suggestions={modal.suggestions}
         tryOnImageUrl={modal.tryOnImageUrl ?? undefined}
         errorMessage={modal.errorMessage ?? undefined}
-        onRetry={() => modal.item && runAction(modal.item, modal.action)}
-        onSaveOutfit={handleSaveOutfit}
+        onRetry={() => {
+          const { item, action } = modal
+          if (item) runAction(item, action)
+        }}
+        onSaveOutfit={async (suggestion) => {
+          const item = modal.item
+          if (!item) return
+          await fetch('/api/outfits', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              item_id: item.id,
+              name: suggestion.name,
+              occasion: suggestion.occasion,
+              pieces: suggestion.pieces,
+              description: suggestion.description,
+            }),
+          })
+          setHasSavedOutfits(true)
+        }}
         onViewSaved={() => setSavedSheetOpen(true)}
         hasSavedOutfits={hasSavedOutfits}
       />
