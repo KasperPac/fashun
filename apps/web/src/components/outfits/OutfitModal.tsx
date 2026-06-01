@@ -16,7 +16,7 @@ interface Props {
   tryOnImageUrl?: string
   errorMessage?: string
   onRetry: () => void
-  onSaveOutfit: (suggestion: OutfitSuggestion) => Promise<void>
+  onSaveOutfit: (suggestion: OutfitSuggestion, idx: number) => Promise<void>
   onViewSaved: () => void
   hasSavedOutfits: boolean
 }
@@ -26,18 +26,18 @@ export default function OutfitModal({
   suggestions = [], tryOnImageUrl, errorMessage,
   onRetry, onSaveOutfit, onViewSaved, hasSavedOutfits,
 }: Props) {
-  const [savedIds, setSavedIds] = useState<Set<number>>(new Set())
-  const [savingIdx, setSavingIdx] = useState<number | null>(null)
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set())
+  const [savingId, setSavingId] = useState<string | null>(null)
 
   if (!isOpen) return null
 
   const handleSave = async (suggestion: OutfitSuggestion, idx: number) => {
-    setSavingIdx(idx)
+    setSavingId(suggestion.name)
     try {
-      await onSaveOutfit(suggestion)
-      setSavedIds(prev => new Set(prev).add(idx))
+      await onSaveOutfit(suggestion, idx)
+      setSavedIds(prev => new Set(prev).add(suggestion.name))
     } finally {
-      setSavingIdx(null)
+      setSavingId(null)
     }
   }
 
@@ -99,26 +99,30 @@ export default function OutfitModal({
             <div className="flex flex-col gap-4">
               {suggestions.map((s, i) => (
                 <OutfitSuggestionCard
-                  key={i}
+                  key={s.name}
                   suggestion={s}
                   onSave={() => handleSave(s, i)}
-                  saved={savedIds.has(i)}
-                  saving={savingIdx === i}
+                  saved={savedIds.has(s.name)}
+                  saving={savingId === s.name}
                 />
               ))}
             </div>
           )}
 
-          {mode === 'results' && action === 'tryon' && tryOnImageUrl && (
-            <div className="flex flex-col items-center gap-4">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={tryOnImageUrl}
-                alt="Virtual try-on result"
-                className="w-full max-w-xs rounded-2xl border border-zinc-800"
-              />
-              <p className="text-zinc-500 text-xs">Rendered by Fashn.ai</p>
-            </div>
+          {mode === 'results' && action === 'tryon' && (
+            tryOnImageUrl ? (
+              <div className="flex flex-col items-center gap-4">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={tryOnImageUrl}
+                  alt="Virtual try-on result"
+                  className="w-full max-w-xs rounded-2xl border border-zinc-800"
+                />
+                <p className="text-zinc-500 text-xs">Rendered by Fashn.ai</p>
+              </div>
+            ) : (
+              <p className="text-zinc-500 text-sm text-center py-16">No image available.</p>
+            )
           )}
         </div>
 
