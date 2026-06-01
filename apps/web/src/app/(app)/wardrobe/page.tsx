@@ -7,7 +7,28 @@ import type { CategoryOption } from '@/components/wardrobe/CategoryCarousel'
 import PaletteFilterToggle from '@/components/wardrobe/PaletteFilterToggle'
 import WardrobeGrid from '@/components/wardrobe/WardrobeGrid'
 import OwnershipToggle from '@/components/wardrobe/OwnershipToggle'
+import OutfitModal from '@/components/outfits/OutfitModal'
+import type { OutfitSuggestion } from '@/components/outfits/OutfitModal'
+import SavedOutfitsSheet from '@/components/outfits/SavedOutfitsSheet'
 import { supabase } from '@/lib/supabase/client'
+
+type ModalMode = 'loading' | 'results' | 'error'
+type ModalAction = 'style' | 'tryon'
+
+interface ModalState {
+  isOpen: boolean
+  action: ModalAction
+  mode: ModalMode
+  item: WardrobeItem | null
+  suggestions: OutfitSuggestion[]
+  tryOnImageUrl: string | null
+  errorMessage: string | null
+}
+
+const MODAL_CLOSED: ModalState = {
+  isOpen: false, action: 'style', mode: 'loading',
+  item: null, suggestions: [], tryOnImageUrl: null, errorMessage: null,
+}
 
 export default function WardrobePage() {
   const [items, setItems] = useState<WardrobeItem[]>([])
@@ -16,6 +37,9 @@ export default function WardrobePage() {
   const [ownership, setOwnership] = useState<'owned' | 'wishlist'>('owned')
   const [userSeason, setUserSeason] = useState<ColourSeason | undefined>(undefined)
   const [paletteOnly, setPaletteOnly] = useState(false)
+  const [modal, setModal] = useState<ModalState>(MODAL_CLOSED)
+  const [savedSheetOpen, setSavedSheetOpen] = useState(false)
+  const [hasSavedOutfits, setHasSavedOutfits] = useState(false)
 
   const fetchItems = useCallback(async () => {
     setLoading(true)
@@ -45,6 +69,14 @@ export default function WardrobePage() {
     })
   }, [])
 
+  // Check if user has any saved outfits (for the modal footer link)
+  useEffect(() => {
+    fetch('/api/outfits')
+      .then(r => r.json())
+      .then(json => setHasSavedOutfits((json.outfits ?? []).length > 0))
+      .catch(() => {})
+  }, [])
+
   async function handleDelete(id: string) {
     await fetch('/api/wardrobe', {
       method: 'DELETE',
@@ -52,6 +84,54 @@ export default function WardrobePage() {
       body: JSON.stringify({ id }),
     })
     setItems(prev => prev.filter(i => i.id !== id))
+  }
+
+  async function handleAction(item: WardrobeItem, action: 'style' | 'tryon') {
+    setModal({ isOpen: true, action, mode: 'loading', item, suggestions: [], tryOnImageUrl: null, errorMessage: null })
+    await runAction(item, action)
+  }
+
+  async function runAction(item: WardrobeItem, action: 'style' | 'tryon') {
+    try {
+      if (action === 'style') {
+        const res = await fetch('/api/outfits/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ item_id: item.id }),
+        })
+        const json = await res.json()
+        if (!res.ok) throw new Error(json.error ?? 'Failed to generate outfits')
+        setModal(prev => ({ ...prev, mode: 'results', suggestions: json.suggestions ?? [] }))
+      } else {
+        const res = await fetch('/api/outfits/try-on', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ item_id: item.id }),
+        })
+        const json = await res.json()
+        if (!res.ok) throw new Error(json.error ?? 'Try-on failed')
+        setModal(prev => ({ ...prev, mode: 'results', tryOnImageUrl: json.image_url }))
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Something went wrong'
+      setModal(prev => ({ ...prev, mode: 'error', errorMessage: message }))
+    }
+  }
+
+  async function handleSaveOutfit(suggestion: OutfitSuggestion, _idx: number) {
+    if (!modal.item) return
+    await fetch('/api/outfits', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        item_id: modal.item.id,
+        name: suggestion.name,
+        occasion: suggestion.occasion,
+        pieces: suggestion.pieces,
+        description: suggestion.description,
+      }),
+    })
+    setHasSavedOutfits(true)
   }
 
   const validHex = (hex: string) => /^#[0-9a-fA-F]{6}$/.test(hex)
@@ -77,7 +157,13 @@ export default function WardrobePage() {
         )}
       </div>
       <div className="flex-1 px-4 pb-24">
-        <WardrobeGrid items={displayItems} loading={loading} onDelete={handleDelete} userSeason={userSeason} />
+        <WardrobeGrid
+          items={displayItems}
+          loading={loading}
+          onDelete={handleDelete}
+          onAction={handleAction}
+          userSeason={userSeason}
+        />
       </div>
       <div className="fixed bottom-20 inset-x-4">
         <a
@@ -87,6 +173,26 @@ export default function WardrobePage() {
           📸 Add Item
         </a>
       </div>
+
+      <OutfitModal
+        isOpen={modal.isOpen}
+        onClose={() => setModal(MODAL_CLOSED)}
+        action={modal.action}
+        mode={modal.mode}
+        item={modal.item}
+        suggestions={modal.suggestions}
+        tryOnImageUrl={modal.tryOnImageUrl ?? undefined}
+        errorMessage={modal.errorMessage ?? undefined}
+        onRetry={() => modal.item && runAction(modal.item, modal.action)}
+        onSaveOutfit={handleSaveOutfit}
+        onViewSaved={() => setSavedSheetOpen(true)}
+        hasSavedOutfits={hasSavedOutfits}
+      />
+
+      <SavedOutfitsSheet
+        isOpen={savedSheetOpen}
+        onClose={() => setSavedSheetOpen(false)}
+      />
     </div>
   )
 }
