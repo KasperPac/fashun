@@ -1,8 +1,10 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import type { WardrobeItem, WardrobeCategory, ColourSeason } from '@fashun/shared'
+import { isColourInSeason } from '@fashun/shared'
 import CategoryCarousel from '@/components/wardrobe/CategoryCarousel'
 import type { CategoryOption } from '@/components/wardrobe/CategoryCarousel'
+import PaletteFilterToggle from '@/components/wardrobe/PaletteFilterToggle'
 import WardrobeGrid from '@/components/wardrobe/WardrobeGrid'
 import OwnershipToggle from '@/components/wardrobe/OwnershipToggle'
 import BottomNav from '@/components/BottomNav'
@@ -14,6 +16,7 @@ export default function WardrobePage() {
   const [category, setCategory] = useState<CategoryOption>('all')
   const [ownership, setOwnership] = useState<'owned' | 'wishlist'>('owned')
   const [userSeason, setUserSeason] = useState<ColourSeason | undefined>(undefined)
+  const [paletteOnly, setPaletteOnly] = useState(false)
 
   const fetchItems = useCallback(async () => {
     setLoading(true)
@@ -52,20 +55,30 @@ export default function WardrobePage() {
     setItems(prev => prev.filter(i => i.id !== id))
   }
 
+  const validHex = (hex: string) => /^#[0-9a-fA-F]{6}$/.test(hex)
+  const displayItems = paletteOnly && userSeason
+    ? items.filter(item =>
+        (item.colours ?? []).filter(validHex).some(hex => isColourInSeason(hex, userSeason))
+      )
+    : items
+
   return (
     <div className="min-h-screen bg-black text-white flex flex-col">
       <div className="px-4 pt-6 pb-2">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-2xl font-black tracking-tight">My Wardrobe</h1>
-          <span className="text-zinc-500 text-sm">{items.length} items</span>
+          <span className="text-zinc-500 text-sm">{displayItems.length} items</span>
         </div>
         <OwnershipToggle active={ownership} onChange={setOwnership} />
         <div className="mt-3">
           <CategoryCarousel active={category} onChange={setCategory} />
         </div>
+        {userSeason && (
+          <PaletteFilterToggle enabled={paletteOnly} onChange={setPaletteOnly} />
+        )}
       </div>
       <div className="flex-1 px-4 pb-24">
-        <WardrobeGrid items={items} loading={loading} onDelete={handleDelete} userSeason={userSeason} />
+        <WardrobeGrid items={displayItems} loading={loading} onDelete={handleDelete} userSeason={userSeason} />
       </div>
       <BottomNav />
       <div className="fixed bottom-20 inset-x-4">
