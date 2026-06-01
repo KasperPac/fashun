@@ -1,4 +1,5 @@
 import SaveToWardrobeButton from '@/components/wardrobe/SaveToWardrobeButton'
+import BottomNav from '@/components/BottomNav'
 
 // Placeholder products — replaced in Phase 4 with real Commission Factory feed
 const DEMO_PRODUCTS = [
@@ -26,7 +27,7 @@ const DEMO_PRODUCTS = [
 
 export default function ShopPage() {
   return (
-    <div className="min-h-screen bg-black text-white px-4 py-6">
+    <div className="min-h-screen bg-black text-white px-4 py-6 pb-24">
       <h1 className="text-2xl font-black mb-2">Shop 🛍️</h1>
       <p className="text-zinc-500 text-sm mb-6">Australian retailers · filtered by your palette · Phase 1 demo</p>
       <div className="grid grid-cols-2 gap-4">
@@ -52,6 +53,7 @@ export default function ShopPage() {
           </div>
         ))}
       </div>
+      <BottomNav />
     </div>
   )
 }

@@ -5,6 +5,7 @@ import CategoryCarousel from '@/components/wardrobe/CategoryCarousel'
 import type { CategoryOption } from '@/components/wardrobe/CategoryCarousel'
 import WardrobeGrid from '@/components/wardrobe/WardrobeGrid'
 import OwnershipToggle from '@/components/wardrobe/OwnershipToggle'
+import BottomNav from '@/components/BottomNav'
 
 export default function WardrobePage() {
   const [items, setItems] = useState<WardrobeItem[]>([])
@@ -48,7 +49,8 @@ export default function WardrobePage() {
       <div className="flex-1 px-4 pb-24">
         <WardrobeGrid items={items} loading={loading} onDelete={handleDelete} />
       </div>
-      <div className="fixed bottom-6 inset-x-4">
+      <BottomNav />
+      <div className="fixed bottom-20 inset-x-4">
         <a
           href="/wardrobe/add"
           className="block bg-purple-600 hover:bg-purple-500 text-white text-center rounded-2xl py-4 font-bold text-sm shadow-xl shadow-purple-900/50"
