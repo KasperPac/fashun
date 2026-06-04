@@ -31,4 +31,13 @@ describe('uploadImageFromUrl', () => {
     upload.mockResolvedValueOnce({ error: { message: 'nope' } })
     await expect(uploadImageFromUrl(supabase, 'https://cdn.shop.com/shirt.jpg', 'u1')).rejects.toThrow()
   })
+
+  it('throws when the image exceeds the size cap', async () => {
+    ;(globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      headers: { get: (h: string) => (h === 'content-length' ? String(11 * 1024 * 1024) : 'image/jpeg') },
+      arrayBuffer: () => Promise.resolve(new Uint8Array([1]).buffer),
+    })
+    await expect(uploadImageFromUrl(supabase, 'https://cdn.shop.com/huge.jpg', 'u1')).rejects.toThrow()
+  })
 })

@@ -12,9 +12,14 @@ export async function uploadImageFromUrl(
   const res = await fetch(imageUrl, { headers: { Accept: 'image/*' } })
   if (!res.ok) throw new Error(`Image fetch failed: ${res.status}`)
 
-  const contentType = res.headers.get('content-type') ?? 'image/jpeg'
+  const MAX_BYTES = 10 * 1024 * 1024 // 10 MB
+  const declared = Number(res.headers.get('content-length') ?? 0)
+  if (declared > MAX_BYTES) throw new Error('Image too large')
+
+  const contentType = (res.headers.get('content-type') ?? 'image/jpeg').split(';')[0].trim()
   const ext = contentType.includes('png') ? 'png' : contentType.includes('webp') ? 'webp' : 'jpg'
   const bytes = Buffer.from(await res.arrayBuffer())
+  if (bytes.byteLength > MAX_BYTES) throw new Error('Image too large')
   const filename = `${userId}/${randomUUID()}.${ext}`
 
   const { error } = await supabase.storage
