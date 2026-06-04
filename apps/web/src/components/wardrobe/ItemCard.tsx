@@ -31,12 +31,16 @@ export default function ItemCard({ item, onDelete, onAction, userSeason, isActiv
       role="button"
       tabIndex={0}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={item.imageUrl}
-        alt={item.name}
-        className="w-full h-full object-contain p-2"
-      />
+      {item.imageUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={item.imageUrl}
+          alt={item.name}
+          className="w-full h-full object-contain p-2"
+        />
+      ) : (
+        <div className="w-full h-full flex items-center justify-center text-3xl text-zinc-700">👕</div>
+      )}
 
       {/* Palette match badge — top-right */}
       {paletteMatch === true && (
