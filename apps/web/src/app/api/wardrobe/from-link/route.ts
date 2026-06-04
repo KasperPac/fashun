@@ -4,6 +4,7 @@ import { scrapeProductPage } from '@/lib/product-scraper'
 import { extractProduct } from '@/lib/product-extractor'
 import { uploadImageFromUrl } from '@/lib/store-image'
 import { matchVariantToPhoto } from '@/lib/variant-matcher'
+import { searchProduct } from '@/lib/product-search'
 import { z } from 'zod'
 
 const Schema = z.object({
@@ -94,6 +95,10 @@ export async function POST(req: Request) {
     }
   }
 
-  // Search mode — implemented in Task 6
-  return NextResponse.json({ error: 'Search mode not yet available' }, { status: 400 })
+  // Search mode
+  const candidates = await searchProduct(parsed.data.description!, parsed.data.store ?? '')
+  if (candidates.length === 0) {
+    return NextResponse.json({ error: 'No matching products found' }, { status: 404 })
+  }
+  return NextResponse.json({ mode: 'candidates', candidates })
 }

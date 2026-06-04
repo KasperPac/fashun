@@ -17,6 +17,9 @@ vi.mock('@/lib/store-image', () => ({ uploadImageFromUrl }))
 const matchVariantToPhoto = vi.hoisted(() => vi.fn())
 vi.mock('@/lib/variant-matcher', () => ({ matchVariantToPhoto }))
 
+const searchProduct = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/product-search', () => ({ searchProduct }))
+
 import { POST } from './route'
 
 const extracted = {
@@ -33,6 +36,7 @@ beforeEach(() => {
   extractProduct.mockResolvedValue(extracted)
   uploadImageFromUrl.mockResolvedValue('https://supa.co/wardrobe/u1/x.jpg')
   matchVariantToPhoto.mockResolvedValue(null)
+  searchProduct.mockResolvedValue([])
 })
 
 function post(body: unknown) {
@@ -84,5 +88,22 @@ describe('POST /api/wardrobe/from-link (URL mode)', () => {
     const json = await res.json()
     expect(matchVariantToPhoto).toHaveBeenCalled()
     expect(json.product.colours).toEqual(['#556B2F'])
+  })
+
+  it('returns candidates in search mode', async () => {
+    searchProduct.mockResolvedValueOnce([
+      { url: 'https://theiconic.com.au/p/1', title: 'Black Nike Pegasus', imageUrl: null, retailer: 'THE ICONIC' },
+    ])
+    const res = await post({ description: 'black Nike running shoes', store: 'THE ICONIC' })
+    expect(res.status).toBe(200)
+    const json = await res.json()
+    expect(json.mode).toBe('candidates')
+    expect(json.candidates).toHaveLength(1)
+  })
+
+  it('returns 404 when search finds nothing', async () => {
+    searchProduct.mockResolvedValueOnce([])
+    const res = await post({ description: 'nonexistent thing', store: 'Nowhere' })
+    expect(res.status).toBe(404)
   })
 })
