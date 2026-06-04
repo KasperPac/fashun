@@ -67,4 +67,10 @@ describe('POST /api/wardrobe/from-link (URL mode)', () => {
     expect(json.mode).toBe('manual')
     expect(json.storeUrl).toBe('https://shop.com/blocked')
   })
+
+  it('returns 400 for a loopback/private url (SSRF guard)', async () => {
+    expect((await post({ url: 'http://localhost/admin' })).status).toBe(400)
+    expect((await post({ url: 'http://169.254.169.254/latest/meta-data' })).status).toBe(400)
+    expect((await post({ url: 'http://10.0.0.5/internal' })).status).toBe(400)
+  })
 })
