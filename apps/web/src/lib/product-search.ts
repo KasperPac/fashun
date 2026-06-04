@@ -39,7 +39,7 @@ After searching, reply with ONLY a JSON array (no markdown):
         url: c.url,
         title: typeof c.title === 'string' ? c.title : c.url,
         imageUrl: typeof c.imageUrl === 'string' ? c.imageUrl : null,
-        retailer: typeof c.retailer === 'string' ? c.retailer : store,
+        retailer: typeof c.retailer === 'string' ? c.retailer : (store || null),
       }))
   } catch {
     return []

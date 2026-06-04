@@ -53,6 +53,17 @@ describe('searchProduct', () => {
     const sent = mockCreate.mock.calls[0][0].messages[0].content as string
     expect(sent).toContain('from any major Australian retailer')
     expect(sent).not.toContain('retailer ""')
+    expect(out[0].retailer).toBe('Timberland')
+  })
+
+  it('falls back to null retailer (not empty string) when store is empty and the model omits it', async () => {
+    mockCreate.mockResolvedValue({
+      content: [{ type: 'text', text: JSON.stringify([
+        { url: 'https://shop.com/p/2', title: 'Boots', imageUrl: null },
+      ]) }],
+    })
+    const out = await searchProduct('boots', '')
+    expect(out[0].retailer).toBeNull()
   })
 
   it('uses the named retailer clause when a store is given', async () => {
