@@ -22,6 +22,18 @@ describe('searchProduct', () => {
     expect(out[0].url).toBe('https://theiconic.com.au/p/1')
   })
 
+  it('parses candidates when the JSON array is wrapped in a markdown fence', async () => {
+    mockCreate.mockResolvedValue({
+      content: [
+        { type: 'text', text: 'Found these:' },
+        { type: 'text', text: '```json\n[{"url":"https://theiconic.com.au/p/9","title":"Tee","imageUrl":null,"retailer":"THE ICONIC"}]\n```' },
+      ],
+    })
+    const out = await searchProduct('white tee', 'THE ICONIC')
+    expect(out).toHaveLength(1)
+    expect(out[0].url).toBe('https://theiconic.com.au/p/9')
+  })
+
   it('returns an empty array on error or unparseable output', async () => {
     mockCreate.mockRejectedValue(new Error('boom'))
     expect(await searchProduct('x', 'y')).toEqual([])
