@@ -24,6 +24,9 @@ vi.mock('@/lib/variant-matcher', () => ({ matchVariantToPhoto }))
 const searchProduct = vi.hoisted(() => vi.fn())
 vi.mock('@/lib/product-search', () => ({ searchProduct }))
 
+const extractProductViaClaude = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/product-fetch-claude', () => ({ extractProductViaClaude }))
+
 import { POST } from './route'
 
 const extracted = {
@@ -41,6 +44,7 @@ beforeEach(() => {
   uploadImageFromUrl.mockResolvedValue('u1/x.jpg') // bare object path, as the real uploader now returns
   matchVariantToPhoto.mockResolvedValue(null)
   searchProduct.mockResolvedValue([])
+  extractProductViaClaude.mockResolvedValue(null)
 })
 
 function post(body: unknown) {
@@ -71,8 +75,21 @@ describe('POST /api/wardrobe/from-link (URL mode)', () => {
     expect(json.product.colours).toEqual(['#B7410E']) // first variant default, no photo
   })
 
-  it('returns mode manual when scraping throws', async () => {
+  it('falls back to Claude web_fetch and returns confirm when direct scrape throws', async () => {
+    scrapeProductPage.mockRejectedValueOnce(new Error('Fetch failed: 403'))
+    extractProductViaClaude.mockResolvedValueOnce(extracted)
+    const res = await post({ url: 'https://kmart.com.au/p/blocked' })
+    expect(res.status).toBe(200)
+    const json = await res.json()
+    expect(extractProductViaClaude).toHaveBeenCalledWith('https://kmart.com.au/p/blocked')
+    expect(json.mode).toBe('confirm')
+    expect(json.product.suggestedName).toBe('Rust Linen Shirt')
+    expect(json.product.processedImageUrl).toBe('https://signed/preview.jpg')
+  })
+
+  it('returns mode manual when both direct scrape and Claude fetch fail', async () => {
     scrapeProductPage.mockRejectedValueOnce(new Error('403'))
+    extractProductViaClaude.mockResolvedValueOnce(null)
     const res = await post({ url: 'https://shop.com/blocked' })
     expect(res.status).toBe(200)
     const json = await res.json()
