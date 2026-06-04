@@ -62,15 +62,28 @@ export default function AddByLinkForm() {
 
   async function handleSave(imageUrl: string, colours: string[]) {
     if (!product) return
+    const returnMode = mode === 'manual' ? 'manual' : 'confirm'
     setMode('saving')
-    await fetch('/api/wardrobe', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name, category, colours, styleTags: product.styleTags, imageUrl, ownership,
-        storeUrl: product.storeUrl, price: product.price ?? undefined, retailer: product.retailer ?? undefined,
-      }),
-    })
-    router.push('/wardrobe')
+    setError('')
+    try {
+      const res = await fetch('/api/wardrobe', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name, category, colours, styleTags: product.styleTags, imageUrl, ownership,
+          storeUrl: product.storeUrl, price: product.price ?? undefined, retailer: product.retailer ?? undefined,
+        }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setError(data.error || 'Could not save the item — please try again.')
+        setMode(returnMode)
+        return
+      }
+      router.push('/wardrobe')
+    } catch {
+      setError('Could not save the item — please try again.')
+      setMode(returnMode)
+    }
   }
 
   if (mode === 'loading' || mode === 'saving') {
@@ -124,6 +137,7 @@ export default function AddByLinkForm() {
         </div>
         <ColourVariantPicker variants={product.colourVariants} selectedHex={selectedHex} onSelect={setSelectedHex} />
         <OwnershipToggle ownership={ownership} onChange={setOwnership} />
+        {error && <p className="text-red-400 text-sm">{error}</p>}
         <div className="flex gap-2 mt-2">
           <button onClick={() => setMode('input')} className="flex-1 bg-zinc-900 text-zinc-400 rounded-xl py-3 font-bold hover:bg-zinc-800">← Redo</button>
           <button onClick={() => handleSave(product.processedImageUrl ?? '', colours)}
@@ -159,6 +173,7 @@ export default function AddByLinkForm() {
             className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-purple-500" />
         </div>
         <OwnershipToggle ownership={ownership} onChange={setOwnership} />
+        {error && <p className="text-red-400 text-sm">{error}</p>}
         <div className="flex gap-2 mt-2">
           <button onClick={() => setMode('input')} className="flex-1 bg-zinc-900 text-zinc-400 rounded-xl py-3 font-bold hover:bg-zinc-800">← Back</button>
           <button onClick={() => handleSave(manualImageUrl, [])}
