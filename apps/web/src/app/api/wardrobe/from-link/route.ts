@@ -90,7 +90,10 @@ export async function POST(req: Request) {
           retailer: product.retailer,
         },
       })
-    } catch {
+    } catch (err) {
+      // Surfaced in Vercel function logs so the real failure (e.g. "Fetch failed: 403"
+      // from retailer bot-protection, vs a 404) is diagnosable rather than silently swallowed.
+      console.error('[from-link] could not read page', url, err instanceof Error ? err.message : err)
       return NextResponse.json({ mode: 'manual', storeUrl: url, reason: 'Could not read that page' })
     }
   }
