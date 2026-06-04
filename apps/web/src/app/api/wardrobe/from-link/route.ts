@@ -3,6 +3,7 @@ import { createServerClient } from '@/lib/supabase/server'
 import { scrapeProductPage } from '@/lib/product-scraper'
 import { extractProduct } from '@/lib/product-extractor'
 import { uploadImageFromUrl } from '@/lib/store-image'
+import { matchVariantToPhoto } from '@/lib/variant-matcher'
 import { z } from 'zod'
 
 const Schema = z.object({
@@ -63,10 +64,16 @@ export async function POST(req: Request) {
         }
       }
 
-      // Colour resolution (variant photo-matching added in Task 5)
-      const colours = product.colourVariants.length
-        ? [product.colourVariants[0].hex]
-        : product.colours
+      // Colour resolution: photo-match a variant if a photo was given, else first variant, else extracted
+      let colours: string[]
+      if (product.colourVariants.length && parsed.data.itemPhotoBase64) {
+        const matched = await matchVariantToPhoto(product.colourVariants, parsed.data.itemPhotoBase64)
+        colours = [(matched ?? product.colourVariants[0]).hex]
+      } else if (product.colourVariants.length) {
+        colours = [product.colourVariants[0].hex]
+      } else {
+        colours = product.colours
+      }
 
       return NextResponse.json({
         mode: 'confirm',

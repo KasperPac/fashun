@@ -14,6 +14,9 @@ vi.mock('@/lib/product-extractor', () => ({ extractProduct }))
 const uploadImageFromUrl = vi.hoisted(() => vi.fn())
 vi.mock('@/lib/store-image', () => ({ uploadImageFromUrl }))
 
+const matchVariantToPhoto = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/variant-matcher', () => ({ matchVariantToPhoto }))
+
 import { POST } from './route'
 
 const extracted = {
@@ -29,6 +32,7 @@ beforeEach(() => {
   scrapeProductPage.mockResolvedValue({ url: 'https://shop.com/p/1', imageUrl: extracted.imageUrl })
   extractProduct.mockResolvedValue(extracted)
   uploadImageFromUrl.mockResolvedValue('https://supa.co/wardrobe/u1/x.jpg')
+  matchVariantToPhoto.mockResolvedValue(null)
 })
 
 function post(body: unknown) {
@@ -72,5 +76,13 @@ describe('POST /api/wardrobe/from-link (URL mode)', () => {
     expect((await post({ url: 'http://localhost/admin' })).status).toBe(400)
     expect((await post({ url: 'http://169.254.169.254/latest/meta-data' })).status).toBe(400)
     expect((await post({ url: 'http://10.0.0.5/internal' })).status).toBe(400)
+  })
+
+  it('uses the photo-matched variant colour when a photo is attached', async () => {
+    matchVariantToPhoto.mockResolvedValueOnce({ label: 'Olive', hex: '#556B2F' })
+    const res = await post({ url: 'https://shop.com/p/1', itemPhotoBase64: 'BASE64DATA' })
+    const json = await res.json()
+    expect(matchVariantToPhoto).toHaveBeenCalled()
+    expect(json.product.colours).toEqual(['#556B2F'])
   })
 })
