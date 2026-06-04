@@ -6,6 +6,8 @@ import { uploadImageFromUrl } from '@/lib/store-image'
 import { signWardrobeImage } from '@/lib/wardrobe-image'
 import { matchVariantToPhoto } from '@/lib/variant-matcher'
 import { searchProduct } from '@/lib/product-search'
+import { extractProductViaClaude } from '@/lib/product-fetch-claude'
+import type { ExtractedProduct } from '@/lib/product-extractor'
 import { z } from 'zod'
 
 const Schema = z.object({
@@ -53,51 +55,61 @@ export async function POST(req: Request) {
     if (!isPubliclyFetchable(url)) {
       return NextResponse.json({ error: 'That URL cannot be fetched' }, { status: 400 })
     }
+    let product: ExtractedProduct | null = null
     try {
       const page = await scrapeProductPage(url)
-      const product = await extractProduct(page)
-
-      let processedImageUrl: string | null = null
-      if (product.imageUrl) {
-        try {
-          const path = await uploadImageFromUrl(supabase, product.imageUrl, user.id)
-          processedImageUrl = await signWardrobeImage(supabase, path, 3600)
-        } catch {
-          processedImageUrl = null
-        }
-      }
-
-      // Colour resolution: photo-match a variant if a photo was given, else first variant, else extracted
-      let colours: string[]
-      if (product.colourVariants.length && parsed.data.itemPhotoBase64) {
-        const matched = await matchVariantToPhoto(product.colourVariants, parsed.data.itemPhotoBase64)
-        colours = [(matched ?? product.colourVariants[0]).hex]
-      } else if (product.colourVariants.length) {
-        colours = [product.colourVariants[0].hex]
-      } else {
-        colours = product.colours
-      }
-
-      return NextResponse.json({
-        mode: 'confirm',
-        product: {
-          suggestedName: product.name,
-          category: product.category,
-          colours,
-          colourVariants: product.colourVariants,
-          styleTags: product.styleTags,
-          processedImageUrl,
-          storeUrl: url,
-          price: product.price,
-          retailer: product.retailer,
-        },
-      })
+      product = await extractProduct(page)
     } catch (err) {
-      // Surfaced in Vercel function logs so the real failure (e.g. "Fetch failed: 403"
-      // from retailer bot-protection, vs a 404) is diagnosable rather than silently swallowed.
-      console.error('[from-link] could not read page', url, err instanceof Error ? err.message : err)
+      // Direct fetch blocked (e.g. retailer bot-protection 403s Vercel's IP).
+      // Fall back to Claude's server-side web_fetch (different IP, Anthropic infra).
+      console.error('[from-link] direct scrape failed, trying Claude web_fetch', url, err instanceof Error ? err.message : err)
+      try {
+        product = await extractProductViaClaude(url)
+      } catch (claudeErr) {
+        console.error('[from-link] Claude web_fetch threw', url, claudeErr instanceof Error ? claudeErr.message : claudeErr)
+      }
+    }
+
+    if (!product) {
+      console.error('[from-link] both direct + Claude fetch failed', url)
       return NextResponse.json({ mode: 'manual', storeUrl: url, reason: 'Could not read that page' })
     }
+
+    let processedImageUrl: string | null = null
+    if (product.imageUrl) {
+      try {
+        const path = await uploadImageFromUrl(supabase, product.imageUrl, user.id)
+        processedImageUrl = await signWardrobeImage(supabase, path, 3600)
+      } catch {
+        processedImageUrl = null
+      }
+    }
+
+    // Colour resolution: photo-match a variant if a photo was given, else first variant, else extracted
+    let colours: string[]
+    if (product.colourVariants.length && parsed.data.itemPhotoBase64) {
+      const matched = await matchVariantToPhoto(product.colourVariants, parsed.data.itemPhotoBase64)
+      colours = [(matched ?? product.colourVariants[0]).hex]
+    } else if (product.colourVariants.length) {
+      colours = [product.colourVariants[0].hex]
+    } else {
+      colours = product.colours
+    }
+
+    return NextResponse.json({
+      mode: 'confirm',
+      product: {
+        suggestedName: product.name,
+        category: product.category,
+        colours,
+        colourVariants: product.colourVariants,
+        styleTags: product.styleTags,
+        processedImageUrl,
+        storeUrl: url,
+        price: product.price,
+        retailer: product.retailer,
+      },
+    })
   }
 
   // Search mode
