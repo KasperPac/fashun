@@ -150,7 +150,7 @@ export default function AddItemForm() {
               <button
                 type="button"
                 aria-pressed={selected.kind === 'user'}
-                onClick={() => setSelected({ kind: 'user' })}
+                onClick={() => { setNotice(''); setSelected({ kind: 'user' }) }}
                 className={`shrink-0 rounded-xl p-1 border-2 ${selected.kind === 'user' ? 'border-purple-500' : 'border-zinc-800'}`}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -162,7 +162,7 @@ export default function AddItemForm() {
                   key={c.url}
                   type="button"
                   aria-pressed={selected.kind === 'stock' && selected.candidate.url === c.url}
-                  onClick={() => setSelected({ kind: 'stock', candidate: c })}
+                  onClick={() => { setNotice(''); setSelected({ kind: 'stock', candidate: c }) }}
                   className={`shrink-0 rounded-xl p-1 border-2 ${selected.kind === 'stock' && selected.candidate.url === c.url ? 'border-purple-500' : 'border-zinc-800'}`}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
