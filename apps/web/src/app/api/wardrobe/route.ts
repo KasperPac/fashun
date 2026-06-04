@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
 import { z } from 'zod'
 import type { WardrobeItem } from '@fashun/shared'
+import { signWardrobeImage, toObjectPath, isExternalUrl } from '@/lib/wardrobe-image'
 
 export async function GET(req: Request) {
   const supabase = await createServerClient()
@@ -27,7 +28,33 @@ export async function GET(req: Request) {
   const { data, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  return NextResponse.json({ items: data as WardrobeItem[] })
+  type Row = {
+    id: string; user_id: string; ownership: string; category: string; name: string
+    colours: string[] | null; style_tags: string[] | null; occasion_tags: string[] | null
+    image_url: string | null; store_url: string | null; affiliate_url: string | null
+    price: number | null; retailer: string | null; last_worn_at: string | null; created_at: string
+  }
+  const rows = (data ?? []) as Row[]
+
+  const items: WardrobeItem[] = await Promise.all(rows.map(async (row) => ({
+    id: row.id,
+    userId: row.user_id,
+    ownership: row.ownership as WardrobeItem['ownership'],
+    category: row.category as WardrobeItem['category'],
+    name: row.name,
+    colours: row.colours ?? [],
+    styleTags: row.style_tags ?? [],
+    occasionTags: (row.occasion_tags ?? []) as WardrobeItem['occasionTags'],
+    imageUrl: row.image_url ? (await signWardrobeImage(supabase, row.image_url, 3600)) ?? '' : '',
+    storeUrl: row.store_url ?? undefined,
+    affiliateUrl: row.affiliate_url ?? undefined,
+    price: row.price ?? undefined,
+    retailer: row.retailer ?? undefined,
+    lastWornAt: row.last_worn_at ?? undefined,
+    createdAt: row.created_at,
+  })))
+
+  return NextResponse.json({ items })
 }
 
 export async function DELETE(req: Request) {
@@ -55,7 +82,7 @@ const CreateItemSchema = z.object({
   colours: z.array(z.string()).default([]),
   styleTags: z.array(z.string()).default([]),
   occasionTags: z.array(z.enum(['work', 'casual', 'dinner', 'event'])).default([]),
-  imageUrl: z.string().url(),
+  imageUrl: z.string().min(1), // path or URL — normalized to an object path on store
   ownership: z.enum(['owned', 'wishlist']).default('owned'),
   storeUrl: z.string().url().optional(),
   price: z.number().optional(),
@@ -82,7 +109,9 @@ export async function POST(req: Request) {
       colours: parsed.data.colours,
       style_tags: parsed.data.styleTags,
       occasion_tags: parsed.data.occasionTags,
-      image_url: parsed.data.imageUrl,
+      image_url: isExternalUrl(parsed.data.imageUrl)
+        ? parsed.data.imageUrl
+        : toObjectPath(parsed.data.imageUrl),
       ownership: parsed.data.ownership,
       store_url: parsed.data.storeUrl,
       price: parsed.data.price,

@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 const mockGetUser = vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } })
+const mockCreateSignedUrl = vi.fn().mockResolvedValue({ data: { signedUrl: 'https://signed/garment.jpg' }, error: null })
 
-const mockItem = { image_url: 'https://cdn.example.com/chinos.jpg', category: 'bottoms' }
+const mockItem = { image_url: 'u1/chinos.jpg', category: 'bottoms' } // bare object path (signed before Fashn)
 const mockProfile = { try_on_photo_url: 'https://cdn.example.com/me.jpg' }
 
 let itemResult: unknown = { data: mockItem, error: null }
@@ -27,6 +28,7 @@ vi.mock('@/lib/supabase/server', () => ({
       if (table === 'wardrobe_items') return makeChain(itemResult)
       return makeChain(profileResult)
     },
+    storage: { from: () => ({ createSignedUrl: mockCreateSignedUrl }) },
   }),
 }))
 
@@ -37,6 +39,7 @@ describe('POST /api/outfits/try-on', () => {
     vi.useFakeTimers()
     vi.clearAllMocks()
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
+    mockCreateSignedUrl.mockResolvedValue({ data: { signedUrl: 'https://signed/garment.jpg' }, error: null })
     itemResult = { data: mockItem, error: null }
     profileResult = { data: mockProfile, error: null }
   })
@@ -99,6 +102,11 @@ describe('POST /api/outfits/try-on', () => {
     expect(res.status).toBe(200)
     const json = await res.json()
     expect(json.image_url).toBe('https://fashn.ai/result.jpg')
+
+    // The garment image sent to Fashn is the signed URL, not the raw path
+    const runCall = mockFetch.mock.calls.find(c => String(c[0]).endsWith('/run'))
+    expect(runCall).toBeDefined()
+    expect(JSON.parse(runCall![1].body).garment_image).toBe('https://signed/garment.jpg')
   })
 
   it('returns 500 when Fashn.ai render fails', async () => {

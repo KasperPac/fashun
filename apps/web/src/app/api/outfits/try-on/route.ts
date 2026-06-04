@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
+import { signWardrobeImage } from '@/lib/wardrobe-image'
 import { z } from 'zod'
 
 const FASHN_BASE = 'https://api.fashn.ai/v1'
@@ -57,6 +58,11 @@ export async function POST(req: Request) {
     )
   }
 
+  const garmentImage = await signWardrobeImage(supabase, itemRes.data.image_url!, 600)
+  if (!garmentImage) {
+    return NextResponse.json({ error: 'Could not access item image', code: 'IMAGE_UNAVAILABLE' }, { status: 500 })
+  }
+
   try {
     const runRes = await fetch(`${FASHN_BASE}/run`, {
       method: 'POST',
@@ -66,7 +72,7 @@ export async function POST(req: Request) {
       },
       body: JSON.stringify({
         model_image: profileRes.data.try_on_photo_url,
-        garment_image: itemRes.data.image_url,
+        garment_image: garmentImage,
         category: CATEGORY_MAP[itemRes.data.category] ?? 'tops',
       }),
     })
