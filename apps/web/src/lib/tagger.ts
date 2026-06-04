@@ -8,6 +8,7 @@ interface TagResult {
   colours: string[]   // hex codes
   styleTags: string[]
   suggestedName: string
+  searchQuery: string  // product search query if identifiable, else ''
 }
 
 const FALLBACK: TagResult = {
@@ -15,6 +16,7 @@ const FALLBACK: TagResult = {
   colours: [],
   styleTags: [],
   suggestedName: 'My item',
+  searchQuery: '',
 }
 
 export async function tagImage(imageBase64: string): Promise<TagResult> {
@@ -36,7 +38,8 @@ export async function tagImage(imageBase64: string): Promise<TagResult> {
   "category": "tops|bottoms|shoes|outerwear|bags|accessories",
   "colours": ["#hexcode1", "#hexcode2"],
   "styleTags": ["casual|smart-casual|business|streetwear|minimalist|athleisure|bohemian|glam"],
-  "suggestedName": "Short descriptive name e.g. Navy Linen Shirt"
+  "suggestedName": "Short descriptive name e.g. Navy Linen Shirt",
+  "searchQuery": "If you can identify the specific product (brand + model), a concise web search query e.g. 'Timberland 6-inch premium boots'. Empty string if you cannot identify it."
 }
 No markdown, no explanation, just the JSON.`,
           },
@@ -52,6 +55,7 @@ No markdown, no explanation, just the JSON.`,
       colours: Array.isArray(parsed.colours) ? parsed.colours : [],
       styleTags: Array.isArray(parsed.styleTags) ? parsed.styleTags : [],
       suggestedName: parsed.suggestedName ?? FALLBACK.suggestedName,
+      searchQuery: typeof parsed.searchQuery === 'string' ? parsed.searchQuery : '',
     }
   } catch {
     return FALLBACK
