@@ -65,9 +65,10 @@ modes within the tab. The store link is saved on the item regardless of ownershi
      they bought.
    - **No variants on the page** → extract colour(s) from the product image using
      the existing colour-extraction step.
-6. **Image:** the chosen product photo becomes the wardrobe image. It is run through
-   the same **Photoroom background-removal** step used by the photo flow, so the
-   wardrobe grid stays visually consistent (transparent-background PNGs).
+6. **Image:** the chosen product photo becomes the wardrobe image **as-is**.
+   Photoroom background removal is **skipped for now** — store product images are
+   typically already on clean/white backgrounds, and skipping avoids the Photoroom
+   dependency for this flow. (Can be revisited later if grid consistency suffers.)
 7. **Confirm screen:** same pattern as the photo flow — product image, name,
    category, colours, ownership, store link. User edits any field and saves via the
    existing **`POST /api/wardrobe`**.
@@ -130,7 +131,6 @@ Save uses the existing `POST /api/wardrobe` (no new save route).
 | Page fetch blocked / 403 / unparseable | Fall to manual entry, pre-filled with whatever was extracted (e.g. og:image only) |
 | Web search returns nothing | Show "couldn't find it — add the link or enter manually" → manual entry |
 | Multiple search candidates | Show candidate cards; user picks the right one |
-| Background removal fails | Use the product image as-is (skip transparency); user can proceed |
 | Colour variant match low-confidence | Pre-select best guess; user can change on the variant chips / confirm screen |
 | No product image found | Manual entry; user can still attach their own photo as the image |
 
@@ -154,8 +154,9 @@ never silently persisted.
 
 - **Web search = Claude API server-side web search tool**, not a new vendor — the app
   already uses the Claude API. Avoids adding Brave/SerpAPI for the beta.
-- **Product image is background-removed** to match the existing wardrobe look, rather
-  than stored raw.
+- **Photoroom background removal is skipped for now** — the product image is stored
+  as-is. Store images are usually already clean; this avoids the Photoroom dependency
+  for the link flow. Revisit if grid consistency becomes a problem.
 - **No DB migration** — the wardrobe schema already supports store-sourced items.
 - **Confirm-before-save** is mandatory — extraction is assistive, never authoritative.
 
