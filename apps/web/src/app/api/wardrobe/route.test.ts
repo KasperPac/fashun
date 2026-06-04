@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const mockItems = [
-  { id: '1', user_id: 'user-1', category: 'tops', ownership: 'owned', name: 'White Tee', colours: ['#ffffff'], style_tags: ['casual'], occasion_tags: ['casual'], image_url: 'https://example.com/1.png', created_at: '2026-01-01' },
-  { id: '2', user_id: 'user-1', category: 'shoes', ownership: 'wishlist', name: 'Sneakers', colours: ['#000000'], style_tags: ['casual'], occasion_tags: ['casual'], image_url: 'https://example.com/2.png', created_at: '2026-01-02' },
+  { id: '1', user_id: 'user-1', category: 'tops', ownership: 'owned', name: 'White Tee', colours: ['#ffffff'], style_tags: ['casual'], occasion_tags: ['casual'], image_url: 'https://x.supabase.co/storage/v1/object/public/wardrobe-images/user-1/1.png', created_at: '2026-01-01' },
+  { id: '2', user_id: 'user-1', category: 'shoes', ownership: 'wishlist', name: 'Sneakers', colours: ['#000000'], style_tags: ['casual'], occasion_tags: ['casual'], image_url: 'https://x.supabase.co/storage/v1/object/public/wardrobe-images/user-1/2.png', created_at: '2026-01-02' },
 ]
 
 // Chainable thenable mock — every method returns itself, await resolves to result
@@ -62,6 +62,14 @@ describe('GET /api/wardrobe', () => {
     const req = new Request('http://localhost/api/wardrobe')
     const res = await GET(req)
     expect(res.status).toBe(401)
+  })
+
+  it('returns external image URLs unchanged (not signed)', async () => {
+    queryResult = { data: [{ ...mockItems[0], image_url: 'https://images.unsplash.com/p?w=400' }], error: null }
+    const req = new Request('http://localhost/api/wardrobe?ownership=owned')
+    const res = await GET(req)
+    const json = await res.json()
+    expect(json.items[0].imageUrl).toBe('https://images.unsplash.com/p?w=400')
   })
 })
 

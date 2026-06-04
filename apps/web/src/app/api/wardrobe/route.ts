@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
 import { z } from 'zod'
 import type { WardrobeItem } from '@fashun/shared'
-import { signWardrobeImage, toObjectPath } from '@/lib/wardrobe-image'
+import { signWardrobeImage, toObjectPath, isExternalUrl } from '@/lib/wardrobe-image'
 
 export async function GET(req: Request) {
   const supabase = await createServerClient()
@@ -109,7 +109,9 @@ export async function POST(req: Request) {
       colours: parsed.data.colours,
       style_tags: parsed.data.styleTags,
       occasion_tags: parsed.data.occasionTags,
-      image_url: toObjectPath(parsed.data.imageUrl),
+      image_url: isExternalUrl(parsed.data.imageUrl)
+        ? parsed.data.imageUrl
+        : toObjectPath(parsed.data.imageUrl),
       ownership: parsed.data.ownership,
       store_url: parsed.data.storeUrl,
       price: parsed.data.price,
