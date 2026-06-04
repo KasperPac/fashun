@@ -22,6 +22,7 @@ export async function extractProductViaClaude(url: string): Promise<ExtractedPro
     const message = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 1024,
+      // max_uses: 2 allows one redirect/retry without runaway fetches
       tools: [{ type: 'web_fetch_20250910', name: 'web_fetch', max_uses: 2 } as never],
       messages: [{
         role: 'user',
@@ -46,6 +47,7 @@ Rules:
     })
 
     // If web_fetch failed, the result block carries a web_fetch_tool_error -> give up (null).
+    // 'web_fetch_tool_result' is not yet in the SDK's ContentBlock union
     const fetchFailed = message.content.some(
       (b: { type: string; content?: { type?: string } }) =>
         b.type === 'web_fetch_tool_result' && b.content?.type === 'web_fetch_tool_error',

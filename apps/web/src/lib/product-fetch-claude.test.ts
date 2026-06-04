@@ -33,6 +33,7 @@ describe('extractProductViaClaude', () => {
     expect(out!.category).toBe('tops')
     expect(out!.colourVariants).toHaveLength(2)
     expect(out!.colours).toEqual(['#B7410E'])
+    expect(out!.styleTags).toEqual(['smart-casual'])
   })
 
   it('parses JSON wrapped in a markdown fence', async () => {
@@ -42,6 +43,7 @@ describe('extractProductViaClaude', () => {
       ],
     })
     const out = await extractProductViaClaude('https://kmart.com/p/1')
+    expect(out).not.toBeNull()
     expect(out!.name).toBe('Rust Linen Shirt')
   })
 
