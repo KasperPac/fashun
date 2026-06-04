@@ -155,7 +155,7 @@ export default function AddByLinkForm() {
   if (mode === 'manual' && product) {
     return (
       <div className="flex flex-col gap-5">
-        <p className="text-amber-400 text-sm">Couldn&apos;t read that page automatically — fill in the details.</p>
+        <p className="text-amber-400 text-sm">Couldn&apos;t read that page automatically — fill in the details below, or use the 📸 Photo tab to snap the item.</p>
         <div>
           <label className="text-xs text-zinc-500 uppercase tracking-widest mb-1 block">Name</label>
           <input value={name} onChange={e => setName(e.target.value)}
@@ -173,12 +173,15 @@ export default function AddByLinkForm() {
           <input value={manualImageUrl} onChange={e => setManualImageUrl(e.target.value)} placeholder="https://…"
             className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-purple-500" />
         </div>
+        {manualImageUrl !== '' && !isHttpUrl(manualImageUrl) && (
+          <p className="text-amber-400 text-xs">Enter a full image URL (https://…), or use the 📸 Photo tab to snap the item instead.</p>
+        )}
         <OwnershipToggle active={ownership} onChange={setOwnership} />
         {error && <p className="text-red-400 text-sm">{error}</p>}
         <div className="flex gap-2 mt-2">
           <button onClick={() => setMode('input')} className="flex-1 bg-zinc-900 text-zinc-400 rounded-xl py-3 font-bold hover:bg-zinc-800">← Back</button>
           <button onClick={() => handleSave(manualImageUrl, [])}
-            disabled={!name || !manualImageUrl}
+            disabled={!name || !isHttpUrl(manualImageUrl)}
             className="flex-1 bg-purple-600 hover:bg-purple-500 text-white rounded-xl py-3 font-bold disabled:opacity-50">
             ✓ Save to Wardrobe
           </button>
@@ -230,6 +233,11 @@ export default function AddByLinkForm() {
       </button>
     </div>
   )
+}
+
+function isHttpUrl(s: string): boolean {
+  try { const u = new URL(s); return u.protocol === 'http:' || u.protocol === 'https:' }
+  catch { return false }
 }
 
 async function fileToBase64(file: File): Promise<string> {
