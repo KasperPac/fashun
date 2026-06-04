@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
 import { tagImage } from '@/lib/tagger'
+import { signWardrobeImage } from '@/lib/wardrobe-image'
 import { z } from 'zod'
 import { randomUUID } from 'crypto'
 
@@ -36,12 +37,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Upload failed' }, { status: 500 })
   }
 
-  const { data: { publicUrl } } = supabase.storage
-    .from('wardrobe-images')
-    .getPublicUrl(filename)
+  // Private bucket: return a short-lived signed URL for the confirm preview.
+  // The saved value is normalized to the object path by POST /api/wardrobe.
+  const processedImageUrl = await signWardrobeImage(supabase, filename, 3600)
 
   return NextResponse.json({
-    processedImageUrl: publicUrl,
+    processedImageUrl,
     category: tags.category,
     colours: tags.colours,
     styleTags: tags.styleTags,

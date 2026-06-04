@@ -3,7 +3,7 @@ import type { createServerClient } from '@/lib/supabase/server'
 
 type ServerClient = Awaited<ReturnType<typeof createServerClient>>
 
-/** Fetches an image by URL and uploads it to the wardrobe-images bucket. Returns the public URL. */
+/** Fetches an image by URL and uploads it to the wardrobe-images bucket. Returns the object path (`{userId}/{uuid}.ext`). */
 export async function uploadImageFromUrl(
   supabase: ServerClient,
   imageUrl: string,
@@ -27,6 +27,5 @@ export async function uploadImageFromUrl(
     .upload(filename, bytes, { contentType, upsert: false })
   if (error) throw new Error(`Upload failed: ${error.message}`)
 
-  const { data } = supabase.storage.from('wardrobe-images').getPublicUrl(filename)
-  return data.publicUrl
+  return filename
 }

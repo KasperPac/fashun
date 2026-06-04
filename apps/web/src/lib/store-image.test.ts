@@ -16,10 +16,10 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('uploadImageFromUrl', () => {
-  it('uploads the fetched image and returns the public URL', async () => {
-    const url = await uploadImageFromUrl(supabase, 'https://cdn.shop.com/shirt.jpg', 'u1')
+  it('uploads the fetched image and returns the object path', async () => {
+    const path = await uploadImageFromUrl(supabase, 'https://cdn.shop.com/shirt.jpg', 'u1')
     expect(upload).toHaveBeenCalled()
-    expect(url).toBe('https://supa.co/wardrobe/u1/x.jpg')
+    expect(path).toMatch(/^u1\/.+\.jpg$/)
   })
 
   it('throws when the image fetch fails', async () => {

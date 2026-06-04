@@ -3,6 +3,7 @@ import { createServerClient } from '@/lib/supabase/server'
 import { scrapeProductPage } from '@/lib/product-scraper'
 import { extractProduct } from '@/lib/product-extractor'
 import { uploadImageFromUrl } from '@/lib/store-image'
+import { signWardrobeImage } from '@/lib/wardrobe-image'
 import { matchVariantToPhoto } from '@/lib/variant-matcher'
 import { searchProduct } from '@/lib/product-search'
 import { z } from 'zod'
@@ -59,7 +60,8 @@ export async function POST(req: Request) {
       let processedImageUrl: string | null = null
       if (product.imageUrl) {
         try {
-          processedImageUrl = await uploadImageFromUrl(supabase, product.imageUrl, user.id)
+          const path = await uploadImageFromUrl(supabase, product.imageUrl, user.id)
+          processedImageUrl = await signWardrobeImage(supabase, path, 3600)
         } catch {
           processedImageUrl = null
         }

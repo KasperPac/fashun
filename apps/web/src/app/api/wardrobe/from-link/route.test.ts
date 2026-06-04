@@ -1,8 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const mockGetUser = vi.hoisted(() => vi.fn().mockResolvedValue({ data: { user: { id: 'u1' } } }))
+const mockCreateSignedUrl = vi.hoisted(() => vi.fn().mockResolvedValue({ data: { signedUrl: 'https://signed/preview.jpg' }, error: null }))
 vi.mock('@/lib/supabase/server', () => ({
-  createServerClient: async () => ({ auth: { getUser: mockGetUser } }),
+  createServerClient: async () => ({
+    auth: { getUser: mockGetUser },
+    storage: { from: () => ({ createSignedUrl: mockCreateSignedUrl }) },
+  }),
 }))
 
 const scrapeProductPage = vi.hoisted(() => vi.fn())
@@ -61,7 +65,7 @@ describe('POST /api/wardrobe/from-link (URL mode)', () => {
     const json = await res.json()
     expect(json.mode).toBe('confirm')
     expect(json.product.suggestedName).toBe('Rust Linen Shirt')
-    expect(json.product.processedImageUrl).toBe('https://supa.co/wardrobe/u1/x.jpg')
+    expect(json.product.processedImageUrl).toBe('https://signed/preview.jpg')
     expect(json.product.storeUrl).toBe('https://shop.com/p/1')
     expect(json.product.colourVariants).toHaveLength(2)
     expect(json.product.colours).toEqual(['#B7410E']) // first variant default, no photo
