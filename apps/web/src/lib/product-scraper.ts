@@ -10,13 +10,15 @@ export interface ScrapedPage {
 
 function metaContent(html: string, property: string): string | null {
   // Matches <meta property="og:x" content="..."> in either attribute order.
+  // content value must close with the same delimiter it opened with, so values
+  // containing an apostrophe (e.g. content="Men's Jeans") aren't truncated.
   const re = new RegExp(
-    `<meta[^>]+(?:property|name)=["']${property}["'][^>]*content=["']([^"']*)["']` +
-    `|<meta[^>]+content=["']([^"']*)["'][^>]*(?:property|name)=["']${property}["']`,
+    `<meta[^>]+(?:property|name)=["']${property}["'][^>]*content=(?:"([^"]*)"|'([^']*)')` +
+    `|<meta[^>]+content=(?:"([^"]*)"|'([^']*)')[^>]*(?:property|name)=["']${property}["']`,
     'i',
   )
   const m = html.match(re)
-  return m ? (m[1] ?? m[2] ?? null) : null
+  return m ? (m[1] ?? m[2] ?? m[3] ?? m[4] ?? null) : null
 }
 
 function firstProductJsonLd(html: string): Record<string, unknown> | null {
@@ -25,7 +27,8 @@ function firstProductJsonLd(html: string): Record<string, unknown> | null {
   while ((match = re.exec(html))) {
     try {
       const parsed = JSON.parse(match[1].trim())
-      const nodes = Array.isArray(parsed) ? parsed : [parsed, ...(parsed['@graph'] ?? [])]
+      const graph = Array.isArray(parsed['@graph']) ? parsed['@graph'] : []
+      const nodes = Array.isArray(parsed) ? parsed : [parsed, ...graph]
       for (const node of nodes) {
         const type = node?.['@type']
         if (type === 'Product' || (Array.isArray(type) && type.includes('Product'))) {

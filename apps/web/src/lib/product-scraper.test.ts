@@ -48,6 +48,15 @@ describe('scrapeProductPage', () => {
     expect(page.title).toBe('Only Title')
   })
 
+  it('does not truncate a double-quoted value containing an apostrophe', async () => {
+    ;(globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      text: () => Promise.resolve(`<meta property="og:title" content="Men's Linen Shirt" />`),
+    })
+    const page = await scrapeProductPage('https://shop.com/p/3')
+    expect(page.title).toBe("Men's Linen Shirt")
+  })
+
   it('throws when the response is not ok', async () => {
     ;(globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ok: false, status: 403 })
     await expect(scrapeProductPage('https://shop.com/blocked')).rejects.toThrow()
