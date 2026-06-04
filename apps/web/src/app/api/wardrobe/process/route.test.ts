@@ -64,9 +64,11 @@ describe('POST /api/wardrobe/process', () => {
     const res = await post(VALID)
     const json = await res.json()
     expect(searchProduct).not.toHaveBeenCalled()
+    expect(json.searchQuery).toBe('')
     expect(json.candidates).toEqual([])
   })
 
+  // product-search internally soft-fails to []; this verifies the route's own catch survives if that lib contract ever changes.
   it('still returns 200 with no candidates when searchProduct throws', async () => {
     searchProduct.mockRejectedValueOnce(new Error('boom'))
     const res = await post(VALID)
