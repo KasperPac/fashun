@@ -63,7 +63,11 @@ export async function POST(req: Request) {
       // Direct fetch blocked (e.g. retailer bot-protection 403s Vercel's IP).
       // Fall back to Claude's server-side web_fetch (different IP, Anthropic infra).
       console.error('[from-link] direct scrape failed, trying Claude web_fetch', url, err instanceof Error ? err.message : err)
-      product = await extractProductViaClaude(url)
+      try {
+        product = await extractProductViaClaude(url)
+      } catch (claudeErr) {
+        console.error('[from-link] Claude web_fetch threw', url, claudeErr instanceof Error ? claudeErr.message : claudeErr)
+      }
     }
 
     if (!product) {
