@@ -38,7 +38,7 @@ beforeEach(() => {
   mockGetUser.mockResolvedValue({ data: { user: { id: 'u1' } } })
   scrapeProductPage.mockResolvedValue({ url: 'https://shop.com/p/1', imageUrl: extracted.imageUrl })
   extractProduct.mockResolvedValue(extracted)
-  uploadImageFromUrl.mockResolvedValue('https://supa.co/wardrobe/u1/x.jpg')
+  uploadImageFromUrl.mockResolvedValue('u1/x.jpg') // bare object path, as the real uploader now returns
   matchVariantToPhoto.mockResolvedValue(null)
   searchProduct.mockResolvedValue([])
 })

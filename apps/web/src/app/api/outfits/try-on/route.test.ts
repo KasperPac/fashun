@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 const mockGetUser = vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } })
 const mockCreateSignedUrl = vi.fn().mockResolvedValue({ data: { signedUrl: 'https://signed/garment.jpg' }, error: null })
 
-const mockItem = { image_url: 'https://cdn.example.com/chinos.jpg', category: 'bottoms' }
+const mockItem = { image_url: 'u1/chinos.jpg', category: 'bottoms' } // bare object path (signed before Fashn)
 const mockProfile = { try_on_photo_url: 'https://cdn.example.com/me.jpg' }
 
 let itemResult: unknown = { data: mockItem, error: null }
