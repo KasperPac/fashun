@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import type { WardrobeCategory, Ownership } from '@fashun/shared'
 import type { ColourVariant } from '@/lib/product-extractor'
 import ColourVariantPicker from './ColourVariantPicker'
+import OwnershipToggle from './OwnershipToggle'
 
 type Product = {
   suggestedName: string
@@ -136,7 +137,7 @@ export default function AddByLinkForm() {
           </select>
         </div>
         <ColourVariantPicker variants={product.colourVariants} selectedHex={selectedHex} onSelect={setSelectedHex} />
-        <OwnershipToggle ownership={ownership} onChange={setOwnership} />
+        <OwnershipToggle active={ownership} onChange={setOwnership} />
         {error && <p className="text-red-400 text-sm">{error}</p>}
         <div className="flex gap-2 mt-2">
           <button onClick={() => setMode('input')} className="flex-1 bg-zinc-900 text-zinc-400 rounded-xl py-3 font-bold hover:bg-zinc-800">← Redo</button>
@@ -172,7 +173,7 @@ export default function AddByLinkForm() {
           <input value={manualImageUrl} onChange={e => setManualImageUrl(e.target.value)} placeholder="https://…"
             className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-purple-500" />
         </div>
-        <OwnershipToggle ownership={ownership} onChange={setOwnership} />
+        <OwnershipToggle active={ownership} onChange={setOwnership} />
         {error && <p className="text-red-400 text-sm">{error}</p>}
         <div className="flex gap-2 mt-2">
           <button onClick={() => setMode('input')} className="flex-1 bg-zinc-900 text-zinc-400 rounded-xl py-3 font-bold hover:bg-zinc-800">← Back</button>
@@ -215,11 +216,11 @@ export default function AddByLinkForm() {
       <div>
         <label className="text-xs text-zinc-500 uppercase tracking-widest mb-1 block">Photo of your item (optional — helps pick the colour)</label>
         <input type="file" accept="image/*"
-          onChange={async e => { const f = e.target.files?.[0]; if (f) setItemPhoto(await fileToBase64(f)) }}
+          onChange={async e => { const f = e.target.files?.[0]; if (f) { const b = await fileToBase64(f); if (b) setItemPhoto(b) } }}
           className="text-zinc-400 text-sm" />
       </div>
 
-      <OwnershipToggle ownership={ownership} onChange={setOwnership} />
+      <OwnershipToggle active={ownership} onChange={setOwnership} />
       {error && <p className="text-red-400 text-sm">{error}</p>}
       <button
         onClick={() => describe ? submit({ description, store }) : submit({ url, itemPhotoBase64: itemPhoto })}
@@ -231,25 +232,11 @@ export default function AddByLinkForm() {
   )
 }
 
-function OwnershipToggle({ ownership, onChange }: { ownership: Ownership; onChange: (o: Ownership) => void }) {
-  return (
-    <div className="flex gap-2">
-      {(['owned', 'wishlist'] as Ownership[]).map(o => (
-        <button key={o} type="button" onClick={() => onChange(o)}
-          className={`flex-1 rounded-xl py-2 text-sm font-semibold transition-colors ${
-            ownership === o ? 'bg-purple-600 text-white' : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-800'
-          }`}>
-          {o === 'owned' ? 'Owned' : 'Wishlist'}
-        </button>
-      ))}
-    </div>
-  )
-}
-
 async function fileToBase64(file: File): Promise<string> {
   return new Promise(resolve => {
     const reader = new FileReader()
     reader.onload = () => resolve((reader.result as string).split(',')[1])
+    reader.onerror = () => resolve('')
     reader.readAsDataURL(file)
   })
 }
