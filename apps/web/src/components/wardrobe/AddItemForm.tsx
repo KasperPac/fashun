@@ -17,6 +17,8 @@ type ProcessResult = {
 
 type Selected = { kind: 'user' } | { kind: 'stock'; candidate: Candidate }
 
+const CATEGORIES: WardrobeCategory[] = ['tops', 'bottoms', 'shoes', 'outerwear', 'bags', 'accessories']
+
 export default function AddItemForm() {
   const router = useRouter()
   const inputRef = useRef<HTMLInputElement>(null)
@@ -35,26 +37,32 @@ export default function AddItemForm() {
     setNotice('')
     const base64 = await fileToBase64(file)
     setUserPhotoBase64(base64)
-    const res = await fetch('/api/wardrobe/process', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ imageBase64: base64 }),
-    })
-    const data = await res.json()
-    if (!res.ok) { setError(data.error || 'Processing failed'); setState('idle'); return }
-    const r = data as ProcessResult
-    setResult(r)
-    setName(r.suggestedName)
-    setCategory(r.category)
-    // Default to the best stock image when one was found; otherwise the user's photo.
-    setSelected(r.candidates.length ? { kind: 'stock', candidate: r.candidates[0] } : { kind: 'user' })
-    setState('confirming')
+    try {
+      const res = await fetch('/api/wardrobe/process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: base64 }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error || 'Processing failed'); setState('idle'); return }
+      const r = data as ProcessResult
+      setResult(r)
+      setName(r.suggestedName)
+      setCategory(r.category)
+      // Default to the best stock image when one was found; otherwise the user's photo.
+      setSelected(r.candidates.length ? { kind: 'stock', candidate: r.candidates[0] } : { kind: 'user' })
+      setState('confirming')
+    } catch {
+      setError('Could not process that photo — please try again.')
+      setState('idle')
+    }
   }
 
   async function handleSave() {
     if (!result) return
     setState('saving')
     setError('')
+    setNotice('')
 
     let imageUrl = result.processedImageUrl
     let colours = result.colours
@@ -92,7 +100,7 @@ export default function AddItemForm() {
     }
 
     try {
-      await fetch('/api/wardrobe', {
+      const res = await fetch('/api/wardrobe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -100,6 +108,12 @@ export default function AddItemForm() {
           ownership: 'owned', price, retailer, storeUrl,
         }),
       })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setError(data.error || 'Could not save the item — please try again.')
+        setState('confirming')
+        return
+      }
       router.push('/wardrobe')
     } catch {
       setError('Could not save the item — please try again.')
@@ -135,6 +149,7 @@ export default function AddItemForm() {
             <div className="flex gap-2 overflow-x-auto pb-1">
               <button
                 type="button"
+                aria-pressed={selected.kind === 'user'}
                 onClick={() => setSelected({ kind: 'user' })}
                 className={`shrink-0 rounded-xl p-1 border-2 ${selected.kind === 'user' ? 'border-purple-500' : 'border-zinc-800'}`}
               >
@@ -146,6 +161,7 @@ export default function AddItemForm() {
                 <button
                   key={c.url}
                   type="button"
+                  aria-pressed={selected.kind === 'stock' && selected.candidate.url === c.url}
                   onClick={() => setSelected({ kind: 'stock', candidate: c })}
                   className={`shrink-0 rounded-xl p-1 border-2 ${selected.kind === 'stock' && selected.candidate.url === c.url ? 'border-purple-500' : 'border-zinc-800'}`}
                 >
@@ -176,7 +192,7 @@ export default function AddItemForm() {
             onChange={e => setCategory(e.target.value as WardrobeCategory)}
             className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-purple-500"
           >
-            {['tops', 'bottoms', 'shoes', 'outerwear', 'bags', 'accessories'].map(c => (
+            {CATEGORIES.map(c => (
               <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
             ))}
           </select>
@@ -231,6 +247,7 @@ async function fileToBase64(file: File): Promise<string> {
       const result = reader.result as string
       resolve(result.split(',')[1])
     }
+    reader.onerror = () => resolve('')
     reader.readAsDataURL(file)
   })
 }
