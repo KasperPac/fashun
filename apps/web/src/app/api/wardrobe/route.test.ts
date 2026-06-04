@@ -32,6 +32,7 @@ vi.mock('@/lib/supabase/server', () => ({
       from: () => ({
         upload: vi.fn().mockResolvedValue({ data: { path: 'test.png' }, error: null }),
         getPublicUrl: vi.fn().mockReturnValue({ data: { publicUrl: 'https://cdn.example.com/test.png' } }),
+        createSignedUrl: vi.fn().mockResolvedValue({ data: { signedUrl: 'https://signed.example.com/x.png' }, error: null }),
       }),
     },
   }),
@@ -45,12 +46,15 @@ describe('GET /api/wardrobe', () => {
     queryResult = { data: mockItems, error: null }
   })
 
-  it('returns items for authenticated user', async () => {
+  it('returns camelCase items with signed image URLs', async () => {
     const req = new Request('http://localhost/api/wardrobe?ownership=owned')
     const res = await GET(req)
     expect(res.status).toBe(200)
     const json = await res.json()
     expect(json.items).toHaveLength(2)
+    expect(json.items[0].imageUrl).toBe('https://signed.example.com/x.png')
+    expect(json.items[0].styleTags).toEqual(['casual'])
+    expect(json.items[0]).not.toHaveProperty('image_url')
   })
 
   it('returns 401 when unauthenticated', async () => {
