@@ -18,9 +18,11 @@ export async function searchProduct(description: string, store: string): Promise
       tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 } as never],
       messages: [{
         role: 'user',
-        content: `Find up to 3 specific product pages for "${description}" at the Australian retailer "${store}".
+        content: `Find up to 3 specific product pages for "${description}" ${
+          store ? `at the Australian retailer "${store}"` : 'from any major Australian retailer'
+        }.
 After searching, reply with ONLY a JSON array (no markdown):
-[{"url":"direct product page url","title":"product name","imageUrl":"image url or null","retailer":"${store}"}]`,
+[{"url":"direct product page url","title":"product name","imageUrl":"image url or null","retailer":"retailer name"}]`,
       }],
     })
 
@@ -37,7 +39,7 @@ After searching, reply with ONLY a JSON array (no markdown):
         url: c.url,
         title: typeof c.title === 'string' ? c.title : c.url,
         imageUrl: typeof c.imageUrl === 'string' ? c.imageUrl : null,
-        retailer: typeof c.retailer === 'string' ? c.retailer : store,
+        retailer: typeof c.retailer === 'string' ? c.retailer : (store || null),
       }))
   } catch {
     return []

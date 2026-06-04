@@ -38,4 +38,38 @@ describe('searchProduct', () => {
     mockCreate.mockRejectedValue(new Error('boom'))
     expect(await searchProduct('x', 'y')).toEqual([])
   })
+
+  it('uses a generic retailer clause and still returns candidates when store is empty', async () => {
+    mockCreate.mockResolvedValue({
+      content: [
+        { type: 'text', text: JSON.stringify([
+          { url: 'https://shop.com/p/1', title: 'Timberland 6-inch boots', imageUrl: 'https://shop.com/i.jpg', retailer: 'Timberland' },
+        ]) },
+      ],
+    })
+    const out = await searchProduct('Timberland 6-inch premium boots', '')
+    expect(out).toHaveLength(1)
+    expect(out[0].url).toBe('https://shop.com/p/1')
+    const sent = mockCreate.mock.calls[0][0].messages[0].content as string
+    expect(sent).toContain('from any major Australian retailer')
+    expect(sent).not.toContain('retailer ""')
+    expect(out[0].retailer).toBe('Timberland')
+  })
+
+  it('falls back to null retailer (not empty string) when store is empty and the model omits it', async () => {
+    mockCreate.mockResolvedValue({
+      content: [{ type: 'text', text: JSON.stringify([
+        { url: 'https://shop.com/p/2', title: 'Boots', imageUrl: null },
+      ]) }],
+    })
+    const out = await searchProduct('boots', '')
+    expect(out[0].retailer).toBeNull()
+  })
+
+  it('uses the named retailer clause when a store is given', async () => {
+    mockCreate.mockResolvedValue({ content: [{ type: 'text', text: '[]' }] })
+    await searchProduct('white tee', 'THE ICONIC')
+    const sent = mockCreate.mock.calls[0][0].messages[0].content as string
+    expect(sent).toContain('at the Australian retailer "THE ICONIC"')
+  })
 })

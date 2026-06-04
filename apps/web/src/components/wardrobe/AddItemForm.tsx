@@ -3,56 +3,122 @@ import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import type { WardrobeCategory } from '@fashun/shared'
 
+type Candidate = { url: string; title: string; imageUrl: string | null; retailer: string | null }
+
 type ProcessResult = {
   processedImageUrl: string
   category: WardrobeCategory
   colours: string[]
   styleTags: string[]
   suggestedName: string
+  searchQuery: string
+  candidates: Candidate[]
 }
+
+type Selected = { kind: 'user' } | { kind: 'stock'; candidate: Candidate }
+
+const CATEGORIES: WardrobeCategory[] = ['tops', 'bottoms', 'shoes', 'outerwear', 'bags', 'accessories']
 
 export default function AddItemForm() {
   const router = useRouter()
   const inputRef = useRef<HTMLInputElement>(null)
   const [state, setState] = useState<'idle' | 'processing' | 'confirming' | 'saving'>('idle')
   const [result, setResult] = useState<ProcessResult | null>(null)
+  const [userPhotoBase64, setUserPhotoBase64] = useState('')
+  const [selected, setSelected] = useState<Selected>({ kind: 'user' })
   const [name, setName] = useState('')
   const [category, setCategory] = useState<WardrobeCategory>('tops')
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
 
   async function processFile(file: File) {
     setState('processing')
     setError('')
+    setNotice('')
     const base64 = await fileToBase64(file)
-    const res = await fetch('/api/wardrobe/process', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ imageBase64: base64 }),
-    })
-    const data = await res.json()
-    if (!res.ok) { setError(data.error || 'Processing failed'); setState('idle'); return }
-    setResult(data)
-    setName(data.suggestedName)
-    setCategory(data.category)
-    setState('confirming')
+    setUserPhotoBase64(base64)
+    try {
+      const res = await fetch('/api/wardrobe/process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: base64 }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error || 'Processing failed'); setState('idle'); return }
+      const r = data as ProcessResult
+      setResult(r)
+      setName(r.suggestedName)
+      setCategory(r.category)
+      // Default to the best stock image when one was found; otherwise the user's photo.
+      setSelected(r.candidates.length ? { kind: 'stock', candidate: r.candidates[0] } : { kind: 'user' })
+      setState('confirming')
+    } catch {
+      setError('Could not process that photo — please try again.')
+      setState('idle')
+    }
   }
 
   async function handleSave() {
     if (!result) return
     setState('saving')
-    await fetch('/api/wardrobe', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name,
-        category,
-        colours: result.colours,
-        styleTags: result.styleTags,
-        imageUrl: result.processedImageUrl,
-        ownership: 'owned',
-      }),
-    })
-    router.push('/wardrobe')
+    setError('')
+    setNotice('')
+
+    let imageUrl = result.processedImageUrl
+    let colours = result.colours
+    let price: number | undefined
+    let retailer: string | undefined
+    let storeUrl: string | undefined
+
+    if (selected.kind === 'stock') {
+      try {
+        const res = await fetch('/api/wardrobe/from-link', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: selected.candidate.url, itemPhotoBase64: userPhotoBase64 }),
+        })
+        const data = await res.json()
+        if (res.ok && data.mode === 'confirm' && data.product?.processedImageUrl) {
+          imageUrl = data.product.processedImageUrl
+          colours = data.product.colours
+          price = data.product.price ?? undefined
+          retailer = data.product.retailer ?? undefined
+          storeUrl = selected.candidate.url
+        } else {
+          // Graceful fallback: the product image couldn't be fetched — use the user's photo.
+          setNotice("Couldn't fetch that product image — using your photo instead.")
+          setSelected({ kind: 'user' })
+          setState('confirming')
+          return
+        }
+      } catch {
+        setNotice("Couldn't fetch that product image — using your photo instead.")
+        setSelected({ kind: 'user' })
+        setState('confirming')
+        return
+      }
+    }
+
+    try {
+      const res = await fetch('/api/wardrobe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name, category, colours, styleTags: result.styleTags, imageUrl,
+          ownership: 'owned', price, retailer, storeUrl,
+        }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setError(data.error || 'Could not save the item — please try again.')
+        setState('confirming')
+        return
+      }
+      router.push('/wardrobe')
+    } catch {
+      setError('Could not save the item — please try again.')
+      setState('confirming')
+    }
   }
 
   function handleDrop(e: React.DragEvent) {
@@ -65,16 +131,52 @@ export default function AddItemForm() {
     return (
       <div className="flex flex-col items-center justify-center min-h-64 gap-4">
         <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
-        <p className="text-zinc-400 text-sm">Removing background and tagging item…</p>
+        <p className="text-zinc-400 text-sm">Tagging and finding your item…</p>
       </div>
     )
   }
 
   if ((state === 'confirming' || state === 'saving') && result) {
+    const previewUrl = selected.kind === 'stock' ? (selected.candidate.imageUrl ?? result.processedImageUrl) : result.processedImageUrl
     return (
       <div className="flex flex-col gap-5">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={result.processedImageUrl} alt="Processed" className="w-40 h-52 object-contain mx-auto bg-zinc-900 rounded-xl" />
+        <img src={previewUrl} alt={name} className="w-40 h-52 object-contain mx-auto bg-zinc-900 rounded-xl" />
+
+        {result.candidates.length > 0 && (
+          <div>
+            <label className="text-xs text-zinc-500 uppercase tracking-widest mb-2 block">Which photo?</label>
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              <button
+                type="button"
+                aria-pressed={selected.kind === 'user'}
+                onClick={() => { setNotice(''); setSelected({ kind: 'user' }) }}
+                className={`shrink-0 rounded-xl p-1 border-2 ${selected.kind === 'user' ? 'border-purple-500' : 'border-zinc-800'}`}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={result.processedImageUrl} alt="Your photo" className="w-16 h-20 object-contain bg-zinc-900 rounded-lg" />
+                <span className="block text-[10px] text-zinc-400 mt-1">Your photo</span>
+              </button>
+              {result.candidates.map((c) => (
+                <button
+                  key={c.url}
+                  type="button"
+                  aria-pressed={selected.kind === 'stock' && selected.candidate.url === c.url}
+                  onClick={() => { setNotice(''); setSelected({ kind: 'stock', candidate: c }) }}
+                  className={`shrink-0 rounded-xl p-1 border-2 ${selected.kind === 'stock' && selected.candidate.url === c.url ? 'border-purple-500' : 'border-zinc-800'}`}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  {c.imageUrl
+                    ? <img src={c.imageUrl} alt={c.title} className="w-16 h-20 object-contain bg-zinc-900 rounded-lg" />
+                    : <div className="w-16 h-20 bg-zinc-900 rounded-lg flex items-center justify-center text-zinc-600 text-xs">no img</div>}
+                  <span className="block text-[10px] text-zinc-400 mt-1 truncate w-16">{c.retailer ?? 'Stock'}</span>
+                </button>
+              ))}
+            </div>
+            <p className="text-zinc-600 text-[11px] mt-1">Official product photos usually look better in try-on.</p>
+          </div>
+        )}
+
         <div>
           <label className="text-xs text-zinc-500 uppercase tracking-widest mb-1 block">Name</label>
           <input
@@ -90,11 +192,13 @@ export default function AddItemForm() {
             onChange={e => setCategory(e.target.value as WardrobeCategory)}
             className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-purple-500"
           >
-            {['tops', 'bottoms', 'shoes', 'outerwear', 'bags', 'accessories'].map(c => (
+            {CATEGORIES.map(c => (
               <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
             ))}
           </select>
         </div>
+        {notice && <p className="text-amber-400 text-sm">{notice}</p>}
+        {error && <p className="text-red-400 text-sm">{error}</p>}
         <div className="flex gap-2 mt-2">
           <button onClick={() => setState('idle')} className="flex-1 bg-zinc-900 text-zinc-400 rounded-xl py-3 font-bold hover:bg-zinc-800">
             ← Redo
@@ -143,6 +247,7 @@ async function fileToBase64(file: File): Promise<string> {
       const result = reader.result as string
       resolve(result.split(',')[1])
     }
+    reader.onerror = () => resolve('')
     reader.readAsDataURL(file)
   })
 }

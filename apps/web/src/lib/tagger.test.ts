@@ -10,6 +10,7 @@ const mockCreate = vi.hoisted(() =>
         colours: ['#1a1a6e', '#ffffff'],
         styleTags: ['casual', 'smart-casual'],
         suggestedName: 'Navy Linen Shirt',
+        searchQuery: 'Uniqlo navy linen shirt',
       }),
     }],
   })
@@ -30,6 +31,21 @@ describe('tagImage', () => {
     expect(result.colours).toContain('#1a1a6e')
     expect(result.styleTags).toContain('casual')
     expect(result.suggestedName).toBe('Navy Linen Shirt')
+    expect(result.searchQuery).toBe('Uniqlo navy linen shirt')
+  })
+
+  it('returns an empty searchQuery when absent or malformed', async () => {
+    mockCreate.mockResolvedValueOnce({
+      content: [{ type: 'text', text: JSON.stringify({ category: 'tops', colours: [], styleTags: [], suggestedName: 'Item' }) }],
+    })
+    const result = await tagImage('base64imagedata')
+    expect(result.searchQuery).toBe('')
+
+    mockCreate.mockResolvedValueOnce({
+      content: [{ type: 'text', text: JSON.stringify({ category: 'tops', colours: [], styleTags: [], suggestedName: 'Item', searchQuery: 42 }) }],
+    })
+    const malformed = await tagImage('base64imagedata')
+    expect(malformed.searchQuery).toBe('')
   })
 
   it('returns fallback when Claude response is malformed', async () => {
