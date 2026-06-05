@@ -1,5 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import type { WardrobeCategory } from '@fashun/shared'
+import { extractJson } from './extract-json'
+import { mediaTypeFromBase64 } from './image-media-type'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -29,7 +31,7 @@ export async function tagImage(imageBase64: string): Promise<TagResult> {
         content: [
           {
             type: 'image',
-            source: { type: 'base64', media_type: 'image/png', data: imageBase64 },
+            source: { type: 'base64', media_type: mediaTypeFromBase64(imageBase64), data: imageBase64 },
           },
           {
             type: 'text',
@@ -49,7 +51,10 @@ No markdown, no explanation, just the JSON.`,
 
     const content = message.content[0]
     if (content.type !== 'text') return FALLBACK
-    const parsed = JSON.parse(content.text.trim())
+    // The model may wrap the JSON in prose/a fence; extract the object out of it.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const parsed = extractJson<any>(content.text, 'object')
+    if (!parsed) return FALLBACK
     return {
       category: parsed.category ?? FALLBACK.category,
       colours: Array.isArray(parsed.colours) ? parsed.colours : [],
