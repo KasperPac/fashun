@@ -49,4 +49,12 @@ describe('extractProduct', () => {
     expect(p.category).toBe('tops')
     expect(p.colourVariants).toEqual([])
   })
+
+  it('parses the object when the model prepends prose before the JSON', async () => {
+    mockCreate.mockResolvedValueOnce({ content: [{ type: 'text', text:
+      'Here is the normalised product:\n```json\n{"name":"Olive Linen Shirt","category":"tops","styleTags":[],"colourVariants":[],"colours":["#556B2F"]}\n```' }] })
+    const p = await extractProduct(page)
+    expect(p.name).toBe('Olive Linen Shirt')
+    expect(p.colours).toEqual(['#556B2F'])
+  })
 })

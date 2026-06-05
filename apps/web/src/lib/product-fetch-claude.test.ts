@@ -36,6 +36,20 @@ describe('extractProductViaClaude', () => {
     expect(out!.styleTags).toEqual(['smart-casual'])
   })
 
+  it('parses a product when the model prepends prose before the JSON (post-tool narration)', async () => {
+    mockCreate.mockResolvedValue({
+      content: [
+        { type: 'server_tool_use', id: 't1', name: 'web_fetch', input: { url: 'https://kmart.com/p/1' } },
+        { type: 'web_fetch_tool_result', tool_use_id: 't1', content: { type: 'web_fetch_result', url: 'https://kmart.com/p/1' } },
+        { type: 'text', text: 'Based on the fetched page, here is the product:\n\n```json\n' + JSON.stringify(productJson) + '\n```' },
+      ],
+    })
+    const out = await extractProductViaClaude('https://kmart.com/p/1')
+    expect(out).not.toBeNull()
+    expect(out!.name).toBe('Rust Linen Shirt')
+    expect(out!.colourVariants).toHaveLength(2)
+  })
+
   it('parses JSON wrapped in a markdown fence', async () => {
     mockCreate.mockResolvedValue({
       content: [

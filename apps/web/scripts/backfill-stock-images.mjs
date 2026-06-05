@@ -63,8 +63,16 @@ function mediaTypeFromBase64(b64) {
   if (b64.startsWith('R0lGOD')) return 'image/gif'
   return 'image/jpeg'
 }
-function stripFences(text) {
-  return text.trim().replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
+// Extract a JSON array/object out of an LLM response that may add prose and/or a fence.
+function extractJson(text, kind) {
+  if (!text) return null
+  const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/i)
+  const body = fence ? fence[1] : text
+  const [open, close] = kind === 'array' ? ['[', ']'] : ['{', '}']
+  const start = body.indexOf(open)
+  const end = body.lastIndexOf(close)
+  if (start === -1 || end === -1 || end < start) return null
+  try { return JSON.parse(body.slice(start, end + 1)) } catch { return null }
 }
 
 async function resolveUserId(targetEmail) {
@@ -80,6 +88,7 @@ async function resolveUserId(targetEmail) {
 }
 
 // Mirrors tagger.ts: single Vision call returning a searchQuery (or '').
+// Uses a JSON field so an "I can't identify it" answer comes back as '' rather than prose.
 async function identify(base64) {
   const message = await anthropic.messages.create({
     model: MODEL,
@@ -88,12 +97,15 @@ async function identify(base64) {
       role: 'user',
       content: [
         { type: 'image', source: { type: 'base64', media_type: mediaTypeFromBase64(base64), data: base64 } },
-        { type: 'text', text: `Analyse this clothing item image. If you can identify the specific product (brand + model), reply with ONLY a concise web search query e.g. "Timberland 6-inch premium boots". If you cannot identify a specific product, reply with ONLY an empty string. No markdown, no explanation.` },
+        { type: 'text', text: `Analyse this clothing item image. Return ONLY valid JSON:
+{"searchQuery": "If you can identify the specific product (brand + model), a concise web search query e.g. 'Timberland 6-inch premium boots'. Empty string if you cannot identify it."}
+No markdown, no explanation.` },
       ],
     }],
   })
   const block = message.content.find((b) => b.type === 'text')
-  return block ? block.text.trim().replace(/^["']|["']$/g, '') : ''
+  const parsed = block ? extractJson(block.text, 'object') : null
+  return parsed && typeof parsed.searchQuery === 'string' ? parsed.searchQuery : ''
 }
 
 // Mirrors product-search.ts: web_search over any AU retailer.
@@ -112,18 +124,16 @@ After searching, reply with ONLY a JSON array (no markdown):
   const texts = message.content.filter((b) => b.type === 'text')
   const last = texts[texts.length - 1]
   if (!last) return []
-  try {
-    const parsed = JSON.parse(stripFences(last.text))
-    if (!Array.isArray(parsed)) return []
-    return parsed
-      .filter((c) => c && typeof c.url === 'string' && /^https?:\/\//.test(c.url))
-      .map((c) => ({
-        url: c.url,
-        title: typeof c.title === 'string' ? c.title : c.url,
-        imageUrl: typeof c.imageUrl === 'string' ? c.imageUrl : null,
-        retailer: typeof c.retailer === 'string' ? c.retailer : null,
-      }))
-  } catch { return [] }
+  const parsed = extractJson(last.text, 'array')
+  if (!Array.isArray(parsed)) return []
+  return parsed
+    .filter((c) => c && typeof c.url === 'string' && /^https?:\/\//.test(c.url))
+    .map((c) => ({
+      url: c.url,
+      title: typeof c.title === 'string' ? c.title : c.url,
+      imageUrl: typeof c.imageUrl === 'string' ? c.imageUrl : null,
+      retailer: typeof c.retailer === 'string' ? c.retailer : null,
+    }))
 }
 
 // og:image from the candidate page; fall back to the search thumbnail.
