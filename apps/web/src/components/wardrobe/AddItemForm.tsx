@@ -3,7 +3,7 @@ import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import type { WardrobeCategory } from '@fashun/shared'
 
-type Candidate = { url: string; title: string; imageUrl: string | null; retailer: string | null }
+type Candidate = { url: string; title: string; imageUrl: string | null; retailer: string | null; price?: number }
 
 type ProcessResult = {
   processedImageUrl: string
@@ -24,7 +24,6 @@ export default function AddItemForm() {
   const inputRef = useRef<HTMLInputElement>(null)
   const [state, setState] = useState<'idle' | 'processing' | 'confirming' | 'saving'>('idle')
   const [result, setResult] = useState<ProcessResult | null>(null)
-  const [userPhotoBase64, setUserPhotoBase64] = useState('')
   const [selected, setSelected] = useState<Selected>({ kind: 'user' })
   const [name, setName] = useState('')
   const [category, setCategory] = useState<WardrobeCategory>('tops')
@@ -36,7 +35,6 @@ export default function AddItemForm() {
     setError('')
     setNotice('')
     const base64 = await fileToBase64(file)
-    setUserPhotoBase64(base64)
     try {
       const res = await fetch('/api/wardrobe/process', {
         method: 'POST',
@@ -71,21 +69,27 @@ export default function AddItemForm() {
     let storeUrl: string | undefined
 
     if (selected.kind === 'stock') {
+      const thumb = selected.candidate.imageUrl
+      if (!thumb) {
+        setNotice("That match has no image — using your photo instead.")
+        setSelected({ kind: 'user' })
+        setState('confirming')
+        return
+      }
       try {
-        const res = await fetch('/api/wardrobe/from-link', {
+        const res = await fetch('/api/wardrobe/ingest-image', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: selected.candidate.url, itemPhotoBase64: userPhotoBase64 }),
+          body: JSON.stringify({ imageUrl: thumb }),
         })
         const data = await res.json()
-        if (res.ok && data.mode === 'confirm' && data.product?.processedImageUrl) {
-          imageUrl = data.product.processedImageUrl
-          colours = data.product.colours
-          price = data.product.price ?? undefined
-          retailer = data.product.retailer ?? undefined
+        if (res.ok && data.path) {
+          imageUrl = data.path
+          retailer = selected.candidate.retailer ?? undefined
+          price = selected.candidate.price
           storeUrl = selected.candidate.url
+          // colours stay from Vision tags (Lens returns no colours)
         } else {
-          // Graceful fallback: the product image couldn't be fetched — use the user's photo.
           setNotice("Couldn't fetch that product image — using your photo instead.")
           setSelected({ kind: 'user' })
           setState('confirming')
