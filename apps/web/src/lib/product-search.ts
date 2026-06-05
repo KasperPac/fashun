@@ -8,6 +8,7 @@ export interface ProductCandidate {
   title: string
   imageUrl: string | null
   retailer: string | null
+  price?: number
 }
 
 /** Uses Claude's server-side web search to find candidate product pages. Returns [] on failure. */

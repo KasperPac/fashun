@@ -12,8 +12,8 @@ vi.mock('@/lib/supabase/server', () => ({
 const tagImage = vi.hoisted(() => vi.fn())
 vi.mock('@/lib/tagger', () => ({ tagImage }))
 
-const searchProduct = vi.hoisted(() => vi.fn())
-vi.mock('@/lib/product-search', () => ({ searchProduct }))
+const searchByImage = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/lens-search', () => ({ searchByImage }))
 
 const signWardrobeImage = vi.hoisted(() => vi.fn())
 vi.mock('@/lib/wardrobe-image', () => ({ signWardrobeImage }))
@@ -29,7 +29,7 @@ beforeEach(() => {
   mockGetUser.mockResolvedValue({ data: { user: { id: 'u1' } } })
   mockUpload.mockResolvedValue({ error: null })
   tagImage.mockResolvedValue(tags)
-  searchProduct.mockResolvedValue([candidate])
+  searchByImage.mockResolvedValue([candidate])
   signWardrobeImage.mockResolvedValue('https://signed/preview.jpg')
 })
 
@@ -47,30 +47,19 @@ describe('POST /api/wardrobe/process', () => {
     expect((await post({ imageBase64: 'short' })).status).toBe(400)
   })
 
-  it('returns tags, a signed preview, searchQuery and candidates', async () => {
+  it('returns tags, a signed preview, and Lens candidates (searched by the photo)', async () => {
     const res = await post(VALID)
     expect(res.status).toBe(200)
     const json = await res.json()
-    expect(searchProduct).toHaveBeenCalledWith('Timberland 6-inch boots', '')
+    expect(searchByImage).toHaveBeenCalledWith('https://signed/preview.jpg')
     expect(json.processedImageUrl).toBe('https://signed/preview.jpg')
     expect(json.category).toBe('shoes')
-    expect(json.searchQuery).toBe('Timberland 6-inch boots')
     expect(json.candidates).toHaveLength(1)
     expect(json.candidates[0].url).toBe('https://shop.com/p/1')
   })
 
-  it('does not search and returns no candidates when searchQuery is empty', async () => {
-    tagImage.mockResolvedValueOnce({ ...tags, searchQuery: '' })
-    const res = await post(VALID)
-    const json = await res.json()
-    expect(searchProduct).not.toHaveBeenCalled()
-    expect(json.searchQuery).toBe('')
-    expect(json.candidates).toEqual([])
-  })
-
-  // product-search internally soft-fails to []; this verifies the route's own catch survives if that lib contract ever changes.
-  it('still returns 200 with no candidates when searchProduct throws', async () => {
-    searchProduct.mockRejectedValueOnce(new Error('boom'))
+  it('still returns 200 with no candidates when searchByImage throws', async () => {
+    searchByImage.mockRejectedValueOnce(new Error('boom'))
     const res = await post(VALID)
     expect(res.status).toBe(200)
     const json = await res.json()
