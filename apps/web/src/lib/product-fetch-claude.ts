@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import type { WardrobeCategory } from '@fashun/shared'
 import type { ExtractedProduct, ColourVariant } from './product-extractor'
+import { extractJson } from './extract-json'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -59,8 +60,11 @@ Rules:
     const last = texts[texts.length - 1]
     if (!last) return null
 
-    const raw = last.text.trim().replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
-    const parsed = JSON.parse(raw)
+    // The model may narrate before the JSON (esp. after a tool call), so extract
+    // the object out of any prose/fence rather than parsing the whole block.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const parsed = extractJson<any>(last.text, 'object')
+    if (!parsed) return null
 
     const category: WardrobeCategory = CATEGORIES.includes(parsed.category) ? parsed.category : 'tops'
     const colourVariants: ColourVariant[] = Array.isArray(parsed.colourVariants)

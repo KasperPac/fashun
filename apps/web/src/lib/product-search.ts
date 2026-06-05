@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
+import { extractJson } from './extract-json'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -26,12 +27,13 @@ After searching, reply with ONLY a JSON array (no markdown):
       }],
     })
 
-    // Use the last text block as the answer (tool-use blocks precede it).
+    // Use the last text block as the answer (tool-use blocks precede it). The model
+    // usually narrates ("Based on my search results...") before the JSON, so extract
+    // the array out of the prose/fence rather than parsing the whole block.
     const texts = message.content.filter((b): b is { type: 'text'; text: string } => b.type === 'text')
     const last = texts[texts.length - 1]
     if (!last) return []
-    const raw = last.text.trim().replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
-    const parsed = JSON.parse(raw)
+    const parsed = extractJson<ProductCandidate[]>(last.text, 'array')
     if (!Array.isArray(parsed)) return []
     return parsed
       .filter((c: ProductCandidate) => c && typeof c.url === 'string' && /^https?:\/\//.test(c.url))

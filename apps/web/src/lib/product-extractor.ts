@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import type { WardrobeCategory } from '@fashun/shared'
 import type { ScrapedPage } from './product-scraper'
+import { extractJson } from './extract-json'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -63,8 +64,10 @@ Rules:
     })
     const content = message.content[0]
     if (content.type !== 'text') return fallback
-    const raw = content.text.trim().replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
-    const parsed = JSON.parse(raw)
+    // The model may wrap the JSON in prose/fence; extract the object out of it.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const parsed = extractJson<any>(content.text, 'object')
+    if (!parsed) return fallback
 
     const category: WardrobeCategory = CATEGORIES.includes(parsed.category) ? parsed.category : 'tops'
     const colourVariants: ColourVariant[] = Array.isArray(parsed.colourVariants)

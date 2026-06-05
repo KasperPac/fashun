@@ -39,6 +39,18 @@ describe('searchProduct', () => {
     expect(await searchProduct('x', 'y')).toEqual([])
   })
 
+  it('parses candidates when the model prepends prose before the JSON (real web_search shape)', async () => {
+    mockCreate.mockResolvedValue({
+      content: [
+        { type: 'text', text: 'Based on my search results, here are 3 product pages:\n\n```json\n[{"url":"https://culturekings.com.au/p/1","title":"Nike AF1","imageUrl":null,"retailer":"Culture Kings"}]\n```' },
+      ],
+    })
+    const out = await searchProduct('Nike Air Force 1 white sneakers', '')
+    expect(out).toHaveLength(1)
+    expect(out[0].url).toBe('https://culturekings.com.au/p/1')
+    expect(out[0].retailer).toBe('Culture Kings')
+  })
+
   it('uses a generic retailer clause and still returns candidates when store is empty', async () => {
     mockCreate.mockResolvedValue({
       content: [
