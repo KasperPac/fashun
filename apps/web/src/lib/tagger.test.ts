@@ -57,4 +57,26 @@ describe('tagImage', () => {
     expect(result.colours).toEqual([])
     expect(result.styleTags).toEqual([])
   })
+
+  it('sends image/jpeg media_type for a JPEG base64 (phone photos)', async () => {
+    await tagImage('/9j/4AAQSkZJRgABAQ')
+    const src = mockCreate.mock.calls.at(-1)[0].messages[0].content[0].source
+    expect(src.media_type).toBe('image/jpeg')
+  })
+
+  it('sends image/png media_type for a PNG base64', async () => {
+    await tagImage('iVBORw0KGgoAAAANS')
+    const src = mockCreate.mock.calls.at(-1)[0].messages[0].content[0].source
+    expect(src.media_type).toBe('image/png')
+  })
+
+  it('parses tags when the model wraps the JSON in a markdown fence', async () => {
+    mockCreate.mockResolvedValueOnce({
+      content: [{ type: 'text', text: '```json\n{"category":"shoes","colours":["#000000"],"styleTags":["casual"],"suggestedName":"Black Sneakers","searchQuery":"nike air force 1"}\n```' }],
+    })
+    const result = await tagImage('/9j/abc')
+    expect(result.suggestedName).toBe('Black Sneakers')
+    expect(result.category).toBe('shoes')
+    expect(result.searchQuery).toBe('nike air force 1')
+  })
 })
