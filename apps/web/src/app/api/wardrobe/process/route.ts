@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
 import { tagImage } from '@/lib/tagger'
-import { searchProduct, type ProductCandidate } from '@/lib/product-search'
+import { searchByImage } from '@/lib/lens-search'
+import type { ProductCandidate } from '@/lib/product-search'
 import { signWardrobeImage } from '@/lib/wardrobe-image'
 import { z } from 'zod'
 import { randomUUID } from 'crypto'
@@ -42,11 +43,11 @@ export async function POST(req: Request) {
   // The saved value is normalized to the object path by POST /api/wardrobe.
   const processedImageUrl = await signWardrobeImage(supabase, filename, 3600)
 
-  // 4. If Vision identified the item, find candidate stock images (soft-fail to []).
+  // 4. Reverse-image search the user's photo for stock matches (soft-fail to []).
   let candidates: ProductCandidate[] = []
-  if (tags.searchQuery) {
+  if (processedImageUrl) {
     try {
-      candidates = await searchProduct(tags.searchQuery, '')
+      candidates = await searchByImage(processedImageUrl)
     } catch {
       candidates = []
     }
