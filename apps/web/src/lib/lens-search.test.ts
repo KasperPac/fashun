@@ -51,4 +51,18 @@ describe('searchByImage', () => {
     mockFetch.mockRejectedValue(new Error('network'))
     expect(await searchByImage('https://signed/photo.jpg')).toEqual([])
   })
+
+  it('includes the q param when a query is given', async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: async () => lensResponse })
+    await searchByImage('https://signed/photo.jpg', 'blue oxford shirt')
+    const calledUrl = new URL(mockFetch.mock.calls[0][0] as string)
+    expect(calledUrl.searchParams.get('q')).toBe('blue oxford shirt')
+  })
+
+  it('omits the q param when no query is given', async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: async () => lensResponse })
+    await searchByImage('https://signed/photo.jpg')
+    const calledUrl = new URL(mockFetch.mock.calls[0][0] as string)
+    expect(calledUrl.searchParams.has('q')).toBe(false)
+  })
 })

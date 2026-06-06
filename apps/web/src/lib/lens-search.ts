@@ -13,7 +13,7 @@ interface LensMatch {
  * image URL (a short-lived signed bucket URL) and maps the top visual matches to
  * candidates with real thumbnails. Returns [] on missing key / error / no matches.
  */
-export async function searchByImage(imageUrl: string): Promise<ProductCandidate[]> {
+export async function searchByImage(imageUrl: string, query?: string): Promise<ProductCandidate[]> {
   const key = process.env.SERPAPI_API_KEY
   if (!key) return []
   try {
@@ -24,6 +24,7 @@ export async function searchByImage(imageUrl: string): Promise<ProductCandidate[
       hl: 'en',
       api_key: key,
     })
+    if (query) params.set('q', query)
     const res = await fetch(`https://serpapi.com/search.json?${params.toString()}`)
     if (!res.ok) return []
     const data = await res.json()
