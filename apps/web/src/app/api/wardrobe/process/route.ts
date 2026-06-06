@@ -47,7 +47,7 @@ export async function POST(req: Request) {
   let candidates: ProductCandidate[] = []
   if (processedImageUrl) {
     try {
-      candidates = await searchByImage(processedImageUrl)
+      candidates = await searchByImage(processedImageUrl, tags.searchQuery || tags.suggestedName)
     } catch {
       candidates = []
     }
