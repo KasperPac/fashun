@@ -51,11 +51,17 @@ describe('POST /api/wardrobe/process', () => {
     const res = await post(VALID)
     expect(res.status).toBe(200)
     const json = await res.json()
-    expect(searchByImage).toHaveBeenCalledWith('https://signed/preview.jpg')
+    expect(searchByImage).toHaveBeenCalledWith('https://signed/preview.jpg', 'Timberland 6-inch boots')
     expect(json.processedImageUrl).toBe('https://signed/preview.jpg')
     expect(json.category).toBe('shoes')
     expect(json.candidates).toHaveLength(1)
     expect(json.candidates[0].url).toBe('https://shop.com/p/1')
+  })
+
+  it('falls back to suggestedName as the Lens query when searchQuery is empty', async () => {
+    tagImage.mockResolvedValueOnce({ ...tags, searchQuery: '' })
+    await post(VALID)
+    expect(searchByImage).toHaveBeenCalledWith('https://signed/preview.jpg', 'Boots')
   })
 
   it('still returns 200 with no candidates when searchByImage throws', async () => {
