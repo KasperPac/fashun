@@ -39,3 +39,25 @@ export function showOnboardingSignOut(from: string | null): boolean {
 
 /** The link Profile and Style me use to open step 1. Back from there always returns to Profile, not Style me. */
 export const SELFIE_FROM_PROFILE_HREF = `/onboarding/selfie?from=${FROM_PROFILE}`
+
+/** `from` values the Add piece page understands when opened from onboarding step 3. */
+export const ADD_FROM_ONBOARDING = 'onboarding'
+export const ADD_FROM_ONBOARDING_PROFILE = 'onboarding-profile'
+
+/** The `from` value for an Add piece link on step 3, keeping `from=profile` when the user started from Profile. */
+export function addFromOnboarding(from: string | null): typeof ADD_FROM_ONBOARDING | typeof ADD_FROM_ONBOARDING_PROFILE {
+  return from === FROM_PROFILE ? ADD_FROM_ONBOARDING_PROFILE : ADD_FROM_ONBOARDING
+}
+
+/** Where Add piece's Back goes. From step 3 it returns there, still carrying `from=profile` when it was there. */
+export function addPieceBackHref(addFrom: string | null): string {
+  if (addFrom === ADD_FROM_ONBOARDING_PROFILE) return onboardingHref('/onboarding/items', FROM_PROFILE)
+  if (addFrom === ADD_FROM_ONBOARDING) return '/onboarding/items'
+  return '/wardrobe'
+}
+
+/** Where Add piece goes after saving: the same place as Back, with the toast name. */
+export function addPieceSavedHref(addFrom: string | null, name: string): string {
+  const back = addPieceBackHref(addFrom)
+  return `${back}${back.includes('?') ? '&' : '?'}added=${encodeURIComponent(name)}`
+}

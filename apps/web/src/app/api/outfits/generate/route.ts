@@ -5,7 +5,7 @@ import { SEASON_PROMPT_CONTEXT, OCCASIONS, OCCASION_LABELS } from '@fashun/share
 import type { ColourSeason, OccasionTag } from '@fashun/shared'
 import { z } from 'zod'
 import {
-  OUTFIT_COUNT, describeShortfall, eligibleItems, missingCategories, presentCategories, seasonLabel, validateSuggestions,
+  OUTFIT_COUNT, describeFewer, describeShortfall, eligibleItems, missingCategories, possibleOutfitCount, presentCategories, seasonLabel, validateSuggestions,
   type BuiltOutfit, type OwnedItem,
 } from '@/lib/outfit-builder'
 import { signWardrobeImage } from '@/lib/wardrobe-image'
@@ -37,6 +37,7 @@ function buildOccasionPrompt(
   bestColours: string[],
   avoidColours: string[],
   items: OwnedItem[],
+  count: number,
 ): { system: string; user: string } {
   const ctx = SEASON_PROMPT_CONTEXT[season]
   const label = seasonLabel(season)
@@ -47,7 +48,7 @@ function buildOccasionPrompt(
   const user = `The user's colour season is ${label}. ${label} suits: ${ctx.suits}. Avoid: ${ctx.avoid}.
 Their best colours: ${bestColours.join(', ') || 'none saved'}. Colours to avoid: ${avoidColours.join(', ') || 'none saved'}.
 
-Build ${OUTFIT_COUNT} different complete outfits for the occasion: ${OCCASION_LABELS[occasion]}.
+Build ${count} different complete outfit${count === 1 ? '' : 's'} for the occasion: ${OCCASION_LABELS[occasion]}.
 
 Their wardrobe (use ONLY these items, by id):
 ${lines}
@@ -58,7 +59,7 @@ Rules:
 3. Each outfit must suit the occasion. Never use an item tagged only casual for a formal outfit.
 4. The reason is ONE sentence of at most 140 characters, using the colour names of the pieces (never hex codes). Use this pattern: "{Colour A} and {colour B} are both in your ${label} palette, and {short styling reason}." If only one palette colour is used: "{Colour A} is one of your best ${label} colours, and {short styling reason}."
 
-Return exactly this JSON (array of ${OUTFIT_COUNT}):
+Return exactly this JSON (array of ${count}):
 [{"name":"2-3 word name","description":"One sentence.","reason":"One sentence in the pattern above.","item_ids":["uuid","uuid","uuid"]}]`
   return { system, user }
 }
@@ -87,13 +88,14 @@ async function generateForOccasion(supabase: Awaited<ReturnType<typeof createSer
     }, { status: 422 })
   }
 
+  const target = possibleOutfitCount(eligible)
   const best = ColourListSchema.safeParse(profileRes.data?.best_colours).data ?? []
   const avoid = ColourListSchema.safeParse(profileRes.data?.avoid_colours).data ?? []
-  const { system, user } = buildOccasionPrompt(occasion, colourSeason, best, avoid, eligible)
+  const { system, user } = buildOccasionPrompt(occasion, colourSeason, best, avoid, eligible, target)
 
   const outfits: BuiltOutfit[] = []
   const seen = new Set<string>()
-  for (let attempt = 0; attempt < 2 && outfits.length < OUTFIT_COUNT; attempt++) {
+  for (let attempt = 0; attempt < 2 && outfits.length < target; attempt++) {
     try {
       const message = await getAnthropic().messages.create({
         model: 'claude-haiku-4-5-20251001',
@@ -105,7 +107,7 @@ async function generateForOccasion(supabase: Awaited<ReturnType<typeof createSer
       if (content.type !== 'text') throw new Error('Unexpected content type')
       const raw = content.text.trim().replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
       const parsed = OccasionSuggestionsSchema.parse(JSON.parse(raw))
-      outfits.push(...validateSuggestions(parsed, eligible, occasion, colourSeason, seen).slice(0, OUTFIT_COUNT - outfits.length))
+      outfits.push(...validateSuggestions(parsed, eligible, occasion, colourSeason, seen, target - outfits.length).slice(0, target - outfits.length))
     } catch {
       // try once more; the outcome is judged below
     }
@@ -123,7 +125,9 @@ async function generateForOccasion(supabase: Awaited<ReturnType<typeof createSer
     suggestions: withImages,
     season: colourSeason,
     ...(outfits.length < OUTFIT_COUNT ? { missing: missingCategories(eligible) } : {}),
-    ...(outfits.length < OUTFIT_COUNT ? { message: `Only ${outfits.length} of ${OUTFIT_COUNT} outfits could be built. Try again.` } : {}),
+    // The wardrobe only allows this many different outfits: asking again gives the same ones.
+    ...(target < OUTFIT_COUNT && outfits.length === target ? { limited: true, message: describeFewer(eligible, occasion) } : {}),
+    ...(outfits.length < target ? { message: `Only ${outfits.length} of ${target} outfits could be built. Try again.` } : {}),
   })
 }
 

@@ -97,7 +97,7 @@ export function occasionColour(occasion: OccasionTag): string {
 export const isDarkOccasion = (occasion: OccasionTag): boolean => occasion === 'formal'
 
 /** Where a "Needs …" tile or button sends the user. */
-export function addHref(category: WardrobeCategory | null, occasion: OccasionTag | null, from?: 'onboarding'): string {
+export function addHref(category: WardrobeCategory | null, occasion: OccasionTag | null, from?: 'onboarding' | 'onboarding-profile'): string {
   const params = new URLSearchParams()
   if (category) params.set('category', category)
   if (occasion) params.set('occasion', occasion)

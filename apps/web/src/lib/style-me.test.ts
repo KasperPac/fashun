@@ -33,7 +33,7 @@ describe('fewerMessage', () => {
 
 describe('small labels', () => {
   it('words the loading line, subtitle and button', () => {
-    expect(loadingLine('work')).toBe('Putting together 3 Work outfits from your wardrobe…')
+    expect(loadingLine('work')).toBe('Putting together your Work outfits from your wardrobe…')
     expect(pickerSubtitle('autumn')).toBe('3 outfits from your own clothes, in your Autumn palette.')
     expect(pickerSubtitle(null)).not.toContain('null')
     expect(styleButtonLabel(null)).toBe('Style me')
@@ -78,9 +78,10 @@ describe('saveBody', () => {
 
 describe('readGenerateResponse', () => {
   it('reads outfits and the season', () => {
-    expect(readGenerateResponse(200, { suggestions: [outfit], season: 'winter' })).toEqual({ kind: 'outfits', outfits: [outfit], season: 'winter', missing: null })
+    expect(readGenerateResponse(200, { suggestions: [outfit], season: 'winter' })).toEqual({ kind: 'outfits', outfits: [outfit], season: 'winter', missing: null, limited: false })
     expect(readGenerateResponse(200, { suggestions: [outfit], missing: ['shoes', 'tops'] })).toMatchObject({ missing: 'tops' })
     expect(readGenerateResponse(200, { suggestions: [outfit], season: 'monsoon' })).toMatchObject({ season: null })
+    expect(readGenerateResponse(200, { suggestions: [outfit], limited: true })).toMatchObject({ limited: true })
   })
   it('reads the not-enough answer with what is missing and what is there', () => {
     expect(readGenerateResponse(422, { code: 'not_enough_items', missing: ['shoes', 'nope'], have: ['tops'] }))

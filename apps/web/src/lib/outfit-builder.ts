@@ -48,28 +48,58 @@ export function eligibleItems(items: OwnedItem[], occasion: OccasionTag): OwnedI
   return items.filter((i) => isEligibleForOccasion(i, occasion))
 }
 
+/** Counts of eligible tops, bottoms and shoes, in REQUIRED_CATEGORIES order. */
+function requiredCounts(eligible: OwnedItem[]): number[] {
+  return REQUIRED_CATEGORIES.map((c) => eligible.filter((i) => i.category === c).length)
+}
+
+/**
+ * How many different outfits to ask for: every top + bottom + shoes combination
+ * the wardrobe allows, up to OUTFIT_COUNT. 0 when a top, bottom or shoes is missing.
+ * Accessories and outerwear never add to this, because they do not make a different outfit.
+ */
+export function possibleOutfitCount(eligible: OwnedItem[]): number {
+  return Math.min(OUTFIT_COUNT, requiredCounts(eligible).reduce((a, b) => a * b, 1))
+}
+
 /**
  * Says in plain words what the wardrobe is missing for this occasion, or
- * returns null when there is enough to build 3 different outfits.
+ * returns null when a top, bottom and shoes are all there (at least 1 outfit).
  */
 export function describeShortfall(eligible: OwnedItem[], occasion: OccasionTag): string | null {
   const label = OCCASION_LABELS[occasion].toLowerCase()
   const words = { tops: `a ${label} top`, bottoms: `a pair of ${label} trousers or a skirt`, shoes: `a pair of ${label} shoes` }
-  const counts = REQUIRED_CATEGORIES.map((c) => eligible.filter((i) => i.category === c).length)
+  const counts = requiredCounts(eligible)
   const missing = REQUIRED_CATEGORIES.filter((_, idx) => counts[idx] === 0)
   if (missing.length > 0) {
     return `Not enough ${label} clothes yet. Add ${missing.map((c) => words[c]).join(' and ')}.`
   }
-  if (counts.reduce((a, b) => a * b, 1) < OUTFIT_COUNT) {
-    return `Not enough ${label} clothes to make ${OUTFIT_COUNT} different outfits. Add one more ${label} top, pair of trousers or pair of shoes.`
-  }
   return null
+}
+
+const ADD_WORDS = { tops: 'top', bottoms: 'pair of trousers or a skirt', shoes: 'pair of shoes' } as const
+
+/**
+ * When fewer than OUTFIT_COUNT different outfits are possible, says how many
+ * and names the one piece to add for more. It names the category with the
+ * fewest pieces (first of top, bottom, shoes on a tie): adding to it raises the
+ * number of combinations the most, so the advice changes after every addition
+ * until 3 outfits are possible. Null when there are already enough, or when
+ * something is missing entirely (describeShortfall covers that).
+ */
+export function describeFewer(eligible: OwnedItem[], occasion: OccasionTag): string | null {
+  const count = possibleOutfitCount(eligible)
+  if (count === 0 || count >= OUTFIT_COUNT) return null
+  const label = OCCASION_LABELS[occasion].toLowerCase()
+  const [category] = missingCategories(eligible)
+  return `Your clothes make ${count} different ${label} ${count === 1 ? 'outfit' : 'outfits'}. Add another ${label} ${ADD_WORDS[category]} for more.`
 }
 
 /**
  * Which of top, bottom, shoes to ask the user to add: every category with
- * nothing eligible, or, when each has something but fewer than 3 outfits are
- * possible, the category with the fewest pieces.
+ * nothing eligible, or, when each has something, the category with the fewest
+ * pieces (first of top, bottom, shoes on a tie), which raises the number of
+ * different outfits the most.
  */
 export function missingCategories(eligible: OwnedItem[]): Array<(typeof REQUIRED_CATEGORIES)[number]> {
   const counts = REQUIRED_CATEGORIES.map((c) => ({ c, n: eligible.filter((i) => i.category === c).length }))
@@ -113,7 +143,7 @@ type RawSuggestion = { name: string; description: string; reason: string; item_i
  * Turns the model's suggestions into outfits we can trust. Items are looked up
  * by id in the user's own eligible items only; anything else rejects the whole
  * outfit. Outfits must have a top, bottom and shoes, and must be different from
- * each other. The reason is guaranteed to name the user's colour season.
+ * each other (by their tops, bottoms and shoes), up to `limit`. The reason is guaranteed to name the user's colour season.
  */
 export function validateSuggestions(
   raw: RawSuggestion[],
@@ -121,6 +151,7 @@ export function validateSuggestions(
   occasion: OccasionTag,
   season: ColourSeason,
   seen: Set<string> = new Set(),
+  limit: number = OUTFIT_COUNT,
 ): BuiltOutfit[] {
   const byId = new Map(eligible.map((i) => [i.id, i]))
   const out: BuiltOutfit[] = []
@@ -130,7 +161,8 @@ export function validateSuggestions(
     if (items.length === 0 || items.some((i) => !i)) continue
     const owned = items as OwnedItem[]
     if (!REQUIRED_CATEGORIES.every((c) => owned.some((i) => i.category === c))) continue
-    const key = [...ids].sort().join('|')
+    // Different means a different top, bottom or shoes; an extra jacket or watch does not count.
+    const key = owned.filter((i) => (REQUIRED_CATEGORIES as readonly string[]).includes(i.category)).map((i) => i.id).sort().join('|')
     if (seen.has(key)) continue
     seen.add(key)
     const colourHexes = owned.map((i) => (i.colours ?? []).find((c) => HEX.test(c)) ?? '')
@@ -148,7 +180,7 @@ export function validateSuggestions(
       description: s.description,
       reason,
     })
-    if (out.length === OUTFIT_COUNT) break
+    if (out.length === limit) break
   }
   return out
 }

@@ -43,7 +43,7 @@ type Setup =
 type Phase =
   | { name: 'picker' }
   | { name: 'loading'; occasion: OccasionTag; slow: boolean }
-  | { name: 'results'; occasion: OccasionTag; outfits: StyledOutfit[]; missing: RequiredCategory | null }
+  | { name: 'results'; occasion: OccasionTag; outfits: StyledOutfit[]; missing: RequiredCategory | null; limited: boolean }
   | { name: 'not-enough'; occasion: OccasionTag; missing: RequiredCategory[]; have: RequiredCategory[] }
   | { name: 'failed'; occasion: OccasionTag }
   | { name: 'no-profile' }
@@ -193,7 +193,7 @@ function StyleMeContent() {
     }
     if (runId.current !== id) return
     clearSlow()
-    if (result.kind === 'outfits') setPhase({ name: 'results', occasion, outfits: result.outfits, missing: result.missing })
+    if (result.kind === 'outfits') setPhase({ name: 'results', occasion, outfits: result.outfits, missing: result.missing, limited: result.limited })
     else if (result.kind === 'not-enough') setPhase({ name: 'not-enough', occasion, missing: result.missing, have: result.have })
     else if (result.kind === 'no-profile') setPhase({ name: 'no-profile' })
     else setPhase({ name: 'failed', occasion })
@@ -427,7 +427,7 @@ function StyleMeContent() {
         <p className="mt-4 text-[15px] font-semibold">{fewerMessage(count, occasion, phase.missing)}</p>
       )}
       <div className="mt-6 flex flex-col gap-3 lg:max-w-[480px]">
-        <Button disabled={!online} onClick={() => run(occasion)}>Show 3 more</Button>
+        {!phase.limited && <Button disabled={!online} onClick={() => run(occasion)}>{count < 3 ? 'Try again' : 'Show 3 more'}</Button>}
         <Button variant="secondary" onClick={backToPicker}>Change occasion</Button>
         {!online && <p role="status" className="text-sm text-ink-2">You&apos;re offline. Connect to the internet to get new outfits.</p>}
       </div>

@@ -7,7 +7,7 @@ import { Button, ButtonLink } from '@/components/ui/Button'
 import { ErrorState, Toast } from '@/components/ui/Feedback'
 import { nextMissingPiece } from '@/lib/first-pieces'
 import { addHref } from '@/lib/wardrobe-view'
-import { onboardingHref } from '@/lib/onboarding-back'
+import { addFromOnboarding, onboardingHref } from '@/lib/onboarding-back'
 
 const SLOTS: Array<{ category: WardrobeCategory; label: string }> = [
   { category: 'tops', label: 'Top' },
@@ -103,7 +103,7 @@ function FirstPiecesContent() {
                 )}
               </div>
               {!item && items !== null && (
-                <ButtonLink href={addHref(category, null, 'onboarding')} fullWidth={false} compact variant="secondary">
+                <ButtonLink href={addHref(category, null, addFromOnboarding(params.get('from')))} fullWidth={false} compact variant="secondary">
                   Add
                 </ButtonLink>
               )}

@@ -66,7 +66,7 @@ export function fewerMessage(count: number, occasion: OccasionTag, missing: Requ
 }
 
 export function loadingLine(occasion: OccasionTag): string {
-  return `Putting together 3 ${OCCASION_LABELS[occasion]} outfits from your wardrobe…`
+  return `Putting together your ${OCCASION_LABELS[occasion]} outfits from your wardrobe…`
 }
 
 export function pickerSubtitle(season: ColourSeason | null): string {
@@ -131,7 +131,7 @@ export function saveBody(outfit: StyledOutfit, season: ColourSeason | null) {
 }
 
 export type StyleResult =
-  | { kind: 'outfits'; outfits: StyledOutfit[]; season: ColourSeason | null; missing: RequiredCategory | null }
+  | { kind: 'outfits'; outfits: StyledOutfit[]; season: ColourSeason | null; missing: RequiredCategory | null; limited: boolean }
   | { kind: 'not-enough'; missing: RequiredCategory[]; have: RequiredCategory[] }
   | { kind: 'no-profile' }
   | { kind: 'error' }
@@ -149,7 +149,7 @@ export function readGenerateResponse(status: number, json: unknown): StyleResult
   if (status === 422 && body.code === 'no_colour_profile') return { kind: 'no-profile' }
   if (status < 200 || status >= 300 || !Array.isArray(body.suggestions) || body.suggestions.length === 0) return { kind: 'error' }
   const season = ['spring', 'summer', 'autumn', 'winter'].includes(body.season as string) ? (body.season as ColourSeason) : null
-  return { kind: 'outfits', outfits: body.suggestions as StyledOutfit[], season, missing: asRequired(body.missing)[0] ?? null }
+  return { kind: 'outfits', outfits: body.suggestions as StyledOutfit[], season, missing: asRequired(body.missing)[0] ?? null, limited: body.limited === true }
 }
 
 /** The data-occasion theme name for an occasion. */

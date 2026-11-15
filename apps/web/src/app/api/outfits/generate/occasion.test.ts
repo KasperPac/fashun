@@ -175,16 +175,46 @@ describe('POST /api/outfits/generate (occasion only)', () => {
     expect(mockCreate).not.toHaveBeenCalled()
   })
 
-  it('says so, with no model call, when the wardrobe is empty or too small for 3 different outfits', async () => {
+  it('says so, with no model call, when the wardrobe is empty', async () => {
     wardrobe = []
     expect((await call({ occasion: 'work' })).status).toBe(422)
-    wardrobe = [mk(1, 'tops', ['work']), mk(3, 'bottoms', ['work']), mk(5, 'shoes', ['work'])]
-    const res = await call({ occasion: 'work' })
-    expect(res.status).toBe(422)
-    const small = await res.json()
-    expect(small.error).toContain('Add one more work')
-    expect(small.missing).toHaveLength(1)
     expect(mockCreate).not.toHaveBeenCalled()
+  })
+
+  it('1 top + 1 bottom + 1 pair of shoes: returns 1 outfit and says what to add', async () => {
+    wardrobe = [mk(1, 'tops', ['work']), mk(3, 'bottoms', ['work']), mk(5, 'shoes', ['work'])]
+    mockCreate.mockResolvedValue(reply([outfit([id(1), id(3), id(5)])]))
+    const res = await call({ occasion: 'work' })
+    expect(res.status).toBe(200)
+    const json = await res.json()
+    expect(json.suggestions).toHaveLength(1)
+    expect(json.limited).toBe(true)
+    expect(json.missing).toEqual(['tops'])
+    expect(json.message).toBe('Your clothes make 1 different work outfit. Add another work top for more.')
+    expect(mockCreate.mock.calls[0][0].messages[0].content).toContain('Build 1 different complete outfit for')
+  })
+
+  it('1/1/1 plus jackets and a watch still returns 1 outfit, not 3 jacket variations', async () => {
+    wardrobe = [mk(1, 'tops', ['work']), mk(3, 'bottoms', ['work']), mk(5, 'shoes', ['work']), mk(7, 'outerwear', ['work']), mk(8, 'outerwear', null), mk(9, 'accessories', null)]
+    mockCreate.mockResolvedValue(reply([outfit([id(1), id(3), id(5), id(7)]), outfit([id(1), id(3), id(5), id(8)])]))
+    const json = await (await call({ occasion: 'work' })).json()
+    expect(json.suggestions).toHaveLength(1)
+    expect(json.message).toContain('Add another work top')
+  })
+
+  it('2 tops + 1 bottom + 1 pair of shoes: returns 2 outfits and asks for trousers', async () => {
+    wardrobe = [mk(1, 'tops', ['work']), mk(2, 'tops', ['work']), mk(3, 'bottoms', ['work']), mk(5, 'shoes', ['work'])]
+    mockCreate.mockResolvedValue(reply([outfit([id(1), id(3), id(5)]), outfit([id(2), id(3), id(5)])]))
+    const json = await (await call({ occasion: 'work' })).json()
+    expect(json.suggestions).toHaveLength(2)
+    expect(json.missing).toEqual(['bottoms'])
+    expect(json.message).toContain('Add another work pair of trousers or a skirt')
+  })
+
+  it('3 or more possible: returns 3 with no limit flag', async () => {
+    const json = await (await call({ occasion: 'formal' })).json()
+    expect(json.suggestions).toHaveLength(3)
+    expect(json.limited).toBeUndefined()
   })
 
   it('does not return the same outfit twice', async () => {

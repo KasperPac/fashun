@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { onboardingBackTarget, onboardingHref, showOnboardingSignOut, SELFIE_FROM_PROFILE_HREF } from './onboarding-back'
+import { addFromOnboarding, addPieceBackHref, addPieceSavedHref, onboardingBackTarget, onboardingHref, showOnboardingSignOut, SELFIE_FROM_PROFILE_HREF } from './onboarding-back'
 
 describe('onboardingBackTarget', () => {
   it('step 1 returns to Profile when opened from Retake selfie', () => {
@@ -66,5 +66,27 @@ describe('SELFIE_FROM_PROFILE_HREF', () => {
     expect(SELFIE_FROM_PROFILE_HREF).toBe('/onboarding/selfie?from=profile')
     const from = new URL(SELFIE_FROM_PROFILE_HREF, 'http://x').searchParams.get('from')
     expect(onboardingBackTarget('selfie', from)).toBe('/profile')
+  })
+})
+
+describe('Add piece round trip from step 3', () => {
+  it('keeps from=profile through Add piece and back to step 3', () => {
+    const addFrom = addFromOnboarding('profile')
+    expect(addPieceBackHref(addFrom)).toBe('/onboarding/items?from=profile')
+    const saved = addPieceSavedHref(addFrom, 'Navy shirt')
+    expect(saved).toBe('/onboarding/items?from=profile&added=Navy%20shirt')
+    const from = new URL(saved, 'http://x').searchParams.get('from')
+    expect(onboardingBackTarget('items', from)).toBe('/onboarding/profile?from=profile')
+  })
+  it('without Profile, goes to step 3 with no from', () => {
+    const addFrom = addFromOnboarding(null)
+    expect(addFromOnboarding('elsewhere')).toBe('onboarding')
+    expect(addPieceBackHref(addFrom)).toBe('/onboarding/items')
+    expect(addPieceSavedHref(addFrom, 'Shoes')).toBe('/onboarding/items?added=Shoes')
+  })
+  it('from the wardrobe, or an unknown value, goes to the wardrobe', () => {
+    expect(addPieceBackHref(null)).toBe('/wardrobe')
+    expect(addPieceBackHref('elsewhere')).toBe('/wardrobe')
+    expect(addPieceSavedHref(null, 'A&B')).toBe('/wardrobe?added=A%26B')
   })
 })

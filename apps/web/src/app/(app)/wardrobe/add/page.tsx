@@ -4,12 +4,13 @@ import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import AddPiece from '@/components/wardrobe/AddPiece'
 import { readPresets } from '@/lib/wardrobe-view'
+import { addPieceBackHref, addPieceSavedHref } from '@/lib/onboarding-back'
 
 function AddContent() {
   const params = useSearchParams()
   const presets = readPresets(params)
-  const fromOnboarding = params.get('from') === 'onboarding'
-  const backHref = fromOnboarding ? '/onboarding/items' : '/wardrobe'
+  const addFrom = params.get('from')
+  const backHref = addPieceBackHref(addFrom)
   return (
     <main className="mx-auto w-full max-w-[480px] px-6 pb-8 pt-4 lg:max-w-[720px]">
       <Link
@@ -25,7 +26,7 @@ function AddContent() {
       <AddPiece
         presets={presets}
         returnTo={backHref}
-        onSaved={(name) => `${backHref}?added=${encodeURIComponent(name)}`}
+        onSaved={(name) => addPieceSavedHref(addFrom, name)}
       />
     </main>
   )

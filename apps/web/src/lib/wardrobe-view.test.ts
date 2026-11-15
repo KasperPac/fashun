@@ -88,6 +88,7 @@ describe('addHref / readPresets', () => {
     expect(addHref(null, null)).toBe('/wardrobe/add')
     expect(addHref('shoes', 'formal')).toBe('/wardrobe/add?category=shoes&occasion=formal')
     expect(addHref('tops', null, 'onboarding')).toBe('/wardrobe/add?category=tops&from=onboarding')
+    expect(addHref('tops', null, 'onboarding-profile')).toBe('/wardrobe/add?category=tops&from=onboarding-profile')
     expect(readPresets(new URLSearchParams('category=shoes&occasion=formal'))).toEqual({ category: 'shoes', occasion: 'formal' })
   })
   it('ignores unknown presets', () => {
