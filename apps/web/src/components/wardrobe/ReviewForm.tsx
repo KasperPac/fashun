@@ -63,6 +63,8 @@ export interface ReviewFormProps {
   onBack?: () => void
   /** Shown only for a photo that can be replaced. */
   onChangePhoto?: () => void
+  /** Shown when there is no photo: opens the way to add one without re-reading the details. */
+  onAddPhoto?: () => void
   /** Notice or other content shown above the form fields. */
   intro?: React.ReactNode
   /** Resolves true when saved. For "Save and add another" the parent resets the form. */
@@ -80,6 +82,7 @@ export default function ReviewForm({
   backLabel,
   onBack,
   onChangePhoto,
+  onAddPhoto,
   intro,
   onSave,
   saveError,
@@ -129,6 +132,7 @@ export default function ReviewForm({
             <span className="px-2 text-center text-[13px] text-ink-2">No photo</span>
           )}
         </div>
+        {!photoUrl && onAddPhoto && <Button variant="text" fullWidth={false} onClick={onAddPhoto}>Add a photo</Button>}
         {onChangePhoto && <Button variant="text" fullWidth={false} onClick={onChangePhoto}>Change photo</Button>}
       </div>
 

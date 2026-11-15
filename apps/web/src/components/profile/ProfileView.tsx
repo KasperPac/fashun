@@ -15,6 +15,7 @@ import {
   traitLabel,
 } from '@/lib/profile-view'
 import { ColourCard } from '@/components/ui/ColourSwatch'
+import { FROM_PROFILE } from '@/lib/onboarding-back'
 import { Banner, ErrorState, Skeleton, Toast } from '@/components/ui/Feedback'
 import { Button, ButtonLink } from '@/components/ui/Button'
 import { ConfirmDialog } from '@/components/ui/Overlays'
@@ -180,7 +181,7 @@ export default function ProfileView({
       <div aria-busy="true">
         <p role="status" className="sr-only">Loading your profile…</p>
         <div data-occasion="house">
-          <ScreenBlock><Skeleton className="h-24 w-3/4 bg-step-todo" /></ScreenBlock>
+          <ScreenBlock theme="house"><Skeleton className="h-24 w-3/4 bg-step-todo" /></ScreenBlock>
         </div>
         <div className="flex flex-col gap-4 px-6 py-8">
           {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-12" />)}
@@ -274,7 +275,7 @@ export default function ProfileView({
 
   return (
     <div data-occasion="house">
-      <ScreenBlock>
+      <ScreenBlock theme="house">
         <Kicker>Your colour season</Kicker>
         <h1
           className={`mt-2 animate-reveal font-display font-extrabold uppercase tracking-[-1px] ${
@@ -382,7 +383,7 @@ export default function ProfileView({
         confirmLabel="Retake"
         destructive={false}
         onCancel={() => setRetakeOpen(false)}
-        onConfirm={() => router.push('/onboarding/selfie')}
+        onConfirm={() => router.push(`/onboarding/selfie?from=${FROM_PROFILE}`)}
       />
       {toast && <Toast message={toast} onDone={clearToast} />}
     </div>

@@ -73,4 +73,18 @@ describe('POST /api/wardrobe/process', () => {
     const json = await res.json()
     expect(json.candidates).toEqual([])
   })
+
+  it('uploadOnly stores and signs the photo without reading it or searching', async () => {
+    const res = await post({ ...VALID, uploadOnly: true })
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ processedImageUrl: 'https://signed/preview.jpg' })
+    expect(mockUpload).toHaveBeenCalledTimes(1)
+    expect(tagImage).not.toHaveBeenCalled()
+    expect(searchByImage).not.toHaveBeenCalled()
+  })
+
+  it('uploadOnly returns 500 when the upload fails', async () => {
+    mockUpload.mockResolvedValueOnce({ error: { message: 'x' } })
+    expect((await post({ ...VALID, uploadOnly: true })).status).toBe(500)
+  })
 })

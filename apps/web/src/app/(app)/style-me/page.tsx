@@ -107,7 +107,7 @@ function OccasionPicker({
             key={o}
             style={{ backgroundColor: occasionColour(o) }}
             className={`relative flex min-h-[104px] cursor-pointer items-center gap-3 border-[1.5px] border-ink p-4 has-[:checked]:border-[3px] has-[:focus-visible]:outline-[3px] has-[:focus-visible]:outline-offset-2 ${
-              dark ? 'text-on-dark has-[:focus-visible]:outline-signal' : 'text-ink has-[:focus-visible]:outline-ink'
+              dark ? 'text-on-dark has-[:focus-visible]:outline-ink' : 'text-ink has-[:focus-visible]:outline-ink'
             }`}
           >
             <input
@@ -294,7 +294,7 @@ function StyleMeContent() {
 
   const occasion = phase.occasion
   const block = (
-    <ScreenBlock>
+    <ScreenBlock theme={occasionTheme(occasion)}>
       <Kicker>Style me</Kicker>
       <Hero>{OCCASION_LABELS[occasion]}</Hero>
       <p className="mt-3 text-[15px] text-(--on-block-2)">{pickerSubtitle(season)}</p>

@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase/client'
 import { photoToJpegBase64 } from '@/lib/image-resize'
 import { Button } from '@/components/ui/Button'
 import { Notice, Toast } from '@/components/ui/Feedback'
+import { BottomSheet } from '@/components/ui/Overlays'
 import { TextField } from '@/components/ui/TextField'
 import ReviewForm from './ReviewForm'
 import { asWebUrl, shopDomain, type ReviewValues } from '@/lib/item-form'
@@ -30,7 +31,7 @@ interface Draft {
   failure?: 'link' | 'photo'
 }
 
-type Stage = { name: 'choose' } | { name: 'reading'; what: 'photo' | 'link' } | { name: 'review'; draft: Draft }
+type Stage = { name: 'choose' } | { name: 'reading'; what: 'photo' | 'link' } | { name: 'review'; draft: Draft; seq: number }
 
 const READ_FAILED_PHOTO = "We couldn't read this photo. Fill in the details below, or try another photo."
 const OFFLINE = "Couldn't reach Fashun. Check your connection and try again."
@@ -81,6 +82,15 @@ export default function AddPiece({ presets, returnTo, onSaved }: { presets: Pres
   const [toast, setToast] = useState<string | null>(null)
   const [formKey, setFormKey] = useState(0)
   const clearToast = useCallback(() => setToast(null), [])
+  const seqRef = useRef(0)
+  const [addPhotoOpen, setAddPhotoOpen] = useState(false)
+  const [addPhotoError, setAddPhotoError] = useState<string | null>(null)
+  const [addingPhoto, setAddingPhoto] = useState(false)
+
+  function showReview({ draft }: { draft: Draft }) {
+    seqRef.current += 1
+    setStage({ name: 'review', draft, seq: seqRef.current })
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -121,8 +131,7 @@ export default function AddPiece({ presets, returnTo, onSaved }: { presets: Pres
       const data = await res.json()
       const suggested = occasionsOf(data.occasionTags)
       const colours: string[] = Array.isArray(data.colours) ? data.colours.filter((c: unknown) => typeof c === 'string') : []
-      setStage({
-        name: 'review',
+      showReview({
         draft: {
           source: 'photo',
           initial: withPresets(
@@ -136,7 +145,7 @@ export default function AddPiece({ presets, returnTo, onSaved }: { presets: Pres
       })
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') return
-      setStage({ name: 'review', draft: emptyDraft(activePresets, { failure: 'photo' }) })
+      showReview({ draft: emptyDraft(activePresets, { failure: 'photo' }) })
     }
   }
 
@@ -162,8 +171,7 @@ export default function AddPiece({ presets, returnTo, onSaved }: { presets: Pres
       if (res.ok && data.mode === 'confirm' && data.product) {
         const p = data.product
         const suggested = occasionsOf(p.occasionTags)
-        setStage({
-          name: 'review',
+        showReview({
           draft: {
             source: 'link',
             initial: withPresets(
@@ -186,12 +194,42 @@ export default function AddPiece({ presets, returnTo, onSaved }: { presets: Pres
         return
       }
       // Unreadable page, a blocked address, or a result we can't use: add by hand and keep the link.
-      setStage({ name: 'review', draft: emptyDraft(activePresets, { failure: 'link', storeUrl: link }) })
+      showReview({ draft: emptyDraft(activePresets, { failure: 'link', storeUrl: link }) })
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') return
       setStage({ name: 'choose' })
       setReadError(OFFLINE)
     }
+  }
+
+  /** Put a picture in the empty photo tile. Only stores the picture; the details the user has checked stay as they are. */
+  async function addPhoto(file: File) {
+    setAddPhotoError(null)
+    setAddingPhoto(true)
+    try {
+      const imageBase64 = await photoToJpegBase64(file)
+      const res = await fetch('/api/wardrobe/process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64, uploadOnly: true }),
+      })
+      if (!res.ok) throw new Error('upload failed')
+      const data = await res.json()
+      if (typeof data.processedImageUrl !== 'string') throw new Error('no photo url')
+      const photoUrl: string = data.processedImageUrl
+      setStage((s) => (s.name === 'review' ? { ...s, draft: { ...s.draft, photoUrl } } : s))
+    } catch {
+      setAddPhotoError("Couldn't add that photo. Try again.")
+    } finally {
+      setAddingPhoto(false)
+    }
+  }
+
+  function handleAddPhotoPicked(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    setAddPhotoOpen(false)
+    if (file) void addPhoto(file)
   }
 
   function cancelReading() {
@@ -267,7 +305,7 @@ export default function AddPiece({ presets, returnTo, onSaved }: { presets: Pres
     return (
       <>
         <ReviewForm
-          key={`${formKey}-${draft.source}-${draft.initial.name}-${draft.photoUrl ?? ''}`}
+          key={`${formKey}-${stage.seq}`}
           mode="add"
           initial={draft.initial}
           suggested={draft.suggested}
@@ -276,6 +314,7 @@ export default function AddPiece({ presets, returnTo, onSaved }: { presets: Pres
           backLabel={draft.source === 'photo' ? 'Retake' : 'Back'}
           onBack={() => { setSaveError(null); setStage({ name: 'choose' }) }}
           onChangePhoto={draft.source === 'photo' ? () => setStage({ name: 'choose' }) : undefined}
+          onAddPhoto={() => setAddPhotoOpen(true)}
           saveError={saveError}
           onSave={(values, another) => save(draft, values, another)}
           intro={
@@ -290,6 +329,16 @@ export default function AddPiece({ presets, returnTo, onSaved }: { presets: Pres
             ) : undefined
           }
         />
+        {addingPhoto && <p role="status" className="mt-3 text-[15px] font-semibold">Adding your photo…</p>}
+        {addPhotoError && <p role="alert" className="mt-3 text-[15px] font-semibold text-danger"><span aria-hidden="true">⚠ </span>{addPhotoError}</p>}
+        <input ref={takeRef} type="file" accept="image/*" capture="environment" className="sr-only" tabIndex={-1} aria-hidden="true" onChange={handleAddPhotoPicked} />
+        <input ref={chooseRef} type="file" accept="image/*" className="sr-only" tabIndex={-1} aria-hidden="true" onChange={handleAddPhotoPicked} />
+        <BottomSheet open={addPhotoOpen} title="Add a photo" onClose={() => setAddPhotoOpen(false)}>
+          <div className="flex flex-col gap-3">
+            <Button onClick={() => takeRef.current?.click()}>Take a photo</Button>
+            <Button variant="secondary" onClick={() => chooseRef.current?.click()}>Choose a photo</Button>
+          </div>
+        </BottomSheet>
         {failed === 'photo' && (
           <div className="mt-3">
             <Button variant="secondary" onClick={() => setStage({ name: 'choose' })}>Try another photo</Button>

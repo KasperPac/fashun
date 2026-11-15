@@ -18,7 +18,7 @@ export default function ReadyStrip({ readiness }: { readiness: Readiness[] }) {
                 href={href}
                 style={{ backgroundColor: occasionColour(r.occasion) }}
                 className={`flex min-h-16 flex-col justify-between border-[1.5px] border-ink p-1.5 font-display text-xs font-bold uppercase leading-tight tracking-[0.5px] ${
-                  isDarkOccasion(r.occasion) ? 'text-on-dark focus-visible:outline-signal' : 'text-ink'
+                  isDarkOccasion(r.occasion) ? 'text-on-dark' : 'text-ink'
                 }`}
               >
                 <span>{OCCASION_LABELS[r.occasion]}</span>

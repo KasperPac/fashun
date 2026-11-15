@@ -78,7 +78,7 @@ export default function SavedOutfitPage() {
     return (
       <main data-occasion="house" aria-busy="true">
         <p role="status" className="sr-only">Loading your saved outfit…</p>
-        <ScreenBlock><BackLink /><Skeleton className="h-20 w-56" /></ScreenBlock>
+        <ScreenBlock theme="house"><BackLink /><Skeleton className="h-20 w-56" /></ScreenBlock>
         <div className="px-6 pt-6"><Skeleton className="h-[360px] max-w-[480px]" /></div>
       </main>
     )
@@ -118,7 +118,7 @@ export default function SavedOutfitPage() {
 
   return (
     <main data-occasion={theme}>
-      <ScreenBlock>
+      <ScreenBlock theme={theme}>
         <BackLink />
         <Kicker>Saved outfit</Kicker>
         <h1 className="font-display text-[76px] font-extrabold uppercase leading-[0.9] tracking-[-1px] text-(--on-block)">

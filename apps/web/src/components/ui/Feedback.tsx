@@ -2,11 +2,14 @@
 import type { ReactNode } from 'react'
 import { useEffect } from 'react'
 import { Button } from './Button'
+import { useAnnounce } from './Announcer'
 
-/** Signal-yellow banner, role=status, with a 44px dismiss button. */
-export function Banner({ children, onDismiss }: { children: ReactNode; onDismiss?: () => void }) {
+/** Signal-yellow banner, announced through the shared status region, with a 44px dismiss button. */
+export function Banner({ children, onDismiss }: { children: string; onDismiss?: () => void }) {
+  const announce = useAnnounce()
+  useEffect(() => { announce(children) }, [children, announce])
   return (
-    <div role="status" className="flex items-center gap-2 border-[1.5px] border-ink bg-signal pl-3 text-ink">
+    <div className="flex items-center gap-2 border-[1.5px] border-ink bg-signal pl-3 text-ink">
       <p className="flex-1 py-2 font-sans text-[15px] font-semibold">{children}</p>
       {onDismiss && (
         <button
@@ -43,8 +46,10 @@ export function Notice({
   )
 }
 
-/** Ink toast above the nav, announced to screen readers, gone after 4 seconds. */
+/** Ink toast above the nav, announced through the shared status region, gone after 4 seconds. */
 export function Toast({ message, onDone }: { message: string; onDone: () => void }) {
+  const announce = useAnnounce()
+  useEffect(() => { announce(message) }, [message, announce])
   useEffect(() => {
     const timer = setTimeout(onDone, 4000)
     return () => clearTimeout(timer)
@@ -52,7 +57,6 @@ export function Toast({ message, onDone }: { message: string; onDone: () => void
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-24 z-50 flex justify-center px-6 lg:bottom-8 lg:pl-[240px]">
       <p
-        role="status"
         className="animate-fade-in bg-ink px-4 py-3 font-sans text-[15px] font-semibold text-on-dark"
       >
         {message}

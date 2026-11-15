@@ -34,6 +34,13 @@ describe('occasions', () => {
     expect(occasionFromText('Formal')).toBe('formal')
   })
 
+  it('occasionFromText does not read "informal" as formal, and maps semi-formal and party to smart-casual', () => {
+    expect(occasionFromText('Informal')).toBe('casual')
+    expect(occasionFromText('Informal gathering')).toBe('casual')
+    expect(occasionFromText('Semi-formal')).toBe('smart-casual')
+    expect(occasionFromText('Party')).toBe('smart-casual')
+  })
+
   it('occasionFromText returns null for blank, non-string or unmatched', () => {
     expect(occasionFromText('')).toBeNull()
     expect(occasionFromText('   ')).toBeNull()

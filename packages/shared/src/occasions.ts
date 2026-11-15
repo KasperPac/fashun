@@ -13,8 +13,9 @@ export function sanitiseOccasionTags(value: unknown): OccasionTag[] {
 // Order matters: the first rule that matches wins. Mirrors the SQL mapping in
 // supabase/migrations/006_four_occasions.sql.
 const FREE_TEXT_RULES: [RegExp, OccasionTag][] = [
-  [/smart[\s-]*casual|dinner|\bdate\b|cocktail|drinks|evening/i, 'smart-casual'],
-  [/formal|event|wedding|gala|black[\s-]*tie|party|ceremony/i, 'formal'],
+  [/informal/i, 'casual'],
+  [/smart[\s-]*casual|semi[\s-]*formal|dinner|\bdate\b|cocktail|drinks|evening|party/i, 'smart-casual'],
+  [/formal|event|wedding|gala|black[\s-]*tie|ceremony/i, 'formal'],
   [/\bwork\b|office|business|meeting|interview|professional/i, 'work'],
   [/casual|weekend|brunch|relax|everyday|errand|lounge/i, 'casual'],
 ]

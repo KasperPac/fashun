@@ -1,29 +1,18 @@
 'use client'
 import { usePathname, useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase/client'
 import { StepProgress } from '@/components/ui/Onboarding'
+import { onboardingBackTarget } from '@/lib/onboarding-back'
 
 const STEPS = ['selfie', 'profile', 'items'] as const
-const BACK: Record<(typeof STEPS)[number], string | null> = {
-  selfie: null,
-  profile: '/onboarding/selfie',
-  items: '/onboarding/profile',
-}
 
 export default function OnboardingLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
   const index = Math.max(0, STEPS.findIndex((s) => pathname.endsWith(`/${s}`)))
-  const back = BACK[STEPS[index]]
 
-  async function handleBack() {
-    if (back) {
-      router.push(back)
-      return
-    }
-    // Step 1 has no earlier step: go back to the start screen, signed out.
-    await supabase.auth.signOut()
-    router.push('/login')
+  function handleBack() {
+    const from = new URLSearchParams(window.location.search).get('from')
+    router.push(onboardingBackTarget(STEPS[index], from))
   }
 
   return (

@@ -66,9 +66,7 @@ body {
   outline: 3px solid var(--color-ink);
   outline-offset: 2px;
 }
-.on-dark :focus-visible,
-[data-occasion="formal"] :focus-visible,
-[data-occasion="house"] :focus-visible {
+.on-dark :focus-visible {
   outline-color: var(--color-signal);
 }
 

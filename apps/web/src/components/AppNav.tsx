@@ -22,7 +22,7 @@ export default function AppNav() {
   return (
     <nav
       aria-label="Main"
-      className="fixed inset-x-0 bottom-0 z-40 bg-ink pb-[env(safe-area-inset-bottom,0px)] lg:inset-y-0 lg:right-auto lg:w-60 lg:pb-0 lg:pt-10"
+      className="on-dark fixed inset-x-0 bottom-0 z-40 bg-ink pb-[env(safe-area-inset-bottom,0px)] lg:inset-y-0 lg:right-auto lg:w-60 lg:pb-0 lg:pt-10"
     >
       <p className="mb-6 hidden px-6 font-display text-[40px] font-extrabold uppercase leading-none tracking-[-1px] text-on-dark lg:block">
         Fashun

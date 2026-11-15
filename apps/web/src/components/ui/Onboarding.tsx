@@ -45,10 +45,11 @@ export function SelfieFrame({
   )
 }
 
-/** Full-width block coloured by the nearest data-occasion theme. */
-export function ScreenBlock({ children }: { children: ReactNode }) {
+/** Full-width block coloured by the nearest data-occasion theme. Pass the theme so dark blocks get the yellow focus ring. */
+export function ScreenBlock({ children, theme }: { children: ReactNode; theme?: string }) {
+  const dark = theme === 'formal' || theme === 'house'
   return (
-    <div className="bg-(--block) px-6 pb-8 pt-10 text-(--on-block) lg:px-10">
+    <div className={`${dark ? 'on-dark ' : ''}bg-(--block) px-6 pb-8 pt-10 text-(--on-block) lg:px-10`}>
       {children}
     </div>
   )
