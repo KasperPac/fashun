@@ -1,10 +1,5 @@
-import BottomNav from '@/components/BottomNav'
+import AppShell from '@/components/AppShell'
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <>
-      {children}
-      <BottomNav />
-    </>
-  )
+  return <AppShell>{children}</AppShell>
 }
