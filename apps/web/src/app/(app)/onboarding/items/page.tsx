@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase/client'
 import { Button, ButtonLink } from '@/components/ui/Button'
 import { ErrorState } from '@/components/ui/Feedback'
 import { nextMissingPiece } from '@/lib/first-pieces'
+import { addHref } from '@/lib/wardrobe-view'
 
 const SLOTS: Array<{ category: WardrobeCategory; label: string }> = [
   { category: 'tops', label: 'Top' },
@@ -92,7 +93,7 @@ export default function FirstPiecesStep() {
                 )}
               </div>
               {!item && items !== null && (
-                <ButtonLink href={`/wardrobe/add?category=${category}`} fullWidth={false} compact variant="secondary">
+                <ButtonLink href={addHref(category, null, 'onboarding')} fullWidth={false} compact variant="secondary">
                   Add
                 </ButtonLink>
               )}

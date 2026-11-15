@@ -6,6 +6,8 @@ interface ChipProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'default' | 'add'
   /** Fill for the selected state, e.g. an occasion colour. Defaults to ink. */
   selectedFill?: string
+  /** Use white text on the selected fill (for the Formal colour). */
+  selectedOnDark?: boolean
   role?: 'radio' | 'checkbox' | 'button'
 }
 
@@ -13,6 +15,7 @@ export function Chip({
   selected = false,
   variant = 'default',
   selectedFill,
+  selectedOnDark = false,
   role = 'button',
   className = '',
   children,
@@ -24,7 +27,7 @@ export function Chip({
     variant === 'add'
       ? 'border-[1.5px] border-dashed border-ink bg-card text-ink'
       : selected
-        ? `border-[2.5px] border-ink ${selectedFill ? 'text-ink' : 'bg-ink text-on-dark'}`
+        ? `border-[2.5px] border-ink ${selectedFill ? (selectedOnDark ? 'text-on-dark' : 'text-ink') : 'bg-ink text-on-dark'}`
         : 'border border-ink bg-card text-ink'
   return (
     <button

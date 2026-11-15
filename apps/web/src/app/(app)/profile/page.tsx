@@ -16,11 +16,7 @@ export default function ProfilePage() {
     <main>
       <ProfileView
         headline="tab"
-        footer={
-          <div className="flex max-w-[480px] flex-col gap-3">
-            <Button variant="text" fullWidth={false} onClick={signOut}>Sign out</Button>
-          </div>
-        }
+        footer={<Button variant="text" fullWidth={false} onClick={signOut}>Sign out</Button>}
       />
     </main>
   )

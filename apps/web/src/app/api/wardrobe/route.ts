@@ -143,7 +143,7 @@ const CreateItemSchema = z.object({
   colours: z.array(z.string()).default([]),
   styleTags: z.array(z.string()).default([]),
   occasionTags: z.array(z.enum(OCCASIONS)).default([]),
-  imageUrl: z.string().min(1), // path or URL — normalized to an object path on store
+  imageUrl: z.string().default(''), // path or URL, normalized to an object path on store; empty when added by hand without a photo
   ownership: z.enum(['owned', 'wishlist']).default('owned'),
   storeUrl: z.string().url().optional(),
   price: z.number().optional(),
@@ -170,9 +170,11 @@ export async function POST(req: Request) {
       colours: parsed.data.colours,
       style_tags: parsed.data.styleTags,
       occasion_tags: parsed.data.occasionTags,
-      image_url: isExternalUrl(parsed.data.imageUrl)
-        ? parsed.data.imageUrl
-        : toObjectPath(parsed.data.imageUrl),
+      image_url: parsed.data.imageUrl === ''
+        ? ''
+        : isExternalUrl(parsed.data.imageUrl)
+          ? parsed.data.imageUrl
+          : toObjectPath(parsed.data.imageUrl),
       ownership: parsed.data.ownership,
       store_url: parsed.data.storeUrl,
       price: parsed.data.price,

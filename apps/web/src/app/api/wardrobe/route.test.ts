@@ -187,6 +187,11 @@ describe('POST /api/wardrobe', () => {
     expect(res.status).toBe(201)
   })
 
+  it('saves a piece added by hand without a photo', async () => {
+    const res = await post({ name: 'Navy chinos', category: 'bottoms', colours: ['#000080'], occasionTags: ['work'] })
+    expect(res.status).toBe(201)
+  })
+
   it('rejects the old dinner/event occasions', async () => {
     expect((await post({ name: 'Tee', category: 'tops', imageUrl: 'https://x.test/a.png', occasionTags: ['dinner'] })).status).toBe(400)
     expect((await post({ name: 'Tee', category: 'tops', imageUrl: 'https://x.test/a.png', occasionTags: ['event'] })).status).toBe(400)

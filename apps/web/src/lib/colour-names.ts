@@ -48,3 +48,19 @@ export function colourName(hex: string): string {
   }
   return best[0]
 }
+
+export interface ColourOption { hex: string; name: string }
+
+/** Every named colour a user can pick for a piece, one entry per name, sorted by name. */
+export const COLOUR_OPTIONS: ColourOption[] = (() => {
+  const byName = new Map<string, string>()
+  for (const [hex, name] of Object.entries(NAMED)) if (!byName.has(name)) byName.set(name, hex)
+  for (const [name, hex] of REFERENCE) if (!byName.has(name)) byName.set(name, hex)
+  return [...byName].map(([name, hex]) => ({ hex, name })).sort((a, b) => a.name.localeCompare(b.name))
+})()
+
+/** Colours whose name contains the query, ignoring case and surrounding spaces. Empty query returns all. */
+export function searchColours(query: string): ColourOption[] {
+  const q = query.trim().toLowerCase()
+  return q ? COLOUR_OPTIONS.filter((c) => c.name.toLowerCase().includes(q)) : COLOUR_OPTIONS
+}

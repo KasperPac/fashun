@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { getProfileColours, type ColourSeason } from '@fashun/shared'
-import { colourName } from './colour-names'
+import { COLOUR_OPTIONS, colourName, searchColours } from './colour-names'
 
 describe('colourName', () => {
   it('names a known palette colour, ignoring case and whitespace', () => {
@@ -26,5 +26,21 @@ describe('colourName', () => {
         expect(colourName(hex)).not.toMatch(/^#|Unnamed/)
       }
     }
+  })
+})
+
+describe('searchColours', () => {
+  it('returns all named colours for an empty or blank query', () => {
+    expect(searchColours('')).toHaveLength(COLOUR_OPTIONS.length)
+    expect(searchColours('   ')).toHaveLength(COLOUR_OPTIONS.length)
+  })
+  it('matches part of a name, ignoring case', () => {
+    expect(searchColours('NAV').map((c) => c.name)).toContain('Navy')
+    expect(searchColours('zzzz')).toEqual([])
+  })
+  it('has one entry per name and a valid hex each', () => {
+    const names = COLOUR_OPTIONS.map((c) => c.name)
+    expect(new Set(names).size).toBe(names.length)
+    expect(COLOUR_OPTIONS.every((c) => /^#[0-9A-F]{6}$/i.test(c.hex))).toBe(true)
   })
 })

@@ -1,29 +1,40 @@
 'use client'
-import { useState } from 'react'
-import AddItemForm from '@/components/wardrobe/AddItemForm'
-import AddByLinkForm from '@/components/wardrobe/AddByLinkForm'
+import { Suspense } from 'react'
+import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
+import AddPiece from '@/components/wardrobe/AddPiece'
+import { readPresets } from '@/lib/wardrobe-view'
 
-export default function AddItemPage() {
-  const [method, setMethod] = useState<'photo' | 'link'>('photo')
+function AddContent() {
+  const params = useSearchParams()
+  const presets = readPresets(params)
+  const fromOnboarding = params.get('from') === 'onboarding'
+  const backHref = fromOnboarding ? '/onboarding/items' : '/wardrobe'
   return (
-    <div className="min-h-screen bg-black text-white px-4 py-6 max-w-lg mx-auto">
-      <div className="flex items-center gap-3 mb-6">
-        <a href="/wardrobe" className="text-zinc-500 hover:text-white text-xl">←</a>
-        <h1 className="text-xl font-black">Add Item</h1>
-      </div>
-      <div className="flex gap-2 mb-6">
-        <button onClick={() => setMethod('photo')}
-          className={`flex-1 rounded-xl py-2 text-sm font-semibold transition-colors ${
-            method === 'photo' ? 'bg-purple-600 text-white' : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-800'}`}>
-          📸 Photo
-        </button>
-        <button onClick={() => setMethod('link')}
-          className={`flex-1 rounded-xl py-2 text-sm font-semibold transition-colors ${
-            method === 'link' ? 'bg-purple-600 text-white' : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-800'}`}>
-          🔗 Link
-        </button>
-      </div>
-      {method === 'photo' ? <AddItemForm /> : <AddByLinkForm />}
-    </div>
+    <main className="mx-auto w-full max-w-[480px] px-6 pb-8 pt-4 lg:max-w-[720px]">
+      <Link
+        href={backHref}
+        aria-label="Back"
+        className="-ml-3 mb-2 flex h-11 w-11 items-center justify-center"
+      >
+        <svg aria-hidden="true" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="square">
+          <path d="M15 5l-7 7 7 7" />
+        </svg>
+      </Link>
+      <h1 className="mb-6 font-display text-[44px] font-extrabold uppercase leading-none">Add a piece</h1>
+      <AddPiece
+        presets={presets}
+        returnTo={backHref}
+        onSaved={(name) => (fromOnboarding ? backHref : `${backHref}?added=${encodeURIComponent(name)}`)}
+      />
+    </main>
+  )
+}
+
+export default function AddPage() {
+  return (
+    <Suspense fallback={null}>
+      <AddContent />
+    </Suspense>
   )
 }

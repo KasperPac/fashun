@@ -1,7 +1,8 @@
 'use client'
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useRouter } from 'next/navigation'
 import type { ColourSeason, StylePref } from '@fashun/shared'
-import { SEASON_DESCRIPTIONS } from '@fashun/shared'
+import { SEASON_DESCRIPTIONS, getProfileColours } from '@fashun/shared'
 import { supabase } from '@/lib/supabase/client'
 import { colourName } from '@/lib/colour-names'
 import {
@@ -14,7 +15,17 @@ import {
   traitLabel,
 } from '@/lib/profile-view'
 import { ColourCard } from '@/components/ui/ColourSwatch'
-import { ErrorState, Skeleton } from '@/components/ui/Feedback'
+import { Banner, ErrorState, Skeleton, Toast } from '@/components/ui/Feedback'
+import { Button, ButtonLink } from '@/components/ui/Button'
+import { ConfirmDialog } from '@/components/ui/Overlays'
+import { SeasonSheet, StylesSheet, TraitSheet } from './ProfileSheets'
+import {
+  TRAITS,
+  changeLabel,
+  currentOptionValue,
+  seasonSavedMessage,
+  type TraitKey,
+} from '@/lib/profile-edit'
 import { Kicker, ScreenBlock } from '@/components/ui/Onboarding'
 
 export interface ProfileData {
@@ -84,11 +95,25 @@ function Reveal({ index, children }: { index: number; children: ReactNode }) {
   )
 }
 
-function TraitRow({ label, value }: { label: string; value: string }) {
+function Chevron() {
   return (
-    <li className="flex min-h-12 items-center justify-between gap-3 border-b-[1.5px] border-ink py-2 last:border-b-0">
-      <span className="font-display text-[13px] font-bold uppercase tracking-[1.5px] text-ink-2">{label}</span>
-      <span className={`text-base font-medium ${value === NOT_SURE ? 'text-ink-2' : ''}`}>{value}</span>
+    <svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="square">
+      <path d="M9 5l7 7-7 7" />
+    </svg>
+  )
+}
+
+/** A 48px tap target: label, current value, chevron. Opens the picker for that trait. */
+function TraitRow({ label, value, ariaLabel, onClick }: { label: string; value: string; ariaLabel: string; onClick: () => void }) {
+  return (
+    <li className="border-b-[1.5px] border-ink last:border-b-0">
+      <button type="button" onClick={onClick} aria-label={ariaLabel} className="flex min-h-12 w-full items-center justify-between gap-3 py-2 text-left">
+        <span className="font-display text-[13px] font-bold uppercase tracking-[1.5px] text-ink-2">{label}</span>
+        <span className="flex items-center gap-2">
+          <span className={`text-base font-medium ${value === NOT_SURE ? 'text-ink-2' : ''}`}>{value}</span>
+          <Chevron />
+        </span>
+      </button>
     </li>
   )
 }
@@ -108,16 +133,47 @@ function ColourGrid({ title, hexes, avoid = false }: { title: string; hexes: str
   )
 }
 
-/** Read-only colour profile: season hero, selfie line, traits, colours and styles. */
+type Editing = TraitKey | 'styles' | 'season' | null
+
+async function saveProfile(patch: Record<string, unknown>): Promise<boolean> {
+  try {
+    const res = await fetch('/api/onboarding/profile', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
+const SAVE_FAILED = "Couldn't save. Check your connection and try again."
+
+/** Colour profile: season hero, selfie line, tap-to-change traits, colours and styles. */
 export default function ProfileView({
   headline,
   footer,
+  manual = false,
 }: {
   /** 'reveal' words the hero as "You're an Autumn"; 'tab' shows the season word alone. */
   headline: 'reveal' | 'tab'
   footer?: ReactNode
+  /** Start in "enter my details by hand" mode when there is no profile yet. */
+  manual?: boolean
 }) {
+  const router = useRouter()
   const { state, load } = useProfile()
+  const [edits, setEdits] = useState<Partial<ProfileData>>({})
+  const [editing, setEditing] = useState<Editing>(null)
+  const [draftStyles, setDraftStyles] = useState<StylePref[]>([])
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [toast, setToast] = useState<string | null>(null)
+  const [banner, setBanner] = useState<string | null>(null)
+  const [retakeOpen, setRetakeOpen] = useState(false)
+  const [byHand, setByHand] = useState(manual)
+  const clearToast = useCallback(() => setToast(null), [])
 
   if (state.status === 'loading') {
     return (
@@ -144,35 +200,102 @@ export default function ProfileView({
     )
   }
 
-  const { profile } = state
-  if (!profile || !profile.season) {
+  const loaded = state.profile
+  const profile: ProfileData | null = loaded ? { ...loaded, ...edits } : null
+  const hasSeason = !!profile?.season
+
+  if ((!profile || !hasSeason) && !byHand) {
     return (
-      <div className="px-6 py-8">
+      <div className="flex max-w-[480px] flex-col items-start gap-4 px-6 py-8">
         <p className="text-base">Take a selfie to find your colour season and the colours that suit you.</p>
+        <ButtonLink href="/onboarding/selfie">Take my selfie</ButtonLink>
+        <Button variant="text" onClick={() => setByHand(true)}>Enter my details by hand</Button>
       </div>
     )
   }
 
-  const season = profile.season
-  const heroWord = headline === 'reveal' ? seasonHeadline(season) : SEASON_NAMES[season]
+  const current: ProfileData = profile ?? {
+    season: null, skinTone: null, undertone: null, hair: null, eyes: null, best: [], avoid: [], styles: [],
+  }
+  const season = current.season
+
+  function open(next: Editing) {
+    setSaveError(null)
+    if (next === 'styles') setDraftStyles(current.styles)
+    setEditing(next)
+  }
+
+  function close() {
+    if (!saving) setEditing(null)
+  }
+
+  async function pickTrait(key: TraitKey, value: string) {
+    const trait = TRAITS[key]
+    setSaving(true)
+    setSaveError(null)
+    const ok = await saveProfile({ [trait.field]: value })
+    setSaving(false)
+    if (!ok) { setSaveError(SAVE_FAILED); return }
+    const label = trait.options.find((o) => o.value === value)?.label ?? null
+    const field = key === 'skin' ? 'skinTone' : key === 'undertone' ? 'undertone' : key === 'hair' ? 'hair' : 'eyes'
+    setEdits((e) => ({ ...e, [field]: label }))
+    setEditing(null)
+    setToast('Saved.')
+  }
+
+  async function pickSeason(next: ColourSeason) {
+    setSaving(true)
+    setSaveError(null)
+    const ok = await saveProfile({ colour_season: next })
+    setSaving(false)
+    if (!ok) { setSaveError(SAVE_FAILED); return }
+    const colours = getProfileColours(next)
+    setEdits((e) => ({ ...e, season: next, best: colours.best, avoid: colours.avoid }))
+    setEditing(null)
+    setBanner(seasonSavedMessage(next))
+  }
+
+  async function saveStyles() {
+    setSaving(true)
+    setSaveError(null)
+    const ok = await saveProfile({ suggested_styles: draftStyles })
+    setSaving(false)
+    if (!ok) { setSaveError(SAVE_FAILED); return }
+    setEdits((e) => ({ ...e, styles: draftStyles }))
+    setEditing(null)
+    setToast('Saved.')
+  }
+
+  const trait = editing && editing !== 'styles' && editing !== 'season' ? TRAITS[editing] : null
+  const shown: Record<TraitKey, string | null> = {
+    skin: current.skinTone, undertone: current.undertone, hair: current.hair, eyes: current.eyes,
+  }
+  const heroWord = !season ? 'Your colours' : headline === 'reveal' ? seasonHeadline(season) : SEASON_NAMES[season]
+
   return (
     <div data-occasion="house">
       <ScreenBlock>
         <Kicker>Your colour season</Kicker>
         <h1
           className={`mt-2 animate-reveal font-display font-extrabold uppercase tracking-[-1px] ${
-            headline === 'reveal' ? 'text-[52px] leading-none' : 'text-[76px] leading-[0.9]'
+            headline === 'reveal' || !season ? 'text-[52px] leading-none' : 'text-[76px] leading-[0.9]'
           }`}
         >
           {heroWord}
         </h1>
         <p className="mt-3 max-w-[480px] text-base leading-[1.4] text-(--on-block-2)">
-          {SEASON_DESCRIPTIONS[season]}
+          {season ? SEASON_DESCRIPTIONS[season] : 'Choose your season to see the colours that suit you.'}
         </p>
         <p className="mt-4 text-[15px] font-semibold text-(--on-block)">
           <span aria-hidden="true">🔒 </span>Your selfie isn&apos;t kept. Only the results are saved.
         </p>
       </ScreenBlock>
+
+      {banner && (
+        <div className="mx-auto max-w-[1120px] px-6 pt-6 lg:px-10">
+          <Banner onDismiss={() => setBanner(null)}>{banner}</Banner>
+        </div>
+      )}
 
       <div className="mx-auto flex max-w-[1120px] flex-col gap-8 px-6 py-8 lg:grid lg:grid-cols-2 lg:gap-12 lg:px-10">
         <div className="flex flex-col gap-8">
@@ -180,33 +303,88 @@ export default function ProfileView({
             <section aria-labelledby="about-you">
               <h2 id="about-you" className="mb-1 font-display text-[22px] font-extrabold uppercase">About you</h2>
               <ul className="border-y-[1.5px] border-ink">
-                <TraitRow label="Skin tone" value={traitLabel(profile.skinTone)} />
-                <TraitRow label="Undertone" value={traitLabel(profile.undertone)} />
-                <TraitRow label="Hair" value={traitLabel(profile.hair)} />
-                <TraitRow label="Eyes" value={traitLabel(profile.eyes)} />
-                <TraitRow label="Season" value={SEASON_NAMES[season]} />
+                {(Object.keys(TRAITS) as TraitKey[]).map((key) => (
+                  <TraitRow
+                    key={key}
+                    label={TRAITS[key].label}
+                    value={traitLabel(shown[key])}
+                    ariaLabel={changeLabel(TRAITS[key], shown[key])}
+                    onClick={() => open(key)}
+                  />
+                ))}
+                <TraitRow
+                  label="Season"
+                  value={season ? SEASON_NAMES[season] : NOT_SURE}
+                  ariaLabel={`Change season, currently ${season ? SEASON_NAMES[season] : 'not set'}`}
+                  onClick={() => open('season')}
+                />
               </ul>
             </section>
           </Reveal>
           <Reveal index={4}>
             <section aria-labelledby="styles">
               <h2 id="styles" className="mb-3 font-display text-[22px] font-extrabold uppercase">Styles that suit you</h2>
-              <ul className="flex flex-wrap gap-2">
-                {profile.styles.map((style) => (
-                  <li key={style} className="border-[1.5px] border-ink bg-card px-3 py-2 font-display text-[15px] font-bold uppercase tracking-[1px]">
-                    {STYLE_NAMES[style] ?? traitLabel(style)}
-                  </li>
-                ))}
-              </ul>
+              {current.styles.length > 0 ? (
+                <ul className="mb-3 flex flex-wrap gap-2">
+                  {current.styles.map((style) => (
+                    <li key={style} className="border-[1.5px] border-ink bg-card px-3 py-2 font-display text-[15px] font-bold uppercase tracking-[1px]">
+                      {STYLE_NAMES[style] ?? traitLabel(style)}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mb-3 text-[15px] text-ink-2">{NOT_SURE}</p>
+              )}
+              <Button variant="secondary" compact fullWidth={false} onClick={() => open('styles')}>Change</Button>
             </section>
           </Reveal>
         </div>
-        <div className="flex flex-col gap-8">
-          <Reveal index={2}><ColourGrid title="Wear these" hexes={profile.best} /></Reveal>
-          <Reveal index={3}><ColourGrid title="Skip these" hexes={profile.avoid} avoid /></Reveal>
+        <div key={season ?? 'none'} className="flex animate-fade-in flex-col gap-8">
+          {season ? (
+            <>
+              <Reveal index={2}><ColourGrid title="Wear these" hexes={current.best} /></Reveal>
+              <Reveal index={3}><ColourGrid title="Skip these" hexes={current.avoid} avoid /></Reveal>
+            </>
+          ) : (
+            <p className="text-[15px] text-ink-2">Pick a season to see your best colours.</p>
+          )}
         </div>
-        {footer && <div className="lg:col-span-2">{footer}</div>}
+        <div className="flex max-w-[480px] flex-col gap-3 lg:col-span-2">
+          {headline === 'tab' && (
+            <Button variant="secondary" onClick={() => setRetakeOpen(true)}>Retake selfie</Button>
+          )}
+          {footer}
+        </div>
       </div>
+
+      <TraitSheet
+        trait={trait}
+        current={trait ? currentOptionValue(trait, shown[trait.key]) : null}
+        busy={saving}
+        error={saveError}
+        onPick={(value) => trait && pickTrait(trait.key, value)}
+        onClose={close}
+      />
+      <SeasonSheet open={editing === 'season'} current={season} busy={saving} error={saveError} onPick={pickSeason} onClose={close} />
+      <StylesSheet
+        open={editing === 'styles'}
+        selected={draftStyles}
+        busy={saving}
+        error={saveError}
+        onChange={setDraftStyles}
+        onDone={saveStyles}
+        onClose={close}
+      />
+      <ConfirmDialog
+        open={retakeOpen}
+        title="Retake your selfie?"
+        body="Your new results will replace your current profile, including anything you changed by hand."
+        confirmLabel="Retake"
+        destructive={false}
+        onCancel={() => setRetakeOpen(false)}
+        onConfirm={() => router.push('/onboarding/selfie')}
+      />
+      {toast && <Toast message={toast} onDone={clearToast} />}
     </div>
   )
 }
