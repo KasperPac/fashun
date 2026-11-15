@@ -2,11 +2,14 @@
 import { Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import ProfileView from '@/components/profile/ProfileView'
+import { onboardingHref } from '@/lib/onboarding-back'
 import { Button } from '@/components/ui/Button'
 
 function ProfileStepContent() {
   const router = useRouter()
-  const manual = useSearchParams().get('manual') === '1'
+  const params = useSearchParams()
+  const manual = params.get('manual') === '1'
+  const from = params.get('from')
   return (
     <main>
       <ProfileView
@@ -14,7 +17,7 @@ function ProfileStepContent() {
         manual={manual}
         footer={
           <>
-            <Button onClick={() => router.push('/onboarding/items')}>Looks right</Button>
+            <Button onClick={() => router.push(onboardingHref('/onboarding/items', from))}>Looks right</Button>
             <p className="text-[13px] text-ink-2">Tap anything that&apos;s wrong to change it.</p>
           </>
         }

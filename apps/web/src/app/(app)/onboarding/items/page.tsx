@@ -7,6 +7,7 @@ import { Button, ButtonLink } from '@/components/ui/Button'
 import { ErrorState, Toast } from '@/components/ui/Feedback'
 import { nextMissingPiece } from '@/lib/first-pieces'
 import { addHref } from '@/lib/wardrobe-view'
+import { onboardingHref } from '@/lib/onboarding-back'
 
 const SLOTS: Array<{ category: WardrobeCategory; label: string }> = [
   { category: 'tops', label: 'Top' },
@@ -29,7 +30,7 @@ function FirstPiecesContent() {
   const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
-    if (params.get('added')) router.replace('/onboarding/items')
+    if (params.get('added')) router.replace(onboardingHref('/onboarding/items', params.get('from')))
     // Only on first render: the toast text was already captured.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

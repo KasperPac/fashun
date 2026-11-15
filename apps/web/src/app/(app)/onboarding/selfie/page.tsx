@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
-import { showOnboardingSignOut } from '@/lib/onboarding-back'
+import { onboardingHref, showOnboardingSignOut } from '@/lib/onboarding-back'
 import { photoToJpegBase64 } from '@/lib/image-resize'
 import { Button } from '@/components/ui/Button'
 import { SelfieFrame } from '@/components/ui/Onboarding'
@@ -11,17 +11,21 @@ import { SelfieFrame } from '@/components/ui/Onboarding'
 type Phase = 'idle' | 'preview' | 'reading' | 'failed'
 
 /** The way out for a new user, since Back doesn't sign anyone out. Not shown when they came from Profile. */
-function SignOutButton() {
+function SignOutButton({ reading }: { reading: boolean }) {
   const router = useRouter()
   const from = useSearchParams().get('from')
   const [failed, setFailed] = useState(false)
-  if (!showOnboardingSignOut(from)) return null
+  const [signingOut, setSigningOut] = useState(false)
+  if (reading || !showOnboardingSignOut(from)) return null
 
   async function signOut() {
+    if (signingOut) return
+    setSigningOut(true)
     setFailed(false)
     const { error } = await supabase.auth.signOut()
     if (error) {
       setFailed(true)
+      setSigningOut(false)
       return
     }
     router.push('/login')
@@ -29,14 +33,15 @@ function SignOutButton() {
 
   return (
     <div className="flex flex-col items-start gap-2">
-      <Button variant="text" fullWidth={false} onClick={signOut}>Sign out</Button>
+      <Button variant="text" fullWidth={false} busy={signingOut} busyLabel="Signing out…" onClick={signOut}>Sign out</Button>
       {failed && <p role="alert" className="text-[15px] font-semibold">Couldn&apos;t sign you out. Try again.</p>}
     </div>
   )
 }
 
-export default function SelfieStep() {
+function SelfieContent() {
   const router = useRouter()
+  const from = useSearchParams().get('from')
   const takeRef = useRef<HTMLInputElement>(null)
   const chooseRef = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
@@ -75,7 +80,7 @@ export default function SelfieStep() {
         body: JSON.stringify({ imageBase64 }),
       })
       if (!res.ok) throw new Error('could not read')
-      router.push('/onboarding/profile')
+      router.push(onboardingHref('/onboarding/profile', from))
     } catch {
       setPhase('failed')
     }
@@ -118,15 +123,23 @@ export default function SelfieStep() {
             We couldn&apos;t read your colours from that photo. Try again in daylight with your face filling most of the frame.
           </p>
           <Button onClick={reset}>Try again</Button>
-          <Button variant="text" onClick={() => router.push('/onboarding/profile?manual=1')}>
+          <Button variant="text" onClick={() => router.push(onboardingHref('/onboarding/profile', from, 'manual=1'))}>
             Enter my details by hand
           </Button>
         </div>
       )}
 
       <Suspense fallback={null}>
-        <SignOutButton />
+        <SignOutButton reading={phase === 'reading'} />
       </Suspense>
     </main>
+  )
+}
+
+export default function SelfieStep() {
+  return (
+    <Suspense fallback={null}>
+      <SelfieContent />
+    </Suspense>
   )
 }

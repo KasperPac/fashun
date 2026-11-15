@@ -10,15 +10,25 @@ const EARLIER: Record<OnboardingStep, string | null> = {
 }
 
 /**
+ * An onboarding path that keeps `from=profile` when the user started from Profile,
+ * so every later step and its Back still know the way back. `query` is any other
+ * params, e.g. `manual=1`.
+ */
+export function onboardingHref(path: string, from: string | null, query = ''): string {
+  const params = [query, from === FROM_PROFILE ? `from=${FROM_PROFILE}` : ''].filter(Boolean).join('&')
+  return params ? `${path}?${params}` : path
+}
+
+/**
  * Where Back goes, or null when there is nowhere to go. Steps 2 and 3 go to the
- * step before. Step 1 goes to Profile when the user came from Profile, Style me
- * or Retake selfie, otherwise there is no Back: the start screen would show the
+ * step before and keep `from=profile`. Step 1 goes to Profile when the user came
+ * from Profile ("Retake selfie" or Style me's selfie link), otherwise there is no Back: the start screen would show the
  * sign-in form to a signed-in user, so "Sign out" is the way out instead. Back
  * never signs anyone out.
  */
 export function onboardingBackTarget(step: OnboardingStep, from: string | null): string | null {
   const earlier = EARLIER[step]
-  if (earlier) return earlier
+  if (earlier) return onboardingHref(earlier, from)
   return from === FROM_PROFILE ? '/profile' : null
 }
 
@@ -27,5 +37,5 @@ export function showOnboardingSignOut(from: string | null): boolean {
   return from !== FROM_PROFILE
 }
 
-/** The link that opens step 1 from Profile and Style me, so Back returns there. */
+/** The link Profile and Style me use to open step 1. Back from there always returns to Profile, not Style me. */
 export const SELFIE_FROM_PROFILE_HREF = `/onboarding/selfie?from=${FROM_PROFILE}`

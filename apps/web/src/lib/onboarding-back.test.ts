@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { onboardingBackTarget, showOnboardingSignOut, SELFIE_FROM_PROFILE_HREF } from './onboarding-back'
+import { onboardingBackTarget, onboardingHref, showOnboardingSignOut, SELFIE_FROM_PROFILE_HREF } from './onboarding-back'
 
 describe('onboardingBackTarget', () => {
   it('step 1 returns to Profile when opened from Retake selfie', () => {
@@ -18,8 +18,37 @@ describe('onboardingBackTarget', () => {
     }
   })
   it('later steps go to the step before', () => {
-    expect(onboardingBackTarget('profile', 'profile')).toBe('/onboarding/selfie')
+    expect(onboardingBackTarget('profile', null)).toBe('/onboarding/selfie')
     expect(onboardingBackTarget('items', null)).toBe('/onboarding/profile')
+  })
+  it('later steps keep from=profile on Back', () => {
+    expect(onboardingBackTarget('profile', 'profile')).toBe('/onboarding/selfie?from=profile')
+    expect(onboardingBackTarget('items', 'profile')).toBe('/onboarding/profile?from=profile')
+  })
+  it('Profile -> step 1 -> step 2 -> Back shows step 1 with Back to Profile and no Sign out', () => {
+    const step2 = onboardingHref('/onboarding/profile', 'profile')
+    expect(step2).toBe('/onboarding/profile?from=profile')
+    const back = onboardingBackTarget('profile', new URL(step2, 'http://x').searchParams.get('from'))!
+    const from = new URL(back, 'http://x').searchParams.get('from')
+    expect(back).toBe('/onboarding/selfie?from=profile')
+    expect(onboardingBackTarget('selfie', from)).toBe('/profile')
+    expect(showOnboardingSignOut(from)).toBe(false)
+  })
+  it('ignores an unknown from value', () => {
+    expect(onboardingBackTarget('profile', 'elsewhere')).toBe('/onboarding/selfie')
+  })
+})
+
+describe('onboardingHref', () => {
+  it('adds from=profile only for Profile', () => {
+    expect(onboardingHref('/onboarding/items', 'profile')).toBe('/onboarding/items?from=profile')
+    expect(onboardingHref('/onboarding/items', null)).toBe('/onboarding/items')
+    expect(onboardingHref('/onboarding/items', '')).toBe('/onboarding/items')
+    expect(onboardingHref('/onboarding/items', 'elsewhere')).toBe('/onboarding/items')
+  })
+  it('keeps other params', () => {
+    expect(onboardingHref('/onboarding/profile', 'profile', 'manual=1')).toBe('/onboarding/profile?manual=1&from=profile')
+    expect(onboardingHref('/onboarding/profile', null, 'manual=1')).toBe('/onboarding/profile?manual=1')
   })
 })
 
