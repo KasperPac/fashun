@@ -84,6 +84,7 @@ export async function POST(req: Request) {
         colours,
         colourVariants: product.colourVariants,
         styleTags: product.styleTags,
+        occasionTags: product.occasionTags,
         processedImageUrl,
         storeUrl: url,
         price: product.price,

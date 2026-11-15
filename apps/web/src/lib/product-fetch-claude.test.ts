@@ -12,6 +12,7 @@ const productJson = {
   imageUrl: 'https://cdn.kmart.com/shirt.jpg',
   price: 25,
   styleTags: ['smart-casual'],
+  occasionTags: ['work', 'event'],
   colourVariants: [{ label: 'Rust', hex: '#B7410E' }, { label: 'Olive', hex: '#556B2F' }],
   colours: ['#B7410E'],
 }
@@ -34,6 +35,7 @@ describe('extractProductViaClaude', () => {
     expect(out!.colourVariants).toHaveLength(2)
     expect(out!.colours).toEqual(['#B7410E'])
     expect(out!.styleTags).toEqual(['smart-casual'])
+    expect(out!.occasionTags).toEqual(['work'])
   })
 
   it('parses a product when the model prepends prose before the JSON (post-tool narration)', async () => {

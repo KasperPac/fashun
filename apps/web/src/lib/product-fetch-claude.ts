@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
-import type { WardrobeCategory } from '@fashun/shared'
+import { sanitiseOccasionTags, type WardrobeCategory } from '@fashun/shared'
 import type { ExtractedProduct, ColourVariant } from './product-extractor'
 import { extractJson } from './extract-json'
 
@@ -37,6 +37,7 @@ After fetching, reply with ONLY valid JSON (no markdown):
   "imageUrl": "main product image url, or null",
   "price": number or null,
   "styleTags": ["casual|smart-casual|business|streetwear|minimalist|athleisure|bohemian|glam"],
+  "occasionTags": ["one or more of: casual|smart-casual|work|formal"],
   "colourVariants": [{"label": "named colour shown on the page", "hex": "#rrggbb"}],
   "colours": ["#rrggbb"]
 }
@@ -76,6 +77,8 @@ Rules:
       ? parsed.colours.filter((c: string) => HEX.test(c))
       : []
 
+    const occasionTags = sanitiseOccasionTags(parsed.occasionTags)
+
     return {
       name: typeof parsed.name === 'string' && parsed.name ? parsed.name : 'My item',
       category,
@@ -83,6 +86,7 @@ Rules:
       imageUrl: typeof parsed.imageUrl === 'string' && parsed.imageUrl ? parsed.imageUrl : null,
       price: typeof parsed.price === 'number' && Number.isFinite(parsed.price) ? parsed.price : null,
       styleTags: Array.isArray(parsed.styleTags) ? parsed.styleTags : [],
+      occasionTags: occasionTags.length ? occasionTags : ['casual'],
       colourVariants,
       colours,
     }

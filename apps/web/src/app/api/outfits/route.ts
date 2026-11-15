@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
 import { z } from 'zod'
+import { occasionFromText } from '@fashun/shared'
 
 const PieceSchema = z.object({
   label: z.string(),
@@ -54,7 +55,7 @@ export async function POST(req: Request) {
       user_id: user.id,
       item_id: parsed.data.item_id,
       name: parsed.data.name,
-      occasion: parsed.data.occasion ?? null,
+      occasion: occasionFromText(parsed.data.occasion),
       pieces: parsed.data.pieces,
       description: parsed.data.description ?? null,
     })

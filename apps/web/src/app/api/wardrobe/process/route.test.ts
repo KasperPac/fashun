@@ -20,7 +20,7 @@ vi.mock('@/lib/wardrobe-image', () => ({ signWardrobeImage }))
 
 import { POST } from './route'
 
-const tags = { category: 'shoes', colours: ['#000000'], styleTags: ['casual'], suggestedName: 'Boots', searchQuery: 'Timberland 6-inch boots' }
+const tags = { category: 'shoes', colours: ['#000000'], styleTags: ['casual'], occasionTags: ['casual', 'smart-casual'], suggestedName: 'Boots', searchQuery: 'Timberland 6-inch boots' }
 const candidate = { url: 'https://shop.com/p/1', title: 'Timberland 6-inch boots', imageUrl: 'https://shop.com/i.jpg', retailer: 'Timberland' }
 const VALID = { imageBase64: 'x'.repeat(120) }
 
@@ -54,6 +54,8 @@ describe('POST /api/wardrobe/process', () => {
     expect(searchByImage).toHaveBeenCalledWith('https://signed/preview.jpg', 'Timberland 6-inch boots')
     expect(json.processedImageUrl).toBe('https://signed/preview.jpg')
     expect(json.category).toBe('shoes')
+    expect(json.colours).toEqual(['#000000'])
+    expect(json.occasionTags).toEqual(['casual', 'smart-casual'])
     expect(json.candidates).toHaveLength(1)
     expect(json.candidates[0].url).toBe('https://shop.com/p/1')
   })

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
+const mockInsert = vi.fn()
 const mockGetUser = vi.fn().mockResolvedValue({ data: { user: { id: 'user-1' } } })
 
 const mockOutfit = {
@@ -14,7 +15,10 @@ function makeChain(result: unknown) {
   const chain: Record<string, unknown> = {}
   for (const m of ['select', 'eq', 'order', 'neq']) chain[m] = () => makeChain(result)
   chain['single'] = () => Promise.resolve(result)
-  chain['insert'] = () => ({ select: () => ({ single: () => Promise.resolve(result) }) })
+  chain['insert'] = (row: unknown) => {
+    mockInsert(row)
+    return { select: () => ({ single: () => Promise.resolve(result) }) }
+  }
   chain['then'] = (r: (v: unknown) => unknown) => Promise.resolve(result).then(r)
   chain['catch'] = (r: (v: unknown) => unknown) => Promise.resolve(result).catch(r)
   return chain
@@ -77,5 +81,24 @@ describe('POST /api/outfits', () => {
       method: 'POST', body: JSON.stringify(body),
     }))
     expect(res.status).toBe(201)
+    expect(mockInsert.mock.calls[0][0].occasion).toBe('casual')
+  })
+
+  it.each([
+    ['Work meeting', 'work'],
+    ['Dinner', 'smart-casual'],
+    ['formal', 'formal'],
+    ['Skiing', null],
+    [undefined, null],
+  ])('stores occasion %j as one of the four (%j)', async (occasion, expected) => {
+    const res = await POST(new Request('http://localhost/api/outfits', {
+      method: 'POST',
+      body: JSON.stringify({
+        item_id: '00000000-0000-0000-0000-000000000001', name: 'x', occasion,
+        pieces: [{ label: 'a', colour_hex: '#000000', item_id: null, in_wardrobe: false }],
+      }),
+    }))
+    expect(res.status).toBe(201)
+    expect(mockInsert.mock.calls[0][0].occasion).toBe(expected)
   })
 })

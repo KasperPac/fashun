@@ -13,7 +13,14 @@ export const STYLE_PREFS = [
 ] as const
 export type StylePref = (typeof STYLE_PREFS)[number]
 export type WardrobeCategory = 'tops' | 'bottoms' | 'shoes' | 'outerwear' | 'bags' | 'accessories'
-export type OccasionTag = 'work' | 'casual' | 'dinner' | 'event'
+export const OCCASIONS = ['casual', 'smart-casual', 'work', 'formal'] as const
+export type OccasionTag = (typeof OCCASIONS)[number]
+export const OCCASION_LABELS: Record<OccasionTag, string> = {
+  casual: 'Casual',
+  'smart-casual': 'Smart casual',
+  work: 'Work',
+  formal: 'Formal',
+}
 export type Ownership = 'owned' | 'wishlist'
 
 export interface CategoryBudgets {
@@ -79,6 +86,7 @@ export interface ProcessItemResponse {
   category: WardrobeCategory
   colours: string[]
   styleTags: string[]
+  occasionTags: OccasionTag[]
   suggestedName: string
 }
 

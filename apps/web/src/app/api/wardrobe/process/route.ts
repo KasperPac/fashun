@@ -58,6 +58,7 @@ export async function POST(req: Request) {
     category: tags.category,
     colours: tags.colours,
     styleTags: tags.styleTags,
+    occasionTags: tags.occasionTags,
     suggestedName: tags.suggestedName,
     searchQuery: tags.searchQuery,
     candidates,
