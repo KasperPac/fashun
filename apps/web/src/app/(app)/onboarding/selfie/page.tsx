@@ -1,11 +1,39 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { supabase } from '@/lib/supabase/client'
+import { showOnboardingSignOut } from '@/lib/onboarding-back'
 import { photoToJpegBase64 } from '@/lib/image-resize'
 import { Button } from '@/components/ui/Button'
 import { SelfieFrame } from '@/components/ui/Onboarding'
 
 type Phase = 'idle' | 'preview' | 'reading' | 'failed'
+
+/** The way out for a new user, since Back doesn't sign anyone out. Not shown when they came from Profile. */
+function SignOutButton() {
+  const router = useRouter()
+  const from = useSearchParams().get('from')
+  const [failed, setFailed] = useState(false)
+  if (!showOnboardingSignOut(from)) return null
+
+  async function signOut() {
+    setFailed(false)
+    const { error } = await supabase.auth.signOut()
+    if (error) {
+      setFailed(true)
+      return
+    }
+    router.push('/login')
+  }
+
+  return (
+    <div className="flex flex-col items-start gap-2">
+      <Button variant="text" fullWidth={false} onClick={signOut}>Sign out</Button>
+      {failed && <p role="alert" className="text-[15px] font-semibold">Couldn&apos;t sign you out. Try again.</p>}
+    </div>
+  )
+}
 
 export default function SelfieStep() {
   const router = useRouter()
@@ -95,6 +123,10 @@ export default function SelfieStep() {
           </Button>
         </div>
       )}
+
+      <Suspense fallback={null}>
+        <SignOutButton />
+      </Suspense>
     </main>
   )
 }

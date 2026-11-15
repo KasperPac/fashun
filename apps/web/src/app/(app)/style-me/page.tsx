@@ -30,6 +30,7 @@ import {
   type RequiredCategory,
   type StyledOutfit,
 } from '@/lib/style-me'
+import { SELFIE_FROM_PROFILE_HREF } from '@/lib/onboarding-back'
 import { addHref, isDarkOccasion, occasionColour, outfitReadiness, type Readiness } from '@/lib/wardrobe-view'
 
 const SEASONS: ColourSeason[] = ['spring', 'summer', 'autumn', 'winter']
@@ -252,7 +253,7 @@ function StyleMeContent() {
       <h1 className="mb-4 font-display text-[56px] font-extrabold uppercase leading-none">Style me</h1>
       <div className="flex flex-col items-start gap-4">
         <p className="text-base font-semibold">Take a selfie first, so outfits can follow your colours.</p>
-        <ButtonLink href="/onboarding/selfie">Take my selfie</ButtonLink>
+        <ButtonLink href={SELFIE_FROM_PROFILE_HREF}>Take my selfie</ButtonLink>
         <ButtonLink href="/onboarding/profile?manual=1" variant="secondary">Enter my details by hand</ButtonLink>
       </div>
     </main>

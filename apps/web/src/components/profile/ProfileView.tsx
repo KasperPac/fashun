@@ -15,7 +15,7 @@ import {
   traitLabel,
 } from '@/lib/profile-view'
 import { ColourCard } from '@/components/ui/ColourSwatch'
-import { FROM_PROFILE } from '@/lib/onboarding-back'
+import { SELFIE_FROM_PROFILE_HREF } from '@/lib/onboarding-back'
 import { Banner, ErrorState, Skeleton, Toast } from '@/components/ui/Feedback'
 import { Button, ButtonLink } from '@/components/ui/Button'
 import { ConfirmDialog } from '@/components/ui/Overlays'
@@ -209,7 +209,7 @@ export default function ProfileView({
     return (
       <div className="flex max-w-[480px] flex-col items-start gap-4 px-6 py-8">
         <p className="text-base">Take a selfie to find your colour season and the colours that suit you.</p>
-        <ButtonLink href="/onboarding/selfie">Take my selfie</ButtonLink>
+        <ButtonLink href={SELFIE_FROM_PROFILE_HREF}>Take my selfie</ButtonLink>
         <Button variant="text" onClick={() => setByHand(true)}>Enter my details by hand</Button>
       </div>
     )
@@ -298,49 +298,30 @@ export default function ProfileView({
         </div>
       )}
 
-      <div className="mx-auto flex max-w-[1120px] flex-col gap-8 px-6 py-8 lg:grid lg:grid-cols-2 lg:gap-12 lg:px-10">
-        <div className="contents lg:flex lg:flex-col lg:gap-8">
-          <Reveal index={1} className="order-1 lg:order-none">
-            <section aria-labelledby="about-you">
-              <h2 id="about-you" className="mb-1 font-display text-[22px] font-extrabold uppercase">About you</h2>
-              <ul className="border-y-[1.5px] border-ink">
-                {(Object.keys(TRAITS) as TraitKey[]).map((key) => (
-                  <TraitRow
-                    key={key}
-                    label={TRAITS[key].label}
-                    value={traitLabel(shown[key])}
-                    ariaLabel={changeLabel(TRAITS[key], shown[key])}
-                    onClick={() => open(key)}
-                  />
-                ))}
+      <div className="mx-auto flex max-w-[1120px] flex-col gap-8 px-6 py-8 lg:grid lg:grid-cols-2 lg:grid-rows-[auto_1fr] lg:gap-x-12 lg:gap-y-8 lg:px-10">
+        <Reveal index={1} className="lg:col-start-1 lg:row-start-1">
+          <section aria-labelledby="about-you">
+            <h2 id="about-you" className="mb-1 font-display text-[22px] font-extrabold uppercase">About you</h2>
+            <ul className="border-y-[1.5px] border-ink">
+              {(Object.keys(TRAITS) as TraitKey[]).map((key) => (
                 <TraitRow
-                  label="Season"
-                  value={season ? SEASON_NAMES[season] : NOT_SURE}
-                  ariaLabel={`Change season, currently ${season ? SEASON_NAMES[season] : 'not set'}`}
-                  onClick={() => open('season')}
+                  key={key}
+                  label={TRAITS[key].label}
+                  value={traitLabel(shown[key])}
+                  ariaLabel={changeLabel(TRAITS[key], shown[key])}
+                  onClick={() => open(key)}
                 />
-              </ul>
-            </section>
-          </Reveal>
-          <Reveal index={4} className="order-3 lg:order-none">
-            <section aria-labelledby="styles">
-              <h2 id="styles" className="mb-3 font-display text-[22px] font-extrabold uppercase">Styles that suit you</h2>
-              {current.styles.length > 0 ? (
-                <ul className="mb-3 flex flex-wrap gap-2">
-                  {current.styles.map((style) => (
-                    <li key={style} className="border-[1.5px] border-ink bg-card px-3 py-2 font-display text-[15px] font-bold uppercase tracking-[1px]">
-                      {STYLE_NAMES[style] ?? traitLabel(style)}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="mb-3 text-[15px] text-ink-2">{NOT_SURE}</p>
-              )}
-              <Button variant="secondary" compact fullWidth={false} onClick={() => open('styles')}>Change</Button>
-            </section>
-          </Reveal>
-        </div>
-        <div key={season ?? 'none'} className="order-2 flex animate-fade-in flex-col gap-8 lg:order-none">
+              ))}
+              <TraitRow
+                label="Season"
+                value={season ? SEASON_NAMES[season] : NOT_SURE}
+                ariaLabel={`Change season, currently ${season ? SEASON_NAMES[season] : 'not set'}`}
+                onClick={() => open('season')}
+              />
+            </ul>
+          </section>
+        </Reveal>
+        <div key={season ?? 'none'} className="flex animate-fade-in flex-col gap-8 lg:col-start-2 lg:row-span-2 lg:row-start-1">
           {season ? (
             <>
               <Reveal index={2}><ColourGrid title="Wear these" hexes={current.best} /></Reveal>
@@ -350,7 +331,24 @@ export default function ProfileView({
             <p className="text-[15px] text-ink-2">Pick a season to see your best colours.</p>
           )}
         </div>
-        <div className="order-4 flex max-w-[480px] flex-col gap-3 lg:order-none lg:col-span-2">
+        <Reveal index={4} className="lg:col-start-1 lg:row-start-2">
+          <section aria-labelledby="styles">
+            <h2 id="styles" className="mb-3 font-display text-[22px] font-extrabold uppercase">Styles that suit you</h2>
+            {current.styles.length > 0 ? (
+              <ul className="mb-3 flex flex-wrap gap-2">
+                {current.styles.map((style) => (
+                  <li key={style} className="border-[1.5px] border-ink bg-card px-3 py-2 font-display text-[15px] font-bold uppercase tracking-[1px]">
+                    {STYLE_NAMES[style] ?? traitLabel(style)}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mb-3 text-[15px] text-ink-2">{NOT_SURE}</p>
+            )}
+            <Button variant="secondary" compact fullWidth={false} onClick={() => open('styles')}>Change</Button>
+          </section>
+        </Reveal>
+        <div className="flex max-w-[480px] flex-col gap-3 lg:col-span-2">
           {headline === 'tab' && (
             <Button variant="secondary" onClick={() => setRetakeOpen(true)}>Retake selfie</Button>
           )}
@@ -383,7 +381,7 @@ export default function ProfileView({
         confirmLabel="Retake"
         destructive={false}
         onCancel={() => setRetakeOpen(false)}
-        onConfirm={() => router.push(`/onboarding/selfie?from=${FROM_PROFILE}`)}
+        onConfirm={() => router.push(SELFIE_FROM_PROFILE_HREF)}
       />
       {toast && <Toast message={toast} onDone={clearToast} />}
     </div>

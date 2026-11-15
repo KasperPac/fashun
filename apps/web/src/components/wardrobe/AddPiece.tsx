@@ -324,19 +324,23 @@ export default function AddPiece({ presets, returnTo, onSaved }: { presets: Pres
           season={season}
           backLabel={draft.source === 'photo' ? 'Retake' : 'Back'}
           onBack={() => { setSaveError(null); setStage({ name: 'choose' }) }}
-          onChangePhoto={draft.source === 'photo' ? () => setStage({ name: 'choose' }) : undefined}
+          onChangePhoto={
+            draft.source === 'photo'
+              ? () => setStage({ name: 'choose' })
+              : draft.photoUrl ? () => setAddPhotoOpen(true) : undefined
+          }
           onAddPhoto={() => setAddPhotoOpen(true)}
           saveError={saveError}
           onSave={(values, another) => save(draft, values, another)}
           intro={
             failed === 'link' ? (
-              <Notice title="We couldn't read this page" role="status">
+              <Notice title="We couldn't read this page" role="status" focusTitle>
                 Some shops block us. Add it manually below. It only takes a minute.
                 {domain && <span className="mt-1 block text-[13px]">From: {domain}</span>}
-                <span className="mt-1 block text-[13px]">Add a photo (optional). Snap the piece or save a picture from the shop.</span>
+                {!draft.photoUrl && <span className="mt-1 block text-[13px]">Add a photo (optional). Snap the piece or save a picture from the shop.</span>}
               </Notice>
             ) : failed === 'photo' ? (
-              <Notice title="We couldn't read this photo" role="status">
+              <Notice title="We couldn't read this photo" role="status" focusTitle>
                 {READ_FAILED_PHOTO}
                 <span className="mt-3 block">
                   <Button variant="secondary" fullWidth={false} onClick={() => setStage({ name: 'choose' })}>Try another photo</Button>

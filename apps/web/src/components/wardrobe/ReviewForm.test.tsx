@@ -20,6 +20,11 @@ describe('ReviewForm photo tile', () => {
     expect(html).not.toContain('Add a photo')
     expect(html).toContain('src="https://x/y.jpg"')
   })
+  it('shows "Change photo" for a photo that was added, so a wrong one can be replaced', () => {
+    const html = renderToStaticMarkup(<ReviewForm {...base} photoUrl="https://x/y.jpg" onAddPhoto={() => {}} onChangePhoto={() => {}} />)
+    expect(html).toContain('Change photo')
+    expect(html).not.toContain('Add a photo')
+  })
   it('does not offer it when the screen gives no way to add one', () => {
     expect(renderToStaticMarkup(<ReviewForm {...base} photoUrl={null} />)).not.toContain('Add a photo')
   })

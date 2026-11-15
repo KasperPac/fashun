@@ -1,6 +1,6 @@
 'use client'
 import type { ReactNode } from 'react'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { Button } from './Button'
 import { useAnnounce } from './Announcer'
 
@@ -30,16 +30,23 @@ export function Notice({
   title,
   children,
   role,
+  focusTitle = false,
 }: {
   title: string
   children?: ReactNode
   role?: 'alert' | 'status'
+  /** Move keyboard focus to the title when the notice appears, for notices that replace what the user was on. */
+  focusTitle?: boolean
 }) {
+  const titleRef = useRef<HTMLParagraphElement>(null)
+  useEffect(() => {
+    if (focusTitle) titleRef.current?.focus()
+  }, [focusTitle])
   return (
     <div role={role} className="flex border-2 border-ink bg-card">
       <span aria-hidden="true" className="w-2 shrink-0 bg-signal" />
       <div className="p-3">
-        <p className="font-display text-[22px] font-extrabold uppercase leading-tight">{title}</p>
+        <p ref={titleRef} tabIndex={focusTitle ? -1 : undefined} className="font-display text-[22px] font-extrabold uppercase leading-tight">{title}</p>
         {children && <div className="mt-1 text-[15px] text-ink-2">{children}</div>}
       </div>
     </div>

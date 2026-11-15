@@ -100,4 +100,29 @@ describe('POST /api/wardrobe/process', () => {
     mockUpload.mockResolvedValueOnce({ error: { message: 'x' } })
     expect((await post({ ...VALID, uploadOnly: true })).status).toBe(500)
   })
+
+  describe('stores files only under the signed-in user\'s folder', () => {
+    const FORGED = { userId: 'someone-else', user_id: 'someone-else', path: 'someone-else/x.jpg', filename: 'someone-else/x.jpg' }
+
+    it.each([
+      ['normal', {}],
+      ['uploadOnly', { uploadOnly: true }],
+    ])('%s path starts with the signed-in user id', async (_name, extra) => {
+      await post({ ...VALID, ...extra })
+      expect(mockUpload).toHaveBeenCalledTimes(1)
+      const stored = mockUpload.mock.calls[0][0] as string
+      expect(stored).toMatch(/^u1\/[^/]+\.(jpg|png)$/)
+      expect(signWardrobeImage).toHaveBeenCalledWith(expect.anything(), stored, 3600)
+    })
+
+    it.each([
+      ['normal', {}],
+      ['uploadOnly', { uploadOnly: true }],
+    ])('%s ignores a forged userId or path in the body', async (_name, extra) => {
+      await post({ ...VALID, ...extra, ...FORGED })
+      const stored = mockUpload.mock.calls[0][0] as string
+      expect(stored.startsWith('u1/')).toBe(true)
+      expect(stored).not.toContain('someone-else')
+    })
+  })
 })
