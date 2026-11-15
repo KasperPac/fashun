@@ -146,3 +146,17 @@ export const SEASON_PROMPT_CONTEXT: Record<ColourSeason, { suits: string; avoid:
     avoid: 'warm earthy tones, muted pastels, warm oranges, camel, warm brown, olive',
   },
 }
+
+/** Extra avoid colours so every season has at least four for the colour profile. */
+const SEASON_EXTRA_AVOID: Record<ColourSeason, string[]> = {
+  spring: ['#000000', '#808080'],
+  summer: ['#FFD700', '#CC5500'],
+  autumn: ['#E6E6FA', '#FF00FF'],
+  winter: ['#FFDAB9', '#D2B48C'],
+}
+
+/** Best (8) and avoid (5) hex colours saved on a user's colour profile for a season. */
+export function getProfileColours(season: ColourSeason): { best: string[]; avoid: string[] } {
+  const { swatches, avoid } = SEASON_SWATCHES[season]
+  return { best: swatches.slice(0, 8), avoid: [...avoid, ...SEASON_EXTRA_AVOID[season]] }
+}

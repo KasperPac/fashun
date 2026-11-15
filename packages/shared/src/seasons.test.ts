@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { hexToHsl, isColourInSeason, getSeasonSwatches, SEASON_DESCRIPTIONS, SEASON_PROMPT_CONTEXT } from './seasons'
+import { hexToHsl, isColourInSeason, getSeasonSwatches, getProfileColours, SEASON_DESCRIPTIONS, SEASON_PROMPT_CONTEXT } from './seasons'
 import type { ColourSeason } from './types'
 
 describe('hexToHsl', () => {
@@ -117,5 +117,23 @@ describe('SEASON_PROMPT_CONTEXT', () => {
       expect(SEASON_PROMPT_CONTEXT[s].suits.length).toBeGreaterThan(10)
       expect(SEASON_PROMPT_CONTEXT[s].avoid.length).toBeGreaterThan(10)
     }
+  })
+})
+
+describe('getProfileColours', () => {
+  it('gives at least 6 best and 4 avoid hex colours for every season', () => {
+    for (const season of ['spring', 'summer', 'autumn', 'winter'] as const) {
+      const { best, avoid } = getProfileColours(season)
+      expect(best.length).toBeGreaterThanOrEqual(6)
+      expect(avoid.length).toBeGreaterThanOrEqual(4)
+      for (const hex of [...best, ...avoid]) expect(hex).toMatch(/^#[0-9a-fA-F]{6}$/)
+      expect(best.filter(b => avoid.includes(b))).toEqual([])
+    }
+  })
+
+  it('returns copies so callers cannot mutate the season data', () => {
+    const first = getProfileColours('winter')
+    first.best[0] = '#123456'
+    expect(getProfileColours('winter').best[0]).toBe('#000080')
   })
 })

@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
+import { getProfileColours, HAIR_COLOURS, EYE_COLOURS, STYLE_PREFS } from '@fashun/shared'
 import { z } from 'zod'
 
-const StylePrefsSchema = z.array(
-  z.enum(['casual', 'smart-casual', 'business', 'streetwear', 'minimalist', 'athleisure', 'bohemian', 'glam'])
-).min(1, 'Select at least one style')
+const StylePrefsSchema = z.array(z.enum(STYLE_PREFS)).min(1, 'Select at least one style')
 
 const BudgetRangeSchema = z.tuple([z.number().min(0), z.number()]).refine(
   ([min, max]) => min < max,
@@ -20,11 +19,21 @@ const BudgetsSchema = z.object({
   accessories: BudgetRangeSchema,
 })
 
+const HexSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Colours must be 6-digit hex values')
+
 const BodySchema = z.object({
   style_prefs: StylePrefsSchema.optional(),
   budgets: BudgetsSchema.optional(),
-}).refine(data => data.style_prefs || data.budgets, {
-  message: 'Provide style_prefs or budgets',
+  skin_undertone: z.enum(['warm', 'cool', 'neutral']).optional(),
+  skin_depth: z.enum(['light', 'medium', 'deep']).optional(),
+  hair_colour: z.enum(HAIR_COLOURS).optional(),
+  eye_colour: z.enum(EYE_COLOURS).optional(),
+  colour_season: z.enum(['spring', 'summer', 'autumn', 'winter']).optional(),
+  best_colours: z.array(HexSchema).min(6, 'Choose at least 6 best colours').optional(),
+  avoid_colours: z.array(HexSchema).min(4, 'Choose at least 4 colours to avoid').optional(),
+  suggested_styles: StylePrefsSchema.optional(),
+}).refine(data => Object.values(data).some(v => v !== undefined), {
+  message: 'Provide at least one profile field',
 })
 
 export async function PATCH(req: Request) {
@@ -38,9 +47,15 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 })
   }
 
-  const updates: Record<string, unknown> = {}
-  if (parsed.data.style_prefs) updates.style_prefs = parsed.data.style_prefs
-  if (parsed.data.budgets) updates.budgets = parsed.data.budgets
+  const updates: Record<string, unknown> = { ...parsed.data }
+
+  // Changing the season refreshes the colours to match, unless the user
+  // supplied their own colours in the same request.
+  if (parsed.data.colour_season) {
+    const { best, avoid } = getProfileColours(parsed.data.colour_season)
+    if (!parsed.data.best_colours) updates.best_colours = best
+    if (!parsed.data.avoid_colours) updates.avoid_colours = avoid
+  }
 
   const { error } = await supabase.from('users').update(updates).eq('id', user.id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
