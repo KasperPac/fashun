@@ -33,7 +33,8 @@ vi.mock('@anthropic-ai/sdk', () => ({ default: class { messages = { create: mock
 
 import { POST } from './route'
 
-const call = (body: unknown) => POST(new Request('http://localhost/api/outfits/generate', { method: 'POST', body: JSON.stringify(body) }))
+const call = async (body: unknown): Promise<Response> =>
+  (await POST(new Request('http://localhost/api/outfits/generate', { method: 'POST', body: JSON.stringify(body) })))!
 const reply = (outfits: unknown) => ({ content: [{ type: 'text', text: JSON.stringify(outfits) }] })
 const outfit = (ids: string[], reason = 'Rust and olive are in your Autumn palette.') =>
   ({ name: 'Look', description: 'A good look.', reason, item_ids: ids })
