@@ -15,6 +15,7 @@ function ProfileStepContent() {
       <ProfileView
         headline="reveal"
         manual={manual}
+        selfieHref={onboardingHref('/onboarding/selfie', from)}
         footer={
           <>
             <Button onClick={() => router.push(onboardingHref('/onboarding/items', from))}>Looks right</Button>

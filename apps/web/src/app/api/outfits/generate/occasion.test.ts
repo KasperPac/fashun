@@ -109,7 +109,7 @@ describe('POST /api/outfits/generate (occasion only)', () => {
     expect(returned).not.toContain(id(7))
     expect(returned).not.toContain(id(8))
     // the casual items are not even offered to the model
-    expect(mockCreate.mock.calls[0][0].messages[0].content).not.toContain(id(7))
+    expect(mockCreate.mock.calls[0]![0].messages[0].content).not.toContain(id(7))
   })
 
   it('never builds a casual outfit only from formal items', async () => {
@@ -119,7 +119,7 @@ describe('POST /api/outfits/generate (occasion only)', () => {
     const { suggestions } = await res.json()
     expect(suggestions).toHaveLength(1)
     expect(suggestions[0].pieces.map((p: { item_id: string }) => p.item_id)).toEqual([id(10), id(11), id(12)])
-    expect(mockCreate.mock.calls[0][0].messages[0].content).not.toContain(id(1))
+    expect(mockCreate.mock.calls[0]![0].messages[0].content).not.toContain(id(1))
   })
 
   it('every reason is one sentence of at most 140 characters naming "your {Season} palette" or "your best {Season} colours"', async () => {
@@ -150,7 +150,7 @@ describe('POST /api/outfits/generate (occasion only)', () => {
   it('uses the profile\'s season and hand-edited colours in the prompt', async () => {
     profile = { colour_season: 'winter', best_colours: ['#000080'], avoid_colours: ['#FFB347'] }
     await call({ occasion: 'formal' })
-    const prompt = mockCreate.mock.calls[0][0].messages[0].content
+    const prompt = mockCreate.mock.calls[0]![0].messages[0].content
     expect(prompt).toContain('Winter')
     expect(prompt).toContain('#000080')
     expect(prompt).toContain('#FFB347')
@@ -191,7 +191,7 @@ describe('POST /api/outfits/generate (occasion only)', () => {
     expect(json.limited).toBe(true)
     expect(json.missing).toEqual(['tops'])
     expect(json.message).toBe('Your clothes make 1 different work outfit. Add another work top for more.')
-    expect(mockCreate.mock.calls[0][0].messages[0].content).toContain('Build 1 different complete outfit for')
+    expect(mockCreate.mock.calls[0]![0].messages[0].content).toContain('Build 1 different complete outfit for')
   })
 
   it('1/1/1 plus jackets and a watch still returns 1 outfit, not 3 jacket variations', async () => {

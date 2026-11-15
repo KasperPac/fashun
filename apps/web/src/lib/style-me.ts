@@ -59,19 +59,24 @@ export function readyLine(occasion: OccasionTag, have: RequiredCategory[]): stri
   return `Your ${lower(occasion)} ${list} ${words.length === 1 && words[0] !== 'shoes' && words[0] !== 'trousers' ? 'is' : 'are'} ready.`
 }
 
-/** "We could only make 2 Work outfits from your wardrobe. Add a work top for more choice." */
+/** When the model, not the wardrobe, returned fewer than 3: "We only got 2 Work outfits this time. Try again for more." */
+export function fewerFromModelMessage(count: number, occasion: OccasionTag): string {
+  return `We only got ${count} ${OCCASION_LABELS[occasion]} ${count === 1 ? 'outfit' : 'outfits'} this time. Try again for more.`
+}
+
+/** When the wardrobe is the limit: "We could only make 2 Work outfits from your wardrobe. Add a work top for more choice." */
 export function fewerMessage(count: number, occasion: OccasionTag, missing: RequiredCategory | null): string {
   const base = `We could only make ${count} ${OCCASION_LABELS[occasion]} ${count === 1 ? 'outfit' : 'outfits'} from your wardrobe.`
   return missing ? `${base} Add ${missingPieceLine(missing, occasion)} for more choice.` : base
 }
 
 export function loadingLine(occasion: OccasionTag): string {
-  return `Putting together your ${OCCASION_LABELS[occasion]} outfits from your wardrobe…`
+  return `Putting together ${OCCASION_LABELS[occasion]} outfits from your wardrobe…`
 }
 
 export function pickerSubtitle(season: ColourSeason | null): string {
-  if (!season) return '3 outfits from your own clothes, in your colours.'
-  return `3 outfits from your own clothes, in your ${season.charAt(0).toUpperCase()}${season.slice(1)} palette.`
+  if (!season) return 'Up to 3 outfits from your own clothes, in your colours.'
+  return `Up to 3 outfits from your own clothes, in your ${season.charAt(0).toUpperCase()}${season.slice(1)} palette.`
 }
 
 export function styleButtonLabel(occasion: OccasionTag | null): string {

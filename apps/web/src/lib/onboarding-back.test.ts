@@ -69,6 +69,23 @@ describe('SELFIE_FROM_PROFILE_HREF', () => {
   })
 })
 
+describe('Take my selfie / Retake on step 2', () => {
+  it('a new user keeps Sign out on step 1', () => {
+    const href = onboardingHref('/onboarding/selfie', null)
+    expect(href).toBe('/onboarding/selfie')
+    const from = new URL(href, 'http://x').searchParams.get('from')
+    expect(showOnboardingSignOut(from)).toBe(true)
+    expect(onboardingBackTarget('selfie', from)).toBeNull()
+  })
+  it('a user who came from Profile keeps Back to Profile', () => {
+    const href = onboardingHref('/onboarding/selfie', 'profile')
+    expect(href).toBe(SELFIE_FROM_PROFILE_HREF)
+    const from = new URL(href, 'http://x').searchParams.get('from')
+    expect(onboardingBackTarget('selfie', from)).toBe('/profile')
+    expect(showOnboardingSignOut(from)).toBe(false)
+  })
+})
+
 describe('Add piece round trip from step 3', () => {
   it('keeps from=profile through Add piece and back to step 3', () => {
     const addFrom = addFromOnboarding('profile')

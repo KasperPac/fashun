@@ -13,6 +13,7 @@ import { prefersReducedMotion, rememberOccasion, useLastOccasion, useOnline } fr
 import {
   OCCASION_DESCRIPTIONS,
   SEASON_ACCENTS,
+  fewerFromModelMessage,
   fewerMessage,
   isOccasion,
   loadingLine,
@@ -358,11 +359,11 @@ function StyleMeContent() {
         <p aria-live="polite" className="font-display text-[15px] font-bold uppercase tracking-[1.5px]">
           Outfit {index + 1} of {count}
         </p>
-        <div aria-hidden="true" className="flex gap-1.5">
+        {count > 1 && <div aria-hidden="true" className="flex gap-1.5">
           {outfits.map((o, i) => (
             <span key={o.name + i} className={`h-2.5 w-2.5 border-[1.5px] border-ink ${i === index ? 'bg-ink' : 'bg-card'}`} />
           ))}
-        </div>
+        </div>}
       </div>
       <div
         ref={slider}
@@ -424,10 +425,16 @@ function StyleMeContent() {
         </div>
       )}
       {count < 3 && (
-        <p className="mt-4 text-[15px] font-semibold">{fewerMessage(count, occasion, phase.missing)}</p>
+        <p role="status" className="mt-4 text-[15px] font-semibold">
+          {phase.limited ? fewerMessage(count, occasion, phase.missing) : fewerFromModelMessage(count, occasion)}
+        </p>
       )}
       <div className="mt-6 flex flex-col gap-3 lg:max-w-[480px]">
-        {!phase.limited && <Button disabled={!online} onClick={() => run(occasion)}>{count < 3 ? 'Try again' : 'Show 3 more'}</Button>}
+        {phase.limited ? (
+          <ButtonLink href={addHref(phase.missing ?? 'tops', occasion)}>Add a piece</ButtonLink>
+        ) : (
+          <Button disabled={!online} onClick={() => run(occasion)}>{count < 3 ? 'Try again' : 'Show 3 more'}</Button>
+        )}
         <Button variant="secondary" onClick={backToPicker}>Change occasion</Button>
         {!online && <p role="status" className="text-sm text-ink-2">You&apos;re offline. Connect to the internet to get new outfits.</p>}
       </div>

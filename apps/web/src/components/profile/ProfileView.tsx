@@ -156,12 +156,15 @@ export default function ProfileView({
   headline,
   footer,
   manual = false,
+  selfieHref = SELFIE_FROM_PROFILE_HREF,
 }: {
   /** 'reveal' words the hero as "You're an Autumn"; 'tab' shows the season word alone. */
   headline: 'reveal' | 'tab'
   footer?: ReactNode
   /** Start in "enter my details by hand" mode when there is no profile yet. */
   manual?: boolean
+  /** Where Take my selfie / Retake go. Profile keeps the default (Back returns to Profile); onboarding step 2 passes its own so Sign out stays. */
+  selfieHref?: string
 }) {
   const router = useRouter()
   const { state, load } = useProfile()
@@ -209,7 +212,7 @@ export default function ProfileView({
     return (
       <div className="flex max-w-[480px] flex-col items-start gap-4 px-6 py-8">
         <p className="text-base">Take a selfie to find your colour season and the colours that suit you.</p>
-        <ButtonLink href={SELFIE_FROM_PROFILE_HREF}>Take my selfie</ButtonLink>
+        <ButtonLink href={selfieHref}>Take my selfie</ButtonLink>
         <Button variant="text" onClick={() => setByHand(true)}>Enter my details by hand</Button>
       </div>
     )
@@ -381,7 +384,7 @@ export default function ProfileView({
         confirmLabel="Retake"
         destructive={false}
         onCancel={() => setRetakeOpen(false)}
-        onConfirm={() => router.push(SELFIE_FROM_PROFILE_HREF)}
+        onConfirm={() => router.push(selfieHref)}
       />
       {toast && <Toast message={toast} onDone={clearToast} />}
     </div>

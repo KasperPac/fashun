@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  clampIndex, fewerMessage, loadingLine, missingPieceLine, notEnoughIntro, notEnoughTitle, pickerSubtitle,
+  clampIndex, fewerFromModelMessage, fewerMessage, loadingLine, missingPieceLine, notEnoughIntro, notEnoughTitle, pickerSubtitle,
   readGenerateResponse, readyLine, saveBody, slideIndex, sortPieces, styleButtonLabel, type StyledOutfit,
 } from './style-me'
 
@@ -31,10 +31,17 @@ describe('fewerMessage', () => {
   })
 })
 
+describe('fewerFromModelMessage', () => {
+  it('blames neither the wardrobe nor the user and offers a retry', () => {
+    expect(fewerFromModelMessage(2, 'work')).toBe('We only got 2 Work outfits this time. Try again for more.')
+    expect(fewerFromModelMessage(1, 'smart-casual')).toBe('We only got 1 Smart casual outfit this time. Try again for more.')
+  })
+})
+
 describe('small labels', () => {
   it('words the loading line, subtitle and button', () => {
-    expect(loadingLine('work')).toBe('Putting together your Work outfits from your wardrobe…')
-    expect(pickerSubtitle('autumn')).toBe('3 outfits from your own clothes, in your Autumn palette.')
+    expect(loadingLine('work')).toBe('Putting together Work outfits from your wardrobe…')
+    expect(pickerSubtitle('autumn')).toBe('Up to 3 outfits from your own clothes, in your Autumn palette.')
     expect(pickerSubtitle(null)).not.toContain('null')
     expect(styleButtonLabel(null)).toBe('Style me')
     expect(styleButtonLabel('work')).toBe('Style me for Work')
