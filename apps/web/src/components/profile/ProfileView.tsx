@@ -88,9 +88,9 @@ function useProfile() {
   return { state, load }
 }
 
-function Reveal({ index, children }: { index: number; children: ReactNode }) {
+function Reveal({ index, children, className = '' }: { index: number; children: ReactNode; className?: string }) {
   return (
-    <div className="animate-reveal" style={{ animationDelay: `${Math.min(index * 60, 540)}ms` }}>
+    <div className={`animate-reveal ${className}`} style={{ animationDelay: `${Math.min(index * 60, 540)}ms` }}>
       {children}
     </div>
   )
@@ -299,8 +299,8 @@ export default function ProfileView({
       )}
 
       <div className="mx-auto flex max-w-[1120px] flex-col gap-8 px-6 py-8 lg:grid lg:grid-cols-2 lg:gap-12 lg:px-10">
-        <div className="flex flex-col gap-8">
-          <Reveal index={1}>
+        <div className="contents lg:flex lg:flex-col lg:gap-8">
+          <Reveal index={1} className="order-1 lg:order-none">
             <section aria-labelledby="about-you">
               <h2 id="about-you" className="mb-1 font-display text-[22px] font-extrabold uppercase">About you</h2>
               <ul className="border-y-[1.5px] border-ink">
@@ -322,7 +322,7 @@ export default function ProfileView({
               </ul>
             </section>
           </Reveal>
-          <Reveal index={4}>
+          <Reveal index={4} className="order-3 lg:order-none">
             <section aria-labelledby="styles">
               <h2 id="styles" className="mb-3 font-display text-[22px] font-extrabold uppercase">Styles that suit you</h2>
               {current.styles.length > 0 ? (
@@ -340,7 +340,7 @@ export default function ProfileView({
             </section>
           </Reveal>
         </div>
-        <div key={season ?? 'none'} className="flex animate-fade-in flex-col gap-8">
+        <div key={season ?? 'none'} className="order-2 flex animate-fade-in flex-col gap-8 lg:order-none">
           {season ? (
             <>
               <Reveal index={2}><ColourGrid title="Wear these" hexes={current.best} /></Reveal>
@@ -350,7 +350,7 @@ export default function ProfileView({
             <p className="text-[15px] text-ink-2">Pick a season to see your best colours.</p>
           )}
         </div>
-        <div className="flex max-w-[480px] flex-col gap-3 lg:col-span-2">
+        <div className="order-4 flex max-w-[480px] flex-col gap-3 lg:order-none lg:col-span-2">
           {headline === 'tab' && (
             <Button variant="secondary" onClick={() => setRetakeOpen(true)}>Retake selfie</Button>
           )}

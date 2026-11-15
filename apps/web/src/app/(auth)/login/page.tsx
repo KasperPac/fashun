@@ -8,6 +8,7 @@ import {
   classifyInviteStatus,
   classifySignInError,
 } from '@/lib/auth-messages'
+import { resendEmail, type ResendKind } from '@/lib/auth-resend'
 import { Button } from '@/components/ui/Button'
 import { TextField } from '@/components/ui/TextField'
 import { Kicker } from '@/components/ui/Onboarding'
@@ -28,6 +29,7 @@ export default function StartPage() {
   const [errors, setErrors] = useState<{ email?: string; password?: string; invite?: string; form?: string }>({})
   const [resendIn, setResendIn] = useState(0)
   const [sentNote, setSentNote] = useState('')
+  const [resendKind, setResendKind] = useState<ResendKind>('signup')
 
   useEffect(() => {
     if (resendIn <= 0) return
@@ -35,8 +37,9 @@ export default function StartPage() {
     return () => clearTimeout(timer)
   }, [resendIn])
 
-  function showCheckEmail(note: string) {
+  function showCheckEmail(note: string, kind: ResendKind = 'signup') {
     setSentNote(note)
+    setResendKind(kind)
     setStage('check-email')
     setResendIn(RESEND_SECONDS)
   }
@@ -118,7 +121,7 @@ export default function StartPage() {
       }
       const { data, error } = await supabase.auth.signUp({ email, password })
       if (error) {
-        setErrors({ form: classifySignInError(error) === 'offline' ? AUTH_MESSAGES.offline : error.message })
+        setErrors({ form: classifySignInError(error) === 'offline' ? AUTH_MESSAGES.offline : AUTH_MESSAGES.signUpFailed })
         return
       }
       if (!data.session) {
@@ -140,7 +143,7 @@ export default function StartPage() {
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email)
       if (error) throw error
-      showCheckEmail(checkEmailMessage(email))
+      showCheckEmail(checkEmailMessage(email), 'reset')
     } catch {
       setErrors({ form: AUTH_MESSAGES.offline })
     } finally {
@@ -152,7 +155,7 @@ export default function StartPage() {
     setBusy(true)
     setErrors({})
     try {
-      const { error } = await supabase.auth.resend({ type: 'signup', email })
+      const { error } = await resendEmail(supabase.auth, resendKind, email)
       if (error) throw error
       setResendIn(RESEND_SECONDS)
     } catch {

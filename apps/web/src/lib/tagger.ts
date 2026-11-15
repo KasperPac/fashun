@@ -6,6 +6,7 @@ import { mediaTypeFromBase64 } from './image-media-type'
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 interface TagResult {
+  isClothing: boolean // false when the photo isn't a piece of clothing, footwear, a bag or an accessory
   category: WardrobeCategory
   colours: string[]   // hex codes
   styleTags: string[]
@@ -22,6 +23,7 @@ function occasionsOrDefault(value: unknown): OccasionTag[] {
 }
 
 const FALLBACK: TagResult = {
+  isClothing: true,
   category: 'tops',
   colours: [],
   styleTags: [],
@@ -46,6 +48,7 @@ export async function tagImage(imageBase64: string): Promise<TagResult> {
             type: 'text',
             text: `Analyse this clothing item image. Return ONLY valid JSON:
 {
+  "isClothing": true if the photo shows a piece of clothing, footwear, a bag or an accessory; false if it shows something else (a person with no item in focus, food, a pet, a room, a screenshot),
   "category": "tops|bottoms|shoes|outerwear|bags|accessories",
   "colours": ["#hexcode1", "#hexcode2"],
   "styleTags": ["casual|smart-casual|business|streetwear|minimalist|athleisure|bohemian|glam"],
@@ -66,6 +69,7 @@ No markdown, no explanation, just the JSON.`,
     const parsed = extractJson<any>(content.text, 'object')
     if (!parsed) return FALLBACK
     return {
+      isClothing: parsed.isClothing !== false,
       category: CATEGORIES.includes(parsed.category) ? parsed.category : FALLBACK.category,
       colours: Array.isArray(parsed.colours) ? parsed.colours : [],
       styleTags: Array.isArray(parsed.styleTags) ? parsed.styleTags : [],

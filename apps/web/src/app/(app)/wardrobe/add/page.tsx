@@ -25,7 +25,7 @@ function AddContent() {
       <AddPiece
         presets={presets}
         returnTo={backHref}
-        onSaved={(name) => (fromOnboarding ? backHref : `${backHref}?added=${encodeURIComponent(name)}`)}
+        onSaved={(name) => `${backHref}?added=${encodeURIComponent(name)}`}
       />
     </main>
   )

@@ -1,10 +1,10 @@
 'use client'
-import { useCallback, useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { Suspense, useCallback, useEffect, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import type { WardrobeCategory } from '@fashun/shared'
 import { supabase } from '@/lib/supabase/client'
 import { Button, ButtonLink } from '@/components/ui/Button'
-import { ErrorState } from '@/components/ui/Feedback'
+import { ErrorState, Toast } from '@/components/ui/Feedback'
 import { nextMissingPiece } from '@/lib/first-pieces'
 import { addHref } from '@/lib/wardrobe-view'
 
@@ -16,14 +16,23 @@ const SLOTS: Array<{ category: WardrobeCategory; label: string }> = [
 
 type OwnedItem = { category: string; name: string }
 
-export default function FirstPiecesStep() {
+function FirstPiecesContent() {
   const router = useRouter()
+  const params = useSearchParams()
+  const [toast, setToast] = useState<string | null>(params.get('added') ? `${params.get('added')} added.` : null)
+  const clearToast = useCallback(() => setToast(null), [])
   const [items, setItems] = useState<OwnedItem[] | null>(null)
   const [failed, setFailed] = useState(false)
   const [finishing, setFinishing] = useState(false)
   const [finishFailed, setFinishFailed] = useState(false)
 
   const [attempt, setAttempt] = useState(0)
+
+  useEffect(() => {
+    if (params.get('added')) router.replace('/onboarding/items')
+    // Only on first render: the toast text was already captured.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -113,6 +122,15 @@ export default function FirstPiecesStep() {
         </p>
       )}
       <Button variant="text" onClick={finish} disabled={finishing}>Skip for now</Button>
+      {toast && <Toast message={toast} onDone={clearToast} />}
     </main>
+  )
+}
+
+export default function FirstPiecesStep() {
+  return (
+    <Suspense fallback={null}>
+      <FirstPiecesContent />
+    </Suspense>
   )
 }

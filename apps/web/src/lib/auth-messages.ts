@@ -5,6 +5,7 @@ export const AUTH_MESSAGES = {
   invalidEmail: 'Enter a valid email address.',
   passwordTooShort: 'Use at least 8 characters.',
   inviteMissing: 'Enter your invite code.',
+  signUpFailed: "We couldn't create your account. Check your details and try again.",
 } as const
 
 export function checkEmailMessage(email: string): string {

@@ -8,6 +8,7 @@ describe('auth messages', () => {
       "That invite code isn't valid. Check it with the person who invited you.",
     )
     expect(AUTH_MESSAGES.offline).toBe("Couldn't reach Fashun. Check your connection and try again.")
+    expect(AUTH_MESSAGES.signUpFailed).toBe("We couldn't create your account. Check your details and try again.")
     expect(checkEmailMessage('a@b.co')).toBe(
       'Check your email. We sent a link to a@b.co. Open it on this phone to continue.',
     )

@@ -6,6 +6,7 @@ const mockCreate = vi.hoisted(() =>
     content: [{
       type: 'text',
       text: JSON.stringify({
+        isClothing: true,
         category: 'tops',
         colours: ['#1a1a6e', '#ffffff'],
         styleTags: ['casual', 'smart-casual'],
@@ -36,6 +37,17 @@ describe('tagImage', () => {
     expect(result.searchQuery).toBe('Uniqlo navy linen shirt')
   })
 
+  it('flags a photo that is not clothing, and treats a missing flag as clothing', async () => {
+    mockCreate.mockResolvedValueOnce({
+      content: [{ type: 'text', text: JSON.stringify({ isClothing: false, category: 'tops', colours: [], styleTags: [], suggestedName: 'Dog' }) }],
+    })
+    expect((await tagImage('base64imagedata')).isClothing).toBe(false)
+    mockCreate.mockResolvedValueOnce({
+      content: [{ type: 'text', text: JSON.stringify({ category: 'tops', colours: [], styleTags: [], suggestedName: 'Item' }) }],
+    })
+    expect((await tagImage('base64imagedata')).isClothing).toBe(true)
+  })
+
   it('returns an empty searchQuery when absent or malformed', async () => {
     mockCreate.mockResolvedValueOnce({
       content: [{ type: 'text', text: JSON.stringify({ category: 'tops', colours: [], styleTags: [], suggestedName: 'Item' }) }],
@@ -56,6 +68,7 @@ describe('tagImage', () => {
     })
     const result = await tagImage('base64imagedata')
     expect(result.category).toBe('tops')   // fallback default
+    expect(result.isClothing).toBe(true)
     expect(result.colours).toEqual([])
     expect(result.styleTags).toEqual([])
     expect(result.occasionTags).toEqual(['casual'])

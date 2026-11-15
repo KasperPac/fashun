@@ -7,10 +7,11 @@ import { ButtonLink, Button } from '@/components/ui/Button'
 import { Chip } from '@/components/ui/Chip'
 import { EmptyState, ErrorState, Skeleton, Toast } from '@/components/ui/Feedback'
 import { useSavedOutfits } from '@/components/outfits/useSavedOutfits'
-import { filterSaved, noSavedMessage, savedOn, type SavedFilter, type SavedOutfit } from '@/lib/saved-outfits'
+import { filterSaved, noSavedMessage, savedCountLabel, savedOn, type SavedFilter, type SavedOutfit } from '@/lib/saved-outfits'
 import { sortPieces } from '@/lib/style-me'
 import { CATEGORY_LABELS, isDarkOccasion, occasionColour } from '@/lib/wardrobe-view'
 import type { WardrobeCategory } from '@fashun/shared'
+import CategoryIcon from '@/components/wardrobe/CategoryIcon'
 
 function Row({ outfit }: { outfit: SavedOutfit }) {
   const thumbs = sortPieces(outfit.pieces).slice(0, 4)
@@ -24,8 +25,8 @@ function Row({ outfit }: { outfit: SavedOutfit }) {
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={p.imageUrl} alt="" className="h-full w-full object-contain" />
               ) : (
-                <span className="text-center font-display text-[12px] font-bold uppercase leading-none text-ink-2">
-                  {p.category && p.category in CATEGORY_LABELS ? CATEGORY_LABELS[p.category as WardrobeCategory].slice(0, 3) : '·'}
+                <span className="text-ink-2">
+                  {p.category && p.category in CATEGORY_LABELS ? <CategoryIcon category={p.category as WardrobeCategory} /> : '·'}
                 </span>
               )}
             </span>
@@ -73,8 +74,8 @@ function SavedContent() {
   return (
     <main className="mx-auto w-full max-w-[1120px] px-6 pb-8 pt-10 lg:px-10">
       <h1 className="font-display text-[56px] font-extrabold uppercase leading-none">Saved</h1>
-      {state.status === 'ready' && (
-        <p className="mb-5 mt-1 text-sm text-ink-2">{all.length} {all.length === 1 ? 'outfit' : 'outfits'}</p>
+      {state.status === 'ready' && savedCountLabel(all.length) && (
+        <p className="mb-5 mt-1 text-sm text-ink-2">{savedCountLabel(all.length)}</p>
       )}
 
       {state.status === 'error' ? (

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { filterSaved, joinPieces, noSavedMessage, savedDate, savedOn } from './saved-outfits'
+import { filterSaved, joinPieces, noSavedMessage, savedCountLabel, savedDate, savedOn } from './saved-outfits'
 
 describe('joinPieces', () => {
   const wardrobe = new Map([['a', { category: 'tops', imageUrl: 'https://img/a.png' }]])
@@ -45,5 +45,15 @@ describe('filterSaved and noSavedMessage', () => {
     expect(noSavedMessage('formal')).toBe('No saved Formal outfits.')
     expect(noSavedMessage('smart-casual')).toBe('No saved Smart casual outfits.')
     expect(noSavedMessage('all')).toBe('No saved outfits yet')
+  })
+})
+
+describe('savedCountLabel', () => {
+  it('hides the count when there are none', () => {
+    expect(savedCountLabel(0)).toBeNull()
+  })
+  it('words one and many', () => {
+    expect(savedCountLabel(1)).toBe('1 outfit')
+    expect(savedCountLabel(3)).toBe('3 outfits')
   })
 })

@@ -20,7 +20,7 @@ vi.mock('@/lib/wardrobe-image', () => ({ signWardrobeImage }))
 
 import { POST } from './route'
 
-const tags = { category: 'shoes', colours: ['#000000'], styleTags: ['casual'], occasionTags: ['casual', 'smart-casual'], suggestedName: 'Boots', searchQuery: 'Timberland 6-inch boots' }
+const tags = { isClothing: true, category: 'shoes', colours: ['#000000'], styleTags: ['casual'], occasionTags: ['casual', 'smart-casual'], suggestedName: 'Boots', searchQuery: 'Timberland 6-inch boots' }
 const candidate = { url: 'https://shop.com/p/1', title: 'Timberland 6-inch boots', imageUrl: 'https://shop.com/i.jpg', retailer: 'Timberland' }
 const VALID = { imageBase64: 'x'.repeat(120) }
 
@@ -81,6 +81,19 @@ describe('POST /api/wardrobe/process', () => {
     expect(mockUpload).toHaveBeenCalledTimes(1)
     expect(tagImage).not.toHaveBeenCalled()
     expect(searchByImage).not.toHaveBeenCalled()
+  })
+
+  it('signals a photo that is not clothing, without storing, signing or searching it', async () => {
+    tagImage.mockResolvedValueOnce({ ...tags, isClothing: false })
+    const res = await post(VALID)
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ notClothing: true })
+    expect(mockUpload).not.toHaveBeenCalled()
+    expect(searchByImage).not.toHaveBeenCalled()
+  })
+
+  it('does not signal not-clothing for a normal piece', async () => {
+    expect((await (await post(VALID)).json()).notClothing).toBeUndefined()
   })
 
   it('uploadOnly returns 500 when the upload fails', async () => {

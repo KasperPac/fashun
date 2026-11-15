@@ -81,3 +81,9 @@ export function filterSaved<T extends { occasion: OccasionTag | null }>(outfits:
 export function noSavedMessage(filter: SavedFilter): string {
   return filter === 'all' ? 'No saved outfits yet' : `No saved ${OCCASION_LABELS[filter]} outfits.`
 }
+
+/** "3 outfits" under the Saved heading, or null when there are none (the empty state says it). */
+export function savedCountLabel(count: number): string | null {
+  if (count <= 0) return null
+  return `${count} ${count === 1 ? 'outfit' : 'outfits'}`
+}

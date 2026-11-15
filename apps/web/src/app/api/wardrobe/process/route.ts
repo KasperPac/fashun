@@ -37,6 +37,9 @@ export async function POST(req: Request) {
   // 2. Tag with Claude Vision (soft failure — returns fallback on error)
   const tags = await tagImage(processedBase64)
 
+  // Not a piece of clothing: tell the screen, and keep the photo out of storage.
+  if (!tags.isClothing) return NextResponse.json({ notClothing: true })
+
   // 3. Upload to Supabase Storage
   // Detect format from base64 header (JPEG starts with /9j, PNG with iVBOR)
   const isJpeg = processedBase64.startsWith('/9j') || processedBase64.startsWith('data:image/jpeg')

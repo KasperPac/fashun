@@ -171,7 +171,7 @@ function WardrobeContent() {
         <ErrorState message="Couldn't load your wardrobe." onRetry={retry} />
       ) : (
         <div className="flex flex-col gap-5">
-          <ReadyStrip readiness={readiness} />
+          <ReadyStrip readiness={readiness} loading={load.status === 'loading'} />
 
           <div className="flex min-w-0 flex-col gap-2">
             <div role="radiogroup" aria-label="Category" className="-mx-6 flex gap-2 overflow-x-auto px-6 pb-1 lg:mx-0 lg:flex-wrap lg:px-0">

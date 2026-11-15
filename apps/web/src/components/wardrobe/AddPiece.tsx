@@ -10,6 +10,7 @@ import { Notice, Toast } from '@/components/ui/Feedback'
 import { BottomSheet } from '@/components/ui/Overlays'
 import { TextField } from '@/components/ui/TextField'
 import ReviewForm from './ReviewForm'
+import NotClothingNotice from './NotClothingNotice'
 import { asWebUrl, shopDomain, type ReviewValues } from '@/lib/item-form'
 import { CATEGORY_LABELS } from '@/lib/wardrobe-view'
 
@@ -31,7 +32,7 @@ interface Draft {
   failure?: 'link' | 'photo'
 }
 
-type Stage = { name: 'choose' } | { name: 'reading'; what: 'photo' | 'link' } | { name: 'review'; draft: Draft; seq: number }
+type Stage = { name: 'choose' } | { name: 'not-clothing' } | { name: 'reading'; what: 'photo' | 'link' } | { name: 'review'; draft: Draft; seq: number }
 
 const READ_FAILED_PHOTO = "We couldn't read this photo. Fill in the details below, or try another photo."
 const OFFLINE = "Couldn't reach Fashun. Check your connection and try again."
@@ -129,6 +130,10 @@ export default function AddPiece({ presets, returnTo, onSaved }: { presets: Pres
       })
       if (!res.ok) throw new Error('read failed')
       const data = await res.json()
+      if (data.notClothing === true) {
+        setStage({ name: 'not-clothing' })
+        return
+      }
       const suggested = occasionsOf(data.occasionTags)
       const colours: string[] = Array.isArray(data.colours) ? data.colours.filter((c: unknown) => typeof c === 'string') : []
       showReview({
@@ -298,6 +303,12 @@ export default function AddPiece({ presets, returnTo, onSaved }: { presets: Pres
     )
   }
 
+  if (stage.name === 'not-clothing') {
+    return (
+      <NotClothingNotice onTryAnother={() => setStage({ name: 'choose' })} />
+    )
+  }
+
   if (stage.name === 'review') {
     const draft = stage.draft
     const domain = shopDomain(draft.storeUrl)
@@ -325,7 +336,12 @@ export default function AddPiece({ presets, returnTo, onSaved }: { presets: Pres
                 <span className="mt-1 block text-[13px]">Add a photo (optional). Snap the piece or save a picture from the shop.</span>
               </Notice>
             ) : failed === 'photo' ? (
-              <Notice title="We couldn't read this photo" role="status">{READ_FAILED_PHOTO}</Notice>
+              <Notice title="We couldn't read this photo" role="status">
+                {READ_FAILED_PHOTO}
+                <span className="mt-3 block">
+                  <Button variant="secondary" fullWidth={false} onClick={() => setStage({ name: 'choose' })}>Try another photo</Button>
+                </span>
+              </Notice>
             ) : undefined
           }
         />
@@ -339,11 +355,6 @@ export default function AddPiece({ presets, returnTo, onSaved }: { presets: Pres
             <Button variant="secondary" onClick={() => chooseRef.current?.click()}>Choose a photo</Button>
           </div>
         </BottomSheet>
-        {failed === 'photo' && (
-          <div className="mt-3">
-            <Button variant="secondary" onClick={() => setStage({ name: 'choose' })}>Try another photo</Button>
-          </div>
-        )}
         {toast && <Toast message={toast} onDone={clearToast} />}
       </>
     )
