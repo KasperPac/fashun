@@ -20,8 +20,9 @@ export default function ItemSheet({
   item: WardrobeItem | null
   season: ColourSeason | null
   onClose: () => void
-  onEdit: () => void
-  onDelete: () => void
+  /** Omit both to show the piece read-only, e.g. from a saved outfit. */
+  onEdit?: () => void
+  onDelete?: () => void
 }) {
   const palette = item ? paletteLine(item.colours, season) : null
   return (
@@ -84,10 +85,12 @@ export default function ItemSheet({
             </div>
           </dl>
           {palette && <p className="text-[15px] font-semibold">{palette}</p>}
-          <div className="flex flex-col gap-3">
-            <Button variant="secondary" onClick={onEdit}>Edit</Button>
-            <Button variant="destructive" onClick={onDelete}>Delete</Button>
-          </div>
+          {(onEdit || onDelete) && (
+            <div className="flex flex-col gap-3">
+              {onEdit && <Button variant="secondary" onClick={onEdit}>Edit</Button>}
+              {onDelete && <Button variant="destructive" onClick={onDelete}>Delete</Button>}
+            </div>
+          )}
         </div>
       )}
     </BottomSheet>

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { describeShortfall, eligibleItems, isEligibleForOccasion, validateSuggestions, type OwnedItem } from './outfit-builder'
+import { describeShortfall, eligibleItems, finaliseReason, isEligibleForOccasion, missingCategories, presentCategories, validateSuggestions, type OwnedItem } from './outfit-builder'
 
 const item = (id: string, category: string, occasion_tags: string[] | null, colours: string[] | null = ['#112233']): OwnedItem =>
   ({ id, name: id, category, colours, occasion_tags })
@@ -59,5 +59,51 @@ describe('eligibleItems', () => {
   it('filters by occasion', () => {
     const items = [item('a', 'tops', ['casual']), item('b', 'tops', ['formal'])]
     expect(eligibleItems(items, 'formal').map(i => i.id)).toEqual(['b'])
+  })
+})
+
+describe('finaliseReason', () => {
+  const navy = '#000080'
+  const camel = '#C19A6B'
+  it('keeps a good one-sentence reason that names the season palette', () => {
+    const r = 'Navy and Camel are both in your Autumn palette, and the boots keep it warm.'
+    expect(finaliseReason(r, 'autumn', [navy, camel])).toBe(r)
+  })
+  it('accepts "your best {Season} colours"', () => {
+    const r = 'Navy is one of your best Winter colours, and the shoes sharpen it.'
+    expect(finaliseReason(r, 'winter', [navy])).toBe(r)
+  })
+  it.each([
+    ['empty', ''],
+    ['whitespace', '   '],
+    ['does not name the season', 'Looks sharp.'],
+    ['names the season but not in the pattern', 'Rich Autumn tones.'],
+    ['two sentences', 'Navy is in your Autumn palette. The boots help.'],
+    ['over 140 characters', `Navy is in your Autumn palette, and ${'the shoes keep it warm '.repeat(8)}.`],
+  ])('replaces a reason that is %s', (_label, reason) => {
+    const out = finaliseReason(reason, 'autumn', [navy, camel])
+    expect(out).toMatch(/^\w[\w ]* and \w[\w ]* are both in your Autumn palette\.$/)
+    expect(out.length).toBeLessThanOrEqual(140)
+  })
+  it('uses one colour name, or none, when that is all there is, and never a hex code', () => {
+    expect(finaliseReason('', 'spring', [navy, navy])).toMatch(/is one of your best Spring colours\.$/)
+    expect(finaliseReason('', 'spring', ['', 'nope'])).toBe('This outfit is built from your Spring palette.')
+    expect(finaliseReason('', 'spring', [navy])).not.toContain('#')
+  })
+})
+
+describe('missingCategories and presentCategories', () => {
+  it('lists every category with nothing eligible', () => {
+    const eligible = [item('t', 'tops', null), item('o', 'outerwear', null)]
+    expect(missingCategories(eligible)).toEqual(['bottoms', 'shoes'])
+    expect(presentCategories(eligible)).toEqual(['tops'])
+  })
+  it('asks for the category with the fewest pieces when none is empty', () => {
+    const eligible = [item('t1', 'tops', null), item('t2', 'tops', null), item('b', 'bottoms', null), item('s', 'shoes', null)]
+    expect(missingCategories(eligible)).toEqual(['bottoms'])
+  })
+  it('handles an empty wardrobe', () => {
+    expect(missingCategories([])).toEqual(['tops', 'bottoms', 'shoes'])
+    expect(presentCategories([])).toEqual([])
   })
 })

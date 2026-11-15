@@ -5,9 +5,10 @@ import { SEASON_PROMPT_CONTEXT, OCCASIONS, OCCASION_LABELS } from '@fashun/share
 import type { ColourSeason, OccasionTag } from '@fashun/shared'
 import { z } from 'zod'
 import {
-  OUTFIT_COUNT, describeShortfall, eligibleItems, seasonLabel, validateSuggestions,
+  OUTFIT_COUNT, describeShortfall, eligibleItems, missingCategories, presentCategories, seasonLabel, validateSuggestions,
   type BuiltOutfit, type OwnedItem,
 } from '@/lib/outfit-builder'
+import { signWardrobeImage } from '@/lib/wardrobe-image'
 
 let _anthropic: Anthropic | null = null
 function getAnthropic(): Anthropic {
@@ -55,17 +56,17 @@ Rules:
 1. Every outfit has at least one top, one bottom and one pair of shoes. Outerwear, bags and accessories are optional.
 2. Use only ids from the list above. Never invent an item.
 3. Each outfit must suit the occasion. Never use an item tagged only casual for a formal outfit.
-4. The reason is one sentence that names the ${label} season or the specific palette colours the outfit uses.
+4. The reason is ONE sentence of at most 140 characters, using the colour names of the pieces (never hex codes). Use this pattern: "{Colour A} and {colour B} are both in your ${label} palette, and {short styling reason}." If only one palette colour is used: "{Colour A} is one of your best ${label} colours, and {short styling reason}."
 
 Return exactly this JSON (array of ${OUTFIT_COUNT}):
-[{"name":"2-3 word name","description":"One sentence.","reason":"One sentence naming ${label} or its colours.","item_ids":["uuid","uuid","uuid"]}]`
+[{"name":"2-3 word name","description":"One sentence.","reason":"One sentence in the pattern above.","item_ids":["uuid","uuid","uuid"]}]`
   return { system, user }
 }
 
 async function generateForOccasion(supabase: Awaited<ReturnType<typeof createServerClient>>, userId: string, occasion: OccasionTag) {
   const [profileRes, wardrobeRes] = await Promise.all([
     (supabase.from('users').select('colour_season,best_colours,avoid_colours').eq('id', userId).single() as unknown as Promise<{ data: { colour_season: string | null; best_colours: string[] | null; avoid_colours: string[] | null } | null; error: unknown }>),
-    (supabase.from('wardrobe_items').select('id,name,category,colours,occasion_tags').eq('user_id', userId).eq('ownership', 'owned') as unknown as Promise<{ data: OwnedItem[] | null; error: unknown }>),
+    (supabase.from('wardrobe_items').select('id,name,category,colours,occasion_tags,image_url').eq('user_id', userId).eq('ownership', 'owned') as unknown as Promise<{ data: Array<OwnedItem & { image_url?: string | null }> | null; error: unknown }>),
   ])
   if (wardrobeRes.error) return NextResponse.json({ error: 'Failed to load wardrobe' }, { status: 500 })
 
@@ -77,7 +78,14 @@ async function generateForOccasion(supabase: Awaited<ReturnType<typeof createSer
 
   const eligible = eligibleItems(Array.isArray(wardrobeRes.data) ? wardrobeRes.data : [], occasion)
   const shortfall = describeShortfall(eligible, occasion)
-  if (shortfall) return NextResponse.json({ error: shortfall, code: 'not_enough_items' }, { status: 422 })
+  if (shortfall) {
+    return NextResponse.json({
+      error: shortfall,
+      code: 'not_enough_items',
+      missing: missingCategories(eligible),
+      have: presentCategories(eligible),
+    }, { status: 422 })
+  }
 
   const best = ColourListSchema.safeParse(profileRes.data?.best_colours).data ?? []
   const avoid = ColourListSchema.safeParse(profileRes.data?.avoid_colours).data ?? []
@@ -103,8 +111,18 @@ async function generateForOccasion(supabase: Awaited<ReturnType<typeof createSer
     }
   }
   if (outfits.length === 0) return NextResponse.json({ error: 'Failed to generate outfits' }, { status: 500 })
+  const imageById = new Map((wardrobeRes.data ?? []).map((i) => [i.id, i.image_url ?? null]))
+  const withImages = await Promise.all(outfits.map(async (o) => ({
+    ...o,
+    pieces: await Promise.all(o.pieces.map(async (p) => {
+      const stored = imageById.get(p.item_id)
+      return { ...p, image_url: stored ? await signWardrobeImage(supabase, stored, 3600) : null }
+    })),
+  })))
   return NextResponse.json({
-    suggestions: outfits,
+    suggestions: withImages,
+    season: colourSeason,
+    ...(outfits.length < OUTFIT_COUNT ? { missing: missingCategories(eligible) } : {}),
     ...(outfits.length < OUTFIT_COUNT ? { message: `Only ${outfits.length} of ${OUTFIT_COUNT} outfits could be built. Try again.` } : {}),
   })
 }

@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
 import { z } from 'zod'
 import { occasionFromText } from '@fashun/shared'
+import { signWardrobeImage } from '@/lib/wardrobe-image'
+import { joinPieces, type WardrobeLookup } from '@/lib/saved-outfits'
 
 const PieceSchema = z.object({
   label: z.string(),
@@ -16,7 +18,11 @@ const SaveOutfitSchema = z.object({
   occasion: z.string().optional(),
   pieces: z.array(PieceSchema).min(1),
   description: z.string().optional(),
+  reason: z.string().max(280).optional(),
+  season: z.enum(['spring', 'summer', 'autumn', 'winter']).optional(),
 })
+
+const DeleteSchema = z.object({ id: z.string().uuid() })
 
 export async function GET(_req: Request) {
   const supabase = await createServerClient()
@@ -25,16 +31,37 @@ export async function GET(_req: Request) {
 
   const { data, error } = await (supabase
     .from('outfits')
-    .select('id,item_id,item_ids,name,occasion,pieces,description,try_on_image_url,created_at,wardrobe_items(name)')
+    .select('id,item_id,item_ids,name,occasion,pieces,description,reason,season,created_at,wardrobe_items(name)')
     .eq('user_id', user.id)
     .order('created_at', { ascending: false }) as unknown as Promise<{ data: Array<Record<string, unknown> & { wardrobe_items: { name: string } | null }> | null; error: unknown }>)
 
   if (error) return NextResponse.json({ error: 'Failed to fetch outfits' }, { status: 500 })
 
-  // Flatten the join: move wardrobe_items.name → item_name
-  const outfits = (data ?? []).map(({ wardrobe_items, ...rest }) => ({
+  const rows = data ?? []
+
+  // Look up the pieces in the user's own wardrobe for photos and categories.
+  const wanted = [...new Set(rows.flatMap((o) =>
+    Array.isArray(o.pieces) ? (o.pieces as Array<{ item_id?: unknown }>).flatMap((p) => (typeof p.item_id === 'string' ? [p.item_id] : [])) : [],
+  ))]
+  const wardrobe = new Map<string, WardrobeLookup>()
+  if (wanted.length > 0) {
+    const { data: items, error: itemsError } = await (supabase
+      .from('wardrobe_items')
+      .select('id,category,image_url')
+      .eq('user_id', user.id)
+      .in('id', wanted) as unknown as Promise<{ data: Array<{ id: string; category: string; image_url: string | null }> | null; error: unknown }>)
+    if (itemsError) return NextResponse.json({ error: 'Failed to fetch outfits' }, { status: 500 })
+    await Promise.all((items ?? []).map(async (i) => {
+      const imageUrl = i.image_url ? await signWardrobeImage(supabase, i.image_url, 3600) : null
+      wardrobe.set(i.id, { category: i.category, imageUrl })
+    }))
+  }
+
+  // Flatten the join: move wardrobe_items.name → item_name, and join the pieces.
+  const outfits = rows.map(({ wardrobe_items, pieces, ...rest }) => ({
     ...rest,
     item_name: wardrobe_items?.name ?? null,
+    pieces: joinPieces(pieces, wardrobe),
   }))
 
   return NextResponse.json({ outfits })
@@ -85,10 +112,31 @@ export async function POST(req: Request) {
       occasion: occasionFromText(parsed.data.occasion),
       pieces,
       description: parsed.data.description ?? null,
+      reason: parsed.data.reason ?? null,
+      season: parsed.data.season ?? null,
     })
     .select()
     .single() as unknown as Promise<{ data: unknown; error: unknown }>)
 
   if (error) return NextResponse.json({ error: 'Failed to save outfit' }, { status: 500 })
   return NextResponse.json({ outfit: data }, { status: 201 })
+}
+
+export async function DELETE(req: Request) {
+  const supabase = await createServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const parsed = DeleteSchema.safeParse(await req.json().catch(() => ({})))
+  if (!parsed.success) return NextResponse.json({ error: 'id required' }, { status: 400 })
+
+  const { data, error } = await (supabase
+    .from('outfits')
+    .delete()
+    .eq('id', parsed.data.id)
+    .eq('user_id', user.id)
+    .select('id') as unknown as Promise<{ data: Array<{ id: string }> | null; error: unknown }>)
+  if (error) return NextResponse.json({ error: 'Failed to remove outfit' }, { status: 500 })
+  if (!data || data.length === 0) return NextResponse.json({ error: 'Outfit not found' }, { status: 404 })
+  return NextResponse.json({ ok: true })
 }

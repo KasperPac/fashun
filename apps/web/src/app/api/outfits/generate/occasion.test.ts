@@ -122,16 +122,29 @@ describe('POST /api/outfits/generate (occasion only)', () => {
     expect(mockCreate.mock.calls[0][0].messages[0].content).not.toContain(id(1))
   })
 
-  it('every outfit has a reason naming the colour season, added if the model leaves it out', async () => {
+  it('every reason is one sentence of at most 140 characters naming "your {Season} palette" or "your best {Season} colours"', async () => {
     mockCreate.mockResolvedValue(reply([
       outfit([id(1), id(3), id(5)], 'Looks sharp.'),
-      outfit([id(2), id(4), id(6)], 'Rich AUTUMN tones.'),
+      outfit([id(2), id(4), id(6)], 'Rustic tones are in your Autumn palette, and the shoes keep it warm.'),
       outfit([id(1), id(4), id(6)], ''),
     ]))
     const { suggestions } = await (await call({ occasion: 'formal' })).json()
-    for (const s of suggestions) expect(s.reason.toLowerCase()).toContain('autumn')
-    expect(suggestions[0].reason).toContain('Looks sharp.')
-    expect(suggestions[2].reason).toBe('Fits your Autumn palette.')
+    for (const s of suggestions) {
+      expect(s.reason).toMatch(/your (Autumn palette|best Autumn colours)/)
+      expect(s.reason.length).toBeLessThanOrEqual(140)
+      expect(s.reason).not.toMatch(/#[0-9a-f]{6}/i)
+    }
+    expect(suggestions[1].reason).toBe('Rustic tones are in your Autumn palette, and the shoes keep it warm.')
+    // all three pieces are one colour, so the fallback names that single colour
+    expect(suggestions[0].reason).toMatch(/^.+ is one of your best Autumn colours\.$/)
+  })
+
+  it('gives each piece its category and a photo url (null when there is none)', async () => {
+    const { suggestions } = await (await call({ occasion: 'formal' })).json()
+    expect(suggestions[0].pieces.map((p: { category: string }) => p.category)).toEqual(['tops', 'bottoms', 'shoes'])
+    expect(suggestions[0].pieces.every((p: { image_url: unknown }) => p.image_url === null)).toBe(true)
+    expect(suggestions[0].season).toBeUndefined()
+    expect((await (await call({ occasion: 'formal' })).json()).season).toBe('autumn')
   })
 
   it('uses the profile\'s season and hand-edited colours in the prompt', async () => {
@@ -157,6 +170,8 @@ describe('POST /api/outfits/generate (occasion only)', () => {
     const json = await res.json()
     expect(json.code).toBe('not_enough_items')
     expect(json.error).toBe('Not enough formal clothes yet. Add a pair of formal shoes.')
+    expect(json.missing).toEqual(['shoes'])
+    expect(json.have).toEqual(['tops', 'bottoms'])
     expect(mockCreate).not.toHaveBeenCalled()
   })
 
@@ -166,16 +181,19 @@ describe('POST /api/outfits/generate (occasion only)', () => {
     wardrobe = [mk(1, 'tops', ['work']), mk(3, 'bottoms', ['work']), mk(5, 'shoes', ['work'])]
     const res = await call({ occasion: 'work' })
     expect(res.status).toBe(422)
-    expect((await res.json()).error).toContain('Add one more work')
+    const small = await res.json()
+    expect(small.error).toContain('Add one more work')
+    expect(small.missing).toHaveLength(1)
     expect(mockCreate).not.toHaveBeenCalled()
   })
 
   it('does not return the same outfit twice', async () => {
     mockCreate.mockResolvedValue(reply([outfit([id(1), id(3), id(5)]), outfit([id(5), id(3), id(1)]), outfit([id(2), id(4), id(6)])]))
     const res = await call({ occasion: 'formal' })
-    const { suggestions, message } = await res.json()
+    const { suggestions, message, missing } = await res.json()
     expect(suggestions).toHaveLength(2)
     expect(message).toContain('Only 2 of 3')
+    expect(missing).toHaveLength(1)
   })
 
   it('only calls the Anthropic model (no other service is imported by this flow)', async () => {

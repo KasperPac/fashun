@@ -1,5 +1,6 @@
 import { OCCASION_LABELS } from '@fashun/shared'
 import type { ColourSeason, OccasionTag, WardrobeCategory } from '@fashun/shared'
+import { colourName } from './colour-names'
 
 export type OwnedItem = {
   id: string
@@ -14,6 +15,7 @@ export type OutfitPiece = {
   colour_hex: string
   item_id: string
   in_wardrobe: true
+  category: string
 }
 
 export type BuiltOutfit = {
@@ -64,6 +66,43 @@ export function describeShortfall(eligible: OwnedItem[], occasion: OccasionTag):
   return null
 }
 
+/**
+ * Which of top, bottom, shoes to ask the user to add: every category with
+ * nothing eligible, or, when each has something but fewer than 3 outfits are
+ * possible, the category with the fewest pieces.
+ */
+export function missingCategories(eligible: OwnedItem[]): Array<(typeof REQUIRED_CATEGORIES)[number]> {
+  const counts = REQUIRED_CATEGORIES.map((c) => ({ c, n: eligible.filter((i) => i.category === c).length }))
+  const empty = counts.filter((x) => x.n === 0).map((x) => x.c)
+  if (empty.length > 0) return empty
+  const fewest = counts.reduce((a, b) => (b.n < a.n ? b : a))
+  return [fewest.c]
+}
+
+/** Categories (top, bottom, shoes) the user already has for this occasion. */
+export function presentCategories(eligible: OwnedItem[]): Array<(typeof REQUIRED_CATEGORIES)[number]> {
+  return REQUIRED_CATEGORIES.filter((c) => eligible.some((i) => i.category === c))
+}
+
+export const REASON_MAX_LENGTH = 140
+
+/**
+ * The reason must be one sentence of at most 140 characters that names the
+ * user's season as "your {Season} palette" or "your best {Season} colours".
+ * Anything else is replaced by a plain reason built from the outfit's own colours.
+ */
+export function finaliseReason(reason: string, season: ColourSeason, colourHexes: string[]): string {
+  const label = seasonLabel(season)
+  const text = reason.trim().replace(/\s+/g, ' ')
+  const names = [...new Set(colourHexes.filter((h) => HEX.test(h)).map((h) => colourName(h)))]
+  const namesSeason = new RegExp(`your (${label} palette|best ${label} colours)`, 'i').test(text)
+  const oneSentence = !/[.!?]\s+\S/.test(text)
+  if (text && namesSeason && oneSentence && text.length <= REASON_MAX_LENGTH) return text
+  if (names.length >= 2) return `${names[0]} and ${names[1]} are both in your ${label} palette.`
+  if (names.length === 1) return `${names[0]} is one of your best ${label} colours.`
+  return `This outfit is built from your ${label} palette.`
+}
+
 export function seasonLabel(season: ColourSeason): string {
   return season.charAt(0).toUpperCase() + season.slice(1)
 }
@@ -94,9 +133,8 @@ export function validateSuggestions(
     const key = [...ids].sort().join('|')
     if (seen.has(key)) continue
     seen.add(key)
-    const label = seasonLabel(season)
-    const reasonText = s.reason.trim()
-    const reason = reasonText.toLowerCase().includes(season) ? reasonText : `${reasonText} Fits your ${label} palette.`.trim()
+    const colourHexes = owned.map((i) => (i.colours ?? []).find((c) => HEX.test(c)) ?? '')
+    const reason = finaliseReason(s.reason, season, colourHexes)
     out.push({
       name: s.name,
       occasion,
@@ -105,6 +143,7 @@ export function validateSuggestions(
         colour_hex: (i.colours ?? []).find((c) => HEX.test(c)) ?? '#888888',
         item_id: i.id,
         in_wardrobe: true,
+        category: i.category,
       })),
       description: s.description,
       reason,
