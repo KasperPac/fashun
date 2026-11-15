@@ -1,4 +1,5 @@
 import type { ProductCandidate } from './product-search'
+import { paidExtrasEnabled } from './paid-extras'
 
 interface LensMatch {
   link?: unknown
@@ -14,6 +15,7 @@ interface LensMatch {
  * candidates with real thumbnails. Returns [] on missing key / error / no matches.
  */
 export async function searchByImage(imageUrl: string, query?: string): Promise<ProductCandidate[]> {
+  if (!paidExtrasEnabled()) return []
   const key = process.env.SERPAPI_API_KEY
   if (!key) return []
   try {

@@ -62,3 +62,23 @@ describe('scrapeProductPage', () => {
     await expect(scrapeProductPage('https://shop.com/blocked')).rejects.toThrow()
   })
 })
+
+describe('scrapeProductPage entities and unreadable pages', () => {
+  it('decodes HTML entities in meta values', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      text: () => Promise.resolve(`<head><meta property="og:site_name" content="Rodd &amp; Gunn" /><meta property="og:title" content="Men&#39;s Shirt" /></head>`),
+    }))
+    const page = await scrapeProductPage('https://shop.com/p/2')
+    expect(page.retailer).toBe('Rodd & Gunn')
+    expect(page.title).toBe("Men's Shirt")
+  })
+
+  it('throws when the page has no title, image or product data', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      text: () => Promise.resolve('<html><head></head><body><div id="root"></div></body></html>'),
+    }))
+    await expect(scrapeProductPage('https://shop.com/p/3')).rejects.toThrow('no readable product data')
+  })
+})

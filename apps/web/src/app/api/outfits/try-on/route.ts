@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
 import { signWardrobeImage } from '@/lib/wardrobe-image'
+import { paidExtrasEnabled } from '@/lib/paid-extras'
 import { z } from 'zod'
 
 const FASHN_BASE = 'https://api.fashn.ai/v1'
@@ -31,6 +32,10 @@ async function pollFashn(predictionId: string): Promise<string> {
 }
 
 export async function POST(req: Request) {
+  if (!paidExtrasEnabled()) {
+    return NextResponse.json({ error: 'Try-on is not available', code: 'FEATURE_OFF' }, { status: 404 })
+  }
+
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
