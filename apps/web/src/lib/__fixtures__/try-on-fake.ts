@@ -96,16 +96,14 @@ class Fake {
       rpc: async (name: string, args: Record<string, unknown>) => {
         this.rpcCalls.push({ name, ...args })
         const steps = args.p_steps as string[]
-        const cost = Math.round(Number(args.p_unit_cost) * 10000)
-        const spent = this.tables.try_on_ledger
-          .filter((r) => r.month === args.p_month)
-          .reduce((n, r) => n + Math.round(Number(r.cost_usd) * 10000), 0)
-        if (spent + cost * steps.length > Math.round(Number(args.p_cap) * 10000)) return { data: null, error: null }
+        const spent = this.tables.try_on_ledger.filter((r) => r.month === args.p_month).length
+        if ((spent + steps.length) * Number(args.p_price_units) > Number(args.p_cap_units)) return { data: null, error: null }
+        const batch = crypto.randomUUID()
         const ids = steps.map((step) => {
           const id = crypto.randomUUID()
           this.tables.try_on_ledger.push({
-            id, user_id: args.p_user, outfit_id: args.p_outfit, month: args.p_month, step,
-            status: 'reserved', cost_usd: Number(args.p_unit_cost),
+            id, batch_id: batch, user_id: args.p_user, outfit_id: args.p_outfit, month: args.p_month, step,
+            status: 'reserved', picture_made: false,
           })
           return id
         })

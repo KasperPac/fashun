@@ -149,33 +149,36 @@ export type Database = {
       try_on_ledger: {
         Row: {
           charged_at: string | null
-          cost_usd: number
+          batch_id: string
           created_at: string
           id: string
           month: string
           outfit_id: string | null
+          picture_made: boolean
           status: string
           step: string
           user_id: string | null
         }
         Insert: {
           charged_at?: string | null
-          cost_usd: number
+          batch_id: string
           created_at?: string
           id?: string
           month: string
           outfit_id?: string | null
+          picture_made?: boolean
           status?: string
           step: string
           user_id?: string | null
         }
         Update: {
           charged_at?: string | null
-          cost_usd?: number
+          batch_id?: string
           created_at?: string
           id?: string
           month?: string
           outfit_id?: string | null
+          picture_made?: boolean
           status?: string
           step?: string
           user_id?: string | null
@@ -323,11 +326,11 @@ export type Database = {
     Functions: {
       try_on_reserve: {
         Args: {
-          p_cap: number
+          p_cap_units: number
           p_month: string
           p_outfit: string
+          p_price_units: number
           p_steps: string[]
-          p_unit_cost: number
           p_user: string
         }
         Returns: string[] | null

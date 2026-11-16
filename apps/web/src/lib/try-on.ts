@@ -168,20 +168,27 @@ export function planTryOn(pieces: OutfitPiece[]): TryOnPlan {
 
 export interface SpendMonth {
   month: string
+  /** FASHN images FASHN charged for. This is the exact stored spend. */
+  images: number
+  /** Pictures made and saved. A failed request never counts here, even when FASHN charged an image for it. */
   pictures: number
-  spentUsd: number
 }
 
-/** Groups charged ledger rows by month, newest first. */
-export function summariseSpend(rows: Array<{ month: string; cost_usd: number | string }>): SpendMonth[] {
-  const byMonth = new Map<string, { pictures: number; units: number }>()
+/** Exact spend of a number of FASHN images, in whole units. */
+export function imagesToUnits(images: number, priceUnits: number): number {
+  return images * priceUnits
+}
+
+/** Groups charged ledger rows (one per FASHN image) by month, newest first. */
+export function summariseSpend(rows: Array<{ month: string; batch_id: string; picture_made: boolean }>): SpendMonth[] {
+  const byMonth = new Map<string, { images: number; batches: Set<string> }>()
   for (const r of rows) {
-    const cur = byMonth.get(r.month) ?? { pictures: 0, units: 0 }
-    cur.pictures += 1
-    cur.units += toUnits(Number(r.cost_usd))
+    const cur = byMonth.get(r.month) ?? { images: 0, batches: new Set<string>() }
+    cur.images += 1
+    if (r.picture_made) cur.batches.add(r.batch_id)
     byMonth.set(r.month, cur)
   }
   return [...byMonth.entries()]
-    .map(([month, v]) => ({ month, pictures: v.pictures, spentUsd: fromUnits(v.units) }))
+    .map(([month, v]) => ({ month, images: v.images, pictures: v.batches.size }))
     .sort((a, b) => (a.month < b.month ? 1 : -1))
 }

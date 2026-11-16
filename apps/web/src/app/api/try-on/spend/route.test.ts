@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { fake, A, B } from '@/lib/__fixtures__/try-on-fake'
+import { formatUsd, toUnits } from '@/lib/try-on'
 
 vi.mock('@/lib/supabase/server', async () => {
   const { fake: f } = await import('@/lib/__fixtures__/try-on-fake')
@@ -8,12 +9,15 @@ vi.mock('@/lib/supabase/server', async () => {
 
 import { GET } from './route'
 
-const row = (month: string, status = 'charged') => ({ id: crypto.randomUUID(), month, status, cost_usd: 0.075 })
+let batch = 0
+/** One ledger row is one FASHN image; every two rows share a request. */
+const row = (month: string, status = 'charged', made = true) => ({ id: crypto.randomUUID(), batch_id: `b${Math.floor(batch++ / 2)}`, month, status, picture_made: made })
 
 beforeEach(() => {
   vi.useFakeTimers()
   vi.setSystemTime(new Date('2026-11-17T02:00:00Z'))
   fake.reset()
+  batch = 0
   vi.stubEnv('ENABLE_TRY_ON', 'true')
   vi.stubEnv('TRY_ON_OWNER_USER_ID', A)
   vi.stubEnv('TRY_ON_MONTHLY_CAP_USD', '7.50')
@@ -22,19 +26,30 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs() })
 
 describe('GET /api/try-on/spend', () => {
-  it('owner sees spend, cap, count and previous months', async () => {
+  it('owner sees spend, cap, count, images and previous months', async () => {
     fake.tables.try_on_ledger.push(...Array.from({ length: 13 }, () => row('2026-11')), row('2026-10'), row('2026-10'), row('2026-11', 'reserved'))
     const res = await GET()
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({
       month: '2026-11',
-      spent_usd: 0.975, // 13 pictures x US$0.075; the in-flight reservation is not counted
+      images: 13, // the stored, exact count; the in-flight reservation is not counted
+      spent_usd: 0.975, // 13 images x US$0.075, exact (the screen rounds it to the cent)
       cap_usd: 7.5,
       price_usd: 0.075,
       remaining_usd: 6.525,
-      pictures: 13,
-      previous: [{ month: '2026-10', spent_usd: 0.15, pictures: 2 }],
+      pictures: 7,
+      previous: [{ month: '2026-10', images: 2, spent_usd: 0.15, pictures: 2 }],
     })
+  })
+
+  it('spend is rounded once from the exact total, not per charge', async () => {
+    // 3 separate failed attempts, each charged for 1 image and nothing else.
+    fake.tables.try_on_ledger.push(row('2026-11', 'charged', false), row('2026-11', 'charged', false), row('2026-11', 'charged', false))
+    const json = await (await GET()).json()
+    expect(json.images).toBe(3)
+    expect(json.spent_usd).toBe(0.225)
+    expect(json.pictures).toBe(0)
+    expect(formatUsd(toUnits(json.spent_usd))).toBe('US$0.23') // not US$0.24, which rounding each charge would give
   })
 
   it('shows zero before any picture is made', async () => {
@@ -70,7 +85,7 @@ describe('GET /api/try-on/spend', () => {
     const json = await (await GET()).json()
     expect(json.month).toBe('2026-12')
     expect(json.pictures).toBe(0)
-    expect(json.previous).toEqual([{ month: '2026-11', spent_usd: 0.075, pictures: 1 }])
+    expect(json.previous).toEqual([{ month: '2026-11', images: 1, spent_usd: 0.075, pictures: 1 }])
     vi.stubEnv('VERCEL_ENV', 'production')
     expect((await (await GET()).json()).month).toBe('2026-11')
   })

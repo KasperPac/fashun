@@ -7,6 +7,7 @@ vi.mock('@/lib/supabase/server', async () => {
 })
 
 import { GET, POST } from './route'
+import { GET as SPEND } from '@/app/api/try-on/spend/route'
 
 const OUTFIT = '20000000-0000-4000-8000-000000000001'
 const TOP = '10000000-0000-4000-8000-000000000001'
@@ -157,7 +158,7 @@ describe('POST /api/outfits/try-on: drawing', () => {
     expect(charged()).toHaveLength(2)
   })
 
-  it('dress or jumpsuit outfit makes one picture in one step', async () => {
+  it('a dress outfit is drawn in one step with the one-piece', async () => {
     seed({
       pieces: [piece('Red dress', DRESS)],
       items: [{ id: DRESS, category: 'dresses', image_url: `${A}/dress.jpg` }],
@@ -169,7 +170,7 @@ describe('POST /api/outfits/try-on: drawing', () => {
     expect(charged()).toHaveLength(1)
   })
 
-  it('dress or jumpsuit outfit makes one picture in one step', async () => {
+  it('a jumpsuit outfit is drawn in one step with the one-piece', async () => {
     seed({
       pieces: [piece('Black jumpsuit', DRESS)],
       items: [{ id: DRESS, category: 'jumpsuits', image_url: `${A}/j.jpg` }],
@@ -317,24 +318,28 @@ describe('POST /api/outfits/try-on: failures add no spend', () => {
     expect(fake.tables.outfits[0].try_on_image_path).toBeNull()
   })
 
-  it('second step failure shows the failure message', async () => {
+  it('second step failure uses no try-on and counts the first image for the owner', async () => {
     seed()
     fashnFailOnRun = 2
     const res = await post()
     expect(res.status).toBe(502)
     expect((await res.json()).charged_pictures).toBe(1)
     expect(charged()).toHaveLength(1)
+    expect(charged().some((r) => r.picture_made)).toBe(false) // no picture made, so no try-on used up
     expect(ledger()).toHaveLength(1)
     expect(fake.tables.outfits[0].try_on_image_path).toBeNull()
   })
 
-  it('keeps the charge but reports it when the picture cannot be saved', async () => {
+  it('storage failure saves nothing, uses no try-on and counts FASHN\'s charged images for the owner', async () => {
     seed()
     fake.uploadError = true
     const res = await post()
     expect(res.status).toBe(500)
     expect((await res.json()).charged_pictures).toBe(2)
     expect(charged()).toHaveLength(2)
+    expect(charged().some((r) => r.picture_made)).toBe(false)
+    expect(fake.tables.outfits[0].try_on_image_path).toBeNull()
+    expect([...fake.buckets['try-on-photos'].keys()].filter((k) => k.includes('outfit-'))).toEqual([])
   })
 })
 
@@ -342,7 +347,7 @@ describe('POST /api/outfits/try-on: the monthly cap', () => {
   it('server refuses try-on once the cap is used up', async () => {
     seed()
     vi.stubEnv('TRY_ON_MONTHLY_CAP_USD', '0.10')
-    fake.tables.try_on_ledger.push({ id: 'old', month: '2026-11', status: 'charged', cost_usd: 0.075 })
+    fake.tables.try_on_ledger.push({ id: 'old', batch_id: 'old', month: '2026-11', status: 'charged' })
     const res = await post()
     expect(res.status).toBe(409)
     const json = await res.json()
@@ -399,5 +404,125 @@ describe('POST /api/outfits/try-on: the monthly cap', () => {
     expect(json.paused).toBe(true)
     expect(json.resume_on).toBe('2026-12-01')
     expect(json.image_url).toContain('outfit-')
+  })
+})
+
+describe('spend rules: exact image count', () => {
+  it('a charged first step stays counted in the owner spend when step 2 fails', async () => {
+    seed()
+    fashnFailOnRun = 2
+    await post()
+    expect(charged()).toHaveLength(1)
+    expect(ledger().every((r) => 'batch_id' in r && !('cost_usd' in r))).toBe(true)
+    expect(fake.rpcCalls[0]).toMatchObject({ p_price_units: 750, p_cap_units: 75_000 })
+  })
+
+  it('checks the cap on the exact amount, not the rounded one', async () => {
+    seed({ pieces: [piece('White tee', TOP)] })
+    // 1 image = US$0.075 (shown as US$0.08). A cap of US$0.074 is under one image even though it rounds to US$0.07 either way.
+    vi.stubEnv('TRY_ON_MONTHLY_CAP_USD', '0.074')
+    expect((await post()).status).toBe(409)
+    // 3 images = US$0.225 (shown US$0.23): a cap of US$0.226 fits 3 images, US$0.224 does not.
+    vi.stubEnv('TRY_ON_MONTHLY_CAP_USD', '0.224')
+    fake.tables.try_on_ledger.push(
+      { id: 'a', batch_id: 'x', month: '2026-11', status: 'charged' },
+      { id: 'b', batch_id: 'x', month: '2026-11', status: 'charged' },
+    )
+    expect((await post()).status).toBe(409)
+    vi.stubEnv('TRY_ON_MONTHLY_CAP_USD', '0.226')
+    expect((await post()).status).toBe(200)
+    expect(charged()).toHaveLength(3)
+  })
+
+  it('GET says paused when the outfit needs two images and only one fits', async () => {
+    seed()
+    await post()
+    fake.tables.try_on_ledger.length = 0
+    fake.tables.try_on_ledger.push({ id: 'a', batch_id: 'x', month: '2026-11', status: 'charged' })
+    vi.stubEnv('TRY_ON_MONTHLY_CAP_USD', '0.15')
+    const get = async (images: string) =>
+      (await (await GET(new Request(`http://localhost/api/outfits/try-on?outfit_id=${OUTFIT}&images=${images}`))).json()).paused
+    expect(await get('1')).toBe(false)
+    expect(await get('2')).toBe(true)
+  })
+})
+
+describe('try-on failures log a reason with no personal data', () => {
+  it('logs one fixed reason per failure and nothing from the person or FASHN', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    seed()
+    fashnFailOnRun = 1
+    await post()
+    fashnFailOnRun = null
+    fashnHang = true
+    await post()
+    fashnHang = false
+    fake.uploadError = true
+    await post()
+    const lines = log.mock.calls.map((c) => c.join(' '))
+    expect(lines).toEqual([
+      'try-on failed: fashn_refused',
+      'try-on failed: fashn_timeout',
+      'try-on failed: storage_failed',
+    ])
+    const all = lines.join('\n')
+    for (const secret of [A, 'photo-1', 'bad photo', 'White tee', 'Blue jeans', 'test-key', '@']) expect(all).not.toContain(secret)
+    log.mockRestore()
+  })
+})
+
+describe('the AI label', () => {
+  it('every try-on picture carries the AI label', async () => {
+    seed()
+    const label = 'Made by AI. Fit and details may not be exact.'
+    const fresh = await (await post()).json()
+    expect(fresh.label).toBe(label)
+    const saved = await (await post()).json()
+    expect(saved.saved).toBe(true)
+    expect(saved.label).toBe(label)
+    const got = await (await GET(new Request(`http://localhost/api/outfits/try-on?outfit_id=${OUTFIT}`))).json()
+    expect(got.label).toBe(label)
+  })
+})
+
+describe('owner spend after failures', () => {
+  it('a charged failure shows in the owner\'s panel and not to the person', async () => {
+    vi.stubEnv('TRY_ON_OWNER_USER_ID', A)
+    seed()
+    fashnFailOnRun = 2
+    const res = await post()
+    expect(res.status).toBe(502)
+    // The person: no picture, not paused, so See it on me is still offered; the message promises nothing was charged to them.
+    const mine = await (await GET(new Request(`http://localhost/api/outfits/try-on?outfit_id=${OUTFIT}&images=2`))).json()
+    expect(mine.image_url).toBeNull()
+    expect(mine.paused).toBe(false)
+    // The owner: the charged image counts in images and spend, and no picture was made.
+    const owner = await (await SPEND()).json()
+    expect(owner.images).toBe(1)
+    expect(owner.spent_usd).toBe(0.075)
+    expect(owner.pictures).toBe(0)
+  })
+
+  it('a made picture counts as a picture and its images', async () => {
+    vi.stubEnv('TRY_ON_OWNER_USER_ID', A)
+    seed()
+    await post()
+    const owner = await (await SPEND()).json()
+    expect(owner).toMatchObject({ images: 2, pictures: 1, spent_usd: 0.15 })
+  })
+})
+
+describe('exact cap', () => {
+  it('cap is checked on the exact spend, not the rounded one', async () => {
+    seed()
+    vi.stubEnv('TRY_ON_MONTHLY_CAP_USD', '0.375') // 5 images exactly
+    fake.tables.try_on_ledger.push(
+      ...[1, 2, 3].map((n) => ({ id: `c${n}`, batch_id: `x${n}`, month: '2026-11', status: 'charged', picture_made: false })),
+    ) // 3 images = US$0.225, shown US$0.23, which would leave only US$0.145 if the rounded figure were used
+    expect((await post()).status).toBe(200) // needs US$0.15: fits on the exact amount (room US$0.15)
+    expect(charged()).toHaveLength(5)
+    const second = await post({ outfit_id: OUTFIT, regenerate: true })
+    expect(second.status).toBe(409)
+    expect(fashnRuns).toHaveLength(2) // the second request never reached FASHN
   })
 })

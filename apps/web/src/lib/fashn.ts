@@ -10,6 +10,9 @@ const STEP_TIMEOUT_MS = 40_000
 
 export class FashnError extends Error {}
 
+/** FASHN did not finish in time. A separate type so the log can name the reason without logging FASHN's text. */
+export class FashnTimeoutError extends FashnError {}
+
 export interface TryOnImage {
   mediaType: string
   base64: string
@@ -67,5 +70,5 @@ export async function runTryOn(args: {
     if (status.status === 'completed' && status.output?.[0]) return fromDataUri(status.output[0])
     if (status.status === 'failed') throw new FashnError(errorText(status.error))
   }
-  throw new FashnError('Try-on timed out')
+  throw new FashnTimeoutError('Try-on timed out')
 }

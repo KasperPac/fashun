@@ -3,9 +3,9 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createServerClient, createServiceClient } from '@/lib/supabase/server'
 import { tryOnEnabled } from '@/lib/paid-extras'
-import { runTryOn, FashnError, type TryOnImage } from '@/lib/fashn'
+import { runTryOn, FashnError, FashnTimeoutError, type TryOnImage } from '@/lib/fashn'
 import {
-  chargePicture, chargedSpendByMonth, hasRoomForPicture, releasePictures, reservePictures,
+  chargePicture, chargedSpendByMonth, hasRoomForImages, markPictureMade, releasePictures, reservePictures,
 } from '@/lib/try-on-ledger'
 import { loadGarmentPhoto, loadPersonPhoto, TRY_ON_BUCKET } from '@/lib/try-on-images'
 import {
@@ -19,7 +19,16 @@ export const maxDuration = 90
 const SIGNED_SECONDS = 3600
 
 const BodySchema = z.object({ outfit_id: z.string().uuid(), regenerate: z.boolean().optional() })
-const QuerySchema = z.object({ outfit_id: z.string().uuid() })
+const QuerySchema = z.object({
+  outfit_id: z.string().uuid(),
+  // How many FASHN images this outfit needs (a top and bottoms need 2), so "paused" matches what POST would do.
+  images: z.enum(['1', '2']).default('1'),
+})
+
+/** One fixed reason per failure. Never the error text, an address, a name or an email, which could hold personal data. */
+function logFailure(reason: 'fashn_refused' | 'fashn_timeout' | 'unexpected' | 'storage_failed' | 'save_failed') {
+  console.error(`try-on failed: ${reason}`)
+}
 
 function off() {
   return NextResponse.json({ error: 'Try-on is not available', code: 'FEATURE_OFF' }, { status: 404 })
@@ -52,7 +61,10 @@ export async function GET(req: Request) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const parsed = QuerySchema.safeParse({ outfit_id: new URL(req.url).searchParams.get('outfit_id') })
+  const parsed = QuerySchema.safeParse({
+    outfit_id: new URL(req.url).searchParams.get('outfit_id'),
+    images: new URL(req.url).searchParams.get('images') ?? undefined,
+  })
   if (!parsed.success) return NextResponse.json({ error: 'Invalid outfit' }, { status: 400 })
 
   const outfit = await loadOutfit(supabase, user.id, parsed.data.outfit_id)
@@ -65,7 +77,7 @@ export async function GET(req: Request) {
   let paused = true
   if (config) {
     const spend = await chargedSpendByMonth(await createServiceClient())
-    paused = !hasRoomForPicture(spend.find((s) => s.month === month), config.capUnits, config.priceUnits)
+    paused = !hasRoomForImages(spend.find((s) => s.month === month), Number(parsed.data.images), config.capUnits, config.priceUnits)
   }
 
   return NextResponse.json({
@@ -188,6 +200,7 @@ export async function POST(req: Request) {
     // Pictures FASHN did not return add nothing to spend.
     await releasePictures(service, reserved.slice(charged))
     const fromFashn = err instanceof FashnError
+    logFailure(err instanceof FashnTimeoutError ? 'fashn_timeout' : fromFashn ? 'fashn_refused' : 'unexpected')
     return NextResponse.json(
       {
         error: fromFashn
@@ -207,6 +220,7 @@ export async function POST(req: Request) {
     .from(TRY_ON_BUCKET)
     .upload(path, Buffer.from(current.base64, 'base64'), { contentType: current.mediaType, upsert: false })
   if (uploadError) {
+    logFailure('storage_failed')
     return NextResponse.json(
       { error: 'Could not save the picture', code: 'SAVE_FAILED', charged_pictures: charged },
       { status: 500 },
@@ -220,11 +234,19 @@ export async function POST(req: Request) {
     .eq('id', outfit.id)
     .eq('user_id', user.id)
   if (saveError) {
+    logFailure('save_failed')
     await supabase.storage.from(TRY_ON_BUCKET).remove([path])
     return NextResponse.json(
       { error: 'Could not save the picture', code: 'SAVE_FAILED', charged_pictures: charged },
       { status: 500 },
     )
+  }
+
+  try {
+    await markPictureMade(service, reserved)
+  } catch {
+    // The picture is saved and the images are counted; only the count of pictures is behind by one.
+    logFailure('unexpected')
   }
 
   // The replaced picture is no longer used. If this removal fails the file is only an

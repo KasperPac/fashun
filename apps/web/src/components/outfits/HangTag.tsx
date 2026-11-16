@@ -16,11 +16,12 @@ function categoryLabel(category: string | null): string {
   return category && category in CATEGORY_LABELS ? CATEGORY_LABELS[category as WardrobeCategory] : 'Piece'
 }
 
-function PieceTile({ piece, onOpen }: { piece: TagPiece; onOpen?: (key: string, el: HTMLButtonElement) => void }) {
+export function PieceTile({ piece, onOpen, size = 'md' }: { piece: TagPiece; onOpen?: (key: string, el: HTMLButtonElement) => void; size?: 'md' | 'sm' }) {
+  const small = size === 'sm'
   const photo = piece.imageUrl && !piece.removed
   const inner = (
     <>
-      <span className="flex h-[92px] w-[72px] items-center justify-center overflow-hidden border-[1.5px] border-ink bg-tile">
+      <span className={`flex ${small ? 'h-[72px] w-[56px]' : 'h-[92px] w-[72px]'} items-center justify-center overflow-hidden border-[1.5px] border-ink bg-tile`}>
         {photo ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={piece.imageUrl ?? ''} alt={piece.label} className="h-full w-full object-contain" />
@@ -30,7 +31,7 @@ function PieceTile({ piece, onOpen }: { piece: TagPiece; onOpen?: (key: string, 
           </span>
         )}
       </span>
-      <span className="mt-1 block w-[72px] break-words font-display text-xs font-bold uppercase leading-tight tracking-[0.5px]">
+      <span className={`mt-1 block ${small ? 'w-[56px]' : 'w-[72px]'} break-words font-display text-xs font-bold uppercase leading-tight tracking-[0.5px]`}>
         {piece.label}
       </span>
       {piece.removed && <span className="mt-0.5 block w-[72px] text-xs leading-tight text-ink-2">No longer in your wardrobe</span>}

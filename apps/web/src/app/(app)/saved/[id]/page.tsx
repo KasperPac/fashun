@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { OCCASION_LABELS } from '@fashun/shared'
@@ -11,6 +11,7 @@ import { Kicker, ScreenBlock } from '@/components/ui/Onboarding'
 import { ConfirmDialog } from '@/components/ui/Overlays'
 import HangTag from '@/components/outfits/HangTag'
 import { useSavedOutfits } from '@/components/outfits/useSavedOutfits'
+import TryOnPanel from '@/components/tryon/TryOnPanel'
 import ItemSheet from '@/components/wardrobe/ItemSheet'
 import { SEASON_NAMES } from '@/lib/profile-view'
 import { savedDate } from '@/lib/saved-outfits'
@@ -38,6 +39,8 @@ export default function SavedOutfitPage() {
   const [confirm, setConfirm] = useState(false)
   const [removing, setRemoving] = useState(false)
   const [removeError, setRemoveError] = useState<string | null>(null)
+  const [tryOnAvailable, setTryOnAvailable] = useState(false)
+  const onTryOnAvailable = useCallback((available: boolean) => setTryOnAvailable(available), [])
 
   useEffect(() => {
     let cancelled = false
@@ -125,7 +128,8 @@ export default function SavedOutfitPage() {
           {outfit.occasion ? OCCASION_LABELS[outfit.occasion] : 'Saved'}
         </h1>
       </ScreenBlock>
-      <div className="mx-auto w-full max-w-[480px] px-6 pb-8 pt-6">
+      <div className={`mx-auto flex w-full flex-col gap-6 px-6 pb-8 pt-6 ${tryOnAvailable ? 'max-w-[480px] lg:max-w-[960px] lg:flex-row lg:items-start lg:gap-10' : 'max-w-[480px]'}`}>
+        <div className="w-full lg:max-w-[480px] lg:shrink-0">
         <HangTag
           kicker="Saved outfit"
           name={outfit.name}
@@ -137,6 +141,15 @@ export default function SavedOutfitPage() {
         >
           <Button variant="secondary" onClick={() => { setRemoveError(null); setConfirm(true) }}>Remove from saved</Button>
         </HangTag>
+        </div>
+        <div className="w-full empty:hidden lg:sticky lg:top-10 lg:w-[400px] lg:shrink-0">
+          <TryOnPanel
+            outfitId={outfit.id}
+            outfitName={outfit.name}
+            pieces={pieces}
+            onAvailable={onTryOnAvailable}
+          />
+        </div>
       </div>
       <ItemSheet item={item} season={currentSeason} onClose={() => setOpenItem(null)} />
       <ConfirmDialog

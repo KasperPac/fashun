@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import {
-  firstOfNextMonth, formatUsd, fromUnits, isTryOnOwner, planTryOn, readTryOnConfig, summariseSpend, sydneyMonth, toUnits, tryOnNow,
+  firstOfNextMonth, formatUsd, fromUnits, imagesToUnits, isTryOnOwner, planTryOn, readTryOnConfig, summariseSpend, sydneyMonth, toUnits, tryOnNow,
   type OutfitPiece,
 } from './try-on'
 
@@ -75,19 +75,28 @@ describe('settings', () => {
 })
 
 describe('summariseSpend', () => {
-  it('adds pictures to the cent with no float drift, newest month first', () => {
-    const rows = [...Array.from({ length: 100 }, () => ({ month: '2026-10', cost_usd: 0.075 })), { month: '2026-11', cost_usd: '0.0750' }]
+  it('stores spend exactly as an image count, newest month first, and counts requests', () => {
+    const rows = [
+      ...Array.from({ length: 100 }, (_, i) => ({ month: '2026-10', batch_id: `b${Math.floor(i / 2)}`, picture_made: true })),
+      { month: '2026-11', batch_id: 'n1', picture_made: true },
+    ]
     expect(summariseSpend(rows)).toEqual([
-      { month: '2026-11', pictures: 1, spentUsd: 0.075 },
-      { month: '2026-10', pictures: 100, spentUsd: 7.5 },
+      { month: '2026-11', images: 1, pictures: 1 },
+      { month: '2026-10', images: 100, pictures: 50 },
     ])
     expect(toUnits(0.075)).toBe(750)
   })
+
+  it('works out dollars from the image count with no float drift', () => {
+    expect(imagesToUnits(100, 750)).toBe(75_000)
+    expect(imagesToUnits(3, 750)).toBe(2_250)
+  })
 })
 
-describe('spend is images times price to the cent', () => {
-  it('keeps odd numbers of images exact and rounds half up', () => {
+describe('spend is images times price rounded half up to the cent', () => {
+  it('spend is images times price rounded half up to the cent', () => {
     const price = toUnits(0.075)
+    expect(formatUsd(2 * price)).toBe('US$0.15')
     expect(formatUsd(1 * price)).toBe('US$0.08')
     expect(formatUsd(3 * price)).toBe('US$0.23')
     expect(formatUsd(99 * price)).toBe('US$7.43')
