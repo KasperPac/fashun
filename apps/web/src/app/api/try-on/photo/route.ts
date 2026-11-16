@@ -1,0 +1,117 @@
+import { randomUUID } from 'crypto'
+import { NextResponse } from 'next/server'
+import { createServerClient } from '@/lib/supabase/server'
+import { tryOnEnabled } from '@/lib/paid-extras'
+import { TRY_ON_BUCKET, mediaTypeFromBytes } from '@/lib/try-on-images'
+
+const MAX_BYTES = 10 * 1024 * 1024
+const EXT: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }
+const SIGNED_SECONDS = 3600
+const PAGE = 100
+
+const off = () => NextResponse.json({ error: 'Try-on is not available', code: 'FEATURE_OFF' }, { status: 404 })
+
+type ServerClient = Awaited<ReturnType<typeof createServerClient>>
+
+/** Every file in the person's own try-on folder (photo and pictures, including orphans). */
+async function listOwnFiles(supabase: ServerClient, userId: string): Promise<string[]> {
+  const paths: string[] = []
+  for (let offset = 0; ; offset += PAGE) {
+    const { data, error } = await supabase.storage.from(TRY_ON_BUCKET).list(userId, { limit: PAGE, offset })
+    if (error) throw new Error('Could not list try-on files')
+    paths.push(...(data ?? []).map((f) => `${userId}/${f.name}`))
+    if (!data || data.length < PAGE) return paths
+  }
+}
+
+/** GET: the person's try-on photo, if they have one. */
+export async function GET() {
+  if (!tryOnEnabled()) return off()
+  const supabase = await createServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { data: profile } = await supabase.from('users').select('try_on_photo_url,try_on_consent_at').eq('id', user.id).maybeSingle()
+  if (!profile?.try_on_photo_url) return NextResponse.json({ image_url: null, consented: !!profile?.try_on_consent_at })
+  const { data, error } = await supabase.storage.from(TRY_ON_BUCKET).createSignedUrl(profile.try_on_photo_url, SIGNED_SECONDS)
+  return NextResponse.json({ image_url: error || !data ? null : data.signedUrl, consented: !!profile.try_on_consent_at })
+}
+
+/** POST multipart {file, consent}: adds or replaces the photo. The first one needs consent. */
+export async function POST(req: Request) {
+  if (!tryOnEnabled()) return off()
+  const supabase = await createServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const form = await req.formData().catch(() => null)
+  const file = form?.get('file')
+  if (!(file instanceof File)) return NextResponse.json({ error: 'Choose a photo' }, { status: 400 })
+  if (file.size === 0 || file.size > MAX_BYTES) {
+    return NextResponse.json({ error: 'The photo must be under 10 MB', code: 'BAD_PHOTO' }, { status: 400 })
+  }
+  const bytes = new Uint8Array(await file.arrayBuffer())
+  const mediaType = file.type === 'image/png' || file.type === 'image/webp' || file.type === 'image/jpeg'
+    ? mediaTypeFromBytes(bytes)
+    : null
+  if (!mediaType || mediaType !== file.type) {
+    return NextResponse.json({ error: 'Use a JPEG, PNG or WebP photo', code: 'BAD_PHOTO' }, { status: 400 })
+  }
+
+  const { data: profile } = await supabase.from('users').select('try_on_photo_url,try_on_consent_at').eq('id', user.id).maybeSingle()
+  const agreed = !!profile?.try_on_consent_at || form?.get('consent') === 'true'
+  if (!agreed) {
+    return NextResponse.json({ error: 'Please agree before adding a photo', code: 'CONSENT_REQUIRED' }, { status: 400 })
+  }
+
+  const path = `${user.id}/photo-${randomUUID()}.${EXT[mediaType]}`
+  const { error: uploadError } = await supabase.storage.from(TRY_ON_BUCKET).upload(path, bytes, { contentType: mediaType, upsert: false })
+  if (uploadError) return NextResponse.json({ error: 'Could not save the photo' }, { status: 500 })
+
+  const { error: saveError } = await supabase
+    .from('users')
+    .update({ try_on_photo_url: path, try_on_consent_at: profile?.try_on_consent_at ?? new Date().toISOString() })
+    .eq('id', user.id)
+  if (saveError) {
+    await supabase.storage.from(TRY_ON_BUCKET).remove([path])
+    return NextResponse.json({ error: 'Could not save the photo' }, { status: 500 })
+  }
+
+  // The replaced photo is no longer used; deleting the photo later clears the folder anyway.
+  if (profile?.try_on_photo_url) await supabase.storage.from(TRY_ON_BUCKET).remove([profile.try_on_photo_url])
+
+  return NextResponse.json({ ok: true })
+}
+
+/** DELETE: removes the photo and every try-on picture. Outfits stay. */
+export async function DELETE() {
+  if (!tryOnEnabled()) return off()
+  const supabase = await createServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  try {
+    const remaining = await listOwnFiles(supabase, user.id)
+    if (remaining.length > 0) {
+      const { error } = await supabase.storage.from(TRY_ON_BUCKET).remove(remaining)
+      if (error) throw new Error('Could not delete try-on files')
+    }
+  } catch {
+    return NextResponse.json({ error: 'Could not delete your try-on photo. Try again.' }, { status: 500 })
+  }
+
+  const { error: outfitsError } = await supabase
+    .from('outfits')
+    .update({ try_on_image_path: null, try_on_made_at: null })
+    .eq('user_id', user.id)
+    .not('try_on_image_path', 'is', null)
+  const { error: userError } = await supabase
+    .from('users')
+    .update({ try_on_photo_url: null, try_on_consent_at: null })
+    .eq('id', user.id)
+  if (outfitsError || userError) {
+    return NextResponse.json({ error: 'Could not delete your try-on photo. Try again.' }, { status: 500 })
+  }
+
+  return NextResponse.json({ ok: true })
+}

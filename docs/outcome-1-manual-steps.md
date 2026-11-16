@@ -22,13 +22,15 @@ Required:
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `ANTHROPIC_API_KEY`
 
-Paid extras, all behind one switch:
+Paid extras, behind one switch (try-on has its own, below):
 
 - `ENABLE_PAID_EXTRAS`: leave unset (or anything other than `true`) to keep them off. Off is the default.
 
-With the switch off, nothing in outcome 1 calls Fashn.ai (try-on, returns "not available"), SerpAPI Google Lens (photo-to-shop search, returns no matches) or Photoroom (background removal, original photo kept). Adding a piece by link and by photo still works.
+With the switch off, nothing in outcome 1 calls SerpAPI Google Lens (photo-to-shop search, returns no matches) or Photoroom (background removal, original photo kept). Adding a piece by link and by photo still works.
 
-Only if the switch is turned on are these also needed: `FASHN_API_KEY`, `SERPAPI_API_KEY`, `PHOTOROOM_API_KEY`.
+Try-on (Fashn.ai) is not turned on by `ENABLE_PAID_EXTRAS`. It has its own switch and settings, `ENABLE_TRY_ON`, `FASHN_API_KEY`, `TRY_ON_MONTHLY_CAP_USD`, `TRY_ON_PRICE_USD` and `TRY_ON_OWNER_USER_ID`, and needs `supabase/migrations/008_try_on.sql` applied first.
+
+Only if the switch is turned on are these also needed: `SERPAPI_API_KEY`, `PHOTOROOM_API_KEY`.
 
 ## 3. Checks before release
 

@@ -85,7 +85,9 @@ export type Database = {
           occasion: string | null
           palette_match_pct: number | null
           pieces: Json[]
+          try_on_image_path: string | null
           try_on_image_url: string | null
+          try_on_made_at: string | null
           user_id: string
           worn_count: number | null
         }
@@ -102,7 +104,9 @@ export type Database = {
           occasion?: string | null
           palette_match_pct?: number | null
           pieces?: Json[]
+          try_on_image_path?: string | null
           try_on_image_url?: string | null
+          try_on_made_at?: string | null
           user_id: string
           worn_count?: number | null
         }
@@ -119,7 +123,9 @@ export type Database = {
           occasion?: string | null
           palette_match_pct?: number | null
           pieces?: Json[]
+          try_on_image_path?: string | null
           try_on_image_url?: string | null
+          try_on_made_at?: string | null
           user_id?: string
           worn_count?: number | null
         }
@@ -133,6 +139,57 @@ export type Database = {
           },
           {
             foreignKeyName: "outfits_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      try_on_ledger: {
+        Row: {
+          charged_at: string | null
+          cost_usd: number
+          created_at: string
+          id: string
+          month: string
+          outfit_id: string | null
+          status: string
+          step: string
+          user_id: string | null
+        }
+        Insert: {
+          charged_at?: string | null
+          cost_usd: number
+          created_at?: string
+          id?: string
+          month: string
+          outfit_id?: string | null
+          status?: string
+          step: string
+          user_id?: string | null
+        }
+        Update: {
+          charged_at?: string | null
+          cost_usd?: number
+          created_at?: string
+          id?: string
+          month?: string
+          outfit_id?: string | null
+          status?: string
+          step?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "try_on_ledger_outfit_id_fkey"
+            columns: ["outfit_id"]
+            isOneToOne: false
+            referencedRelation: "outfits"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "try_on_ledger_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
@@ -156,6 +213,7 @@ export type Database = {
           skin_undertone: string | null
           style_prefs: string[] | null
           suggested_styles: string[]
+          try_on_consent_at: string | null
           try_on_photo_url: string | null
         }
         Insert: {
@@ -173,6 +231,7 @@ export type Database = {
           skin_undertone?: string | null
           style_prefs?: string[] | null
           suggested_styles?: string[] | null
+          try_on_consent_at?: string | null
           try_on_photo_url?: string | null
         }
         Update: {
@@ -190,6 +249,7 @@ export type Database = {
           skin_undertone?: string | null
           style_prefs?: string[] | null
           suggested_styles?: string[] | null
+          try_on_consent_at?: string | null
           try_on_photo_url?: string | null
         }
         Relationships: []
@@ -261,7 +321,17 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      try_on_reserve: {
+        Args: {
+          p_cap: number
+          p_month: string
+          p_outfit: string
+          p_steps: string[]
+          p_unit_cost: number
+          p_user: string
+        }
+        Returns: string[] | null
+      }
     }
     Enums: {
       [_ in never]: never

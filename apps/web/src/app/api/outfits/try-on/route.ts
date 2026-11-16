@@ -1,40 +1,85 @@
+import { randomUUID } from 'crypto'
 import { NextResponse } from 'next/server'
-import { createServerClient } from '@/lib/supabase/server'
-import { signWardrobeImage } from '@/lib/wardrobe-image'
-import { paidExtrasEnabled } from '@/lib/paid-extras'
 import { z } from 'zod'
+import { createServerClient, createServiceClient } from '@/lib/supabase/server'
+import { tryOnEnabled } from '@/lib/paid-extras'
+import { runTryOn, FashnError, type TryOnImage } from '@/lib/fashn'
+import {
+  chargePicture, chargedSpendByMonth, hasRoomForPicture, releasePictures, reservePictures,
+} from '@/lib/try-on-ledger'
+import { loadGarmentPhoto, loadPersonPhoto, TRY_ON_BUCKET } from '@/lib/try-on-images'
+import {
+  TRY_ON_LABEL, firstOfNextMonth, planTryOn, readTryOnConfig, sydneyMonth,
+  type OutfitPiece,
+} from '@/lib/try-on'
 
-const FASHN_BASE = 'https://api.fashn.ai/v1'
+// Two FASHN pictures can take up to ~34 seconds; leave room for photos and saving.
+export const maxDuration = 90
 
-const BodySchema = z.object({ item_id: z.string().uuid() })
+const SIGNED_SECONDS = 3600
 
-const CATEGORY_MAP: Record<string, string> = {
-  tops: 'tops',
-  bottoms: 'bottoms',
-  dresses: 'one-pieces',
-  jumpsuits: 'one-pieces',
-  outerwear: 'tops',
+const BodySchema = z.object({ outfit_id: z.string().uuid(), regenerate: z.boolean().optional() })
+const QuerySchema = z.object({ outfit_id: z.string().uuid() })
+
+function off() {
+  return NextResponse.json({ error: 'Try-on is not available', code: 'FEATURE_OFF' }, { status: 404 })
 }
 
-const UNSUPPORTED_CATEGORIES = new Set(['shoes', 'bags', 'accessories'])
+type ServerClient = Awaited<ReturnType<typeof createServerClient>>
 
-async function pollFashn(predictionId: string): Promise<string> {
-  for (let i = 0; i < 30; i++) {
-    await new Promise(r => setTimeout(r, 2000))
-    const res = await fetch(`${FASHN_BASE}/status/${predictionId}`, {
-      headers: { Authorization: `Bearer ${process.env.FASHN_API_KEY}` },
-    })
-    const json = await res.json() as { status: string; output?: string[]; error?: string }
-    if (json.status === 'completed' && json.output?.[0]) return json.output[0]
-    if (json.status === 'failed') throw new Error(json.error ?? 'Render failed')
+async function signedPicture(supabase: ServerClient, path: string): Promise<string | null> {
+  const { data, error } = await supabase.storage.from(TRY_ON_BUCKET).createSignedUrl(path, SIGNED_SECONDS)
+  return error || !data ? null : data.signedUrl
+}
+
+interface StoredPiece { label?: unknown; item_id?: unknown }
+
+async function loadOutfit(supabase: ServerClient, userId: string, outfitId: string) {
+  const { data } = await supabase
+    .from('outfits')
+    .select('id,pieces,try_on_image_path,try_on_made_at')
+    .eq('id', outfitId)
+    .eq('user_id', userId)
+    .maybeSingle()
+  return data
+}
+
+/** GET ?outfit_id= : the saved picture (free) and whether new pictures are paused. */
+export async function GET(req: Request) {
+  if (!tryOnEnabled()) return off()
+
+  const supabase = await createServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const parsed = QuerySchema.safeParse({ outfit_id: new URL(req.url).searchParams.get('outfit_id') })
+  if (!parsed.success) return NextResponse.json({ error: 'Invalid outfit' }, { status: 400 })
+
+  const outfit = await loadOutfit(supabase, user.id, parsed.data.outfit_id)
+  if (!outfit) return NextResponse.json({ error: 'Outfit not found' }, { status: 404 })
+
+  const imageUrl = outfit.try_on_image_path ? await signedPicture(supabase, outfit.try_on_image_path) : null
+
+  const month = sydneyMonth(new Date())
+  const config = readTryOnConfig()
+  let paused = true
+  if (config) {
+    const spend = await chargedSpendByMonth(await createServiceClient())
+    paused = !hasRoomForPicture(spend.find((s) => s.month === month), config.capUnits, config.priceUnits)
   }
-  throw new Error('Try-on timed out after 60s')
+
+  return NextResponse.json({
+    image_url: imageUrl,
+    made_at: imageUrl ? outfit.try_on_made_at : null,
+    label: TRY_ON_LABEL,
+    paused,
+    resume_on: paused ? firstOfNextMonth(month) : null,
+  })
 }
 
+/** POST {outfit_id, regenerate?}: the saved picture if there is one, otherwise draws a new one. */
 export async function POST(req: Request) {
-  if (!paidExtrasEnabled()) {
-    return NextResponse.json({ error: 'Try-on is not available', code: 'FEATURE_OFF' }, { status: 404 })
-  }
+  if (!tryOnEnabled()) return off()
 
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -42,53 +87,157 @@ export async function POST(req: Request) {
 
   const body = await req.json().catch(() => ({}))
   const parsed = BodySchema.safeParse(body)
-  if (!parsed.success) return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 })
+  if (!parsed.success) return NextResponse.json({ error: 'Invalid outfit' }, { status: 400 })
 
-  const [itemRes, profileRes] = await Promise.all([
-    (supabase.from('wardrobe_items').select('image_url,category').eq('id', parsed.data.item_id).eq('user_id', user.id).single() as unknown as Promise<{ data: { image_url: string | null; category: string } | null; error: unknown }>),
-    (supabase.from('users').select('try_on_photo_url').eq('id', user.id).single() as unknown as Promise<{ data: { try_on_photo_url: string | null } | null; error: unknown }>),
-  ])
+  const outfit = await loadOutfit(supabase, user.id, parsed.data.outfit_id)
+  if (!outfit) return NextResponse.json({ error: 'Outfit not found' }, { status: 404 })
 
-  if (!itemRes.data?.image_url) {
-    return NextResponse.json({ error: 'Add a photo to this item to enable try-on', code: 'NO_ITEM_PHOTO' }, { status: 400 })
+  const previousPath = outfit.try_on_image_path
+
+  // A saved picture is free: no FASHN call, nothing added to spend.
+  if (outfit.try_on_image_path && !parsed.data.regenerate) {
+    const imageUrl = await signedPicture(supabase, outfit.try_on_image_path)
+    if (imageUrl) {
+      return NextResponse.json({
+        image_url: imageUrl, made_at: outfit.try_on_made_at, label: TRY_ON_LABEL,
+        skipped: [], charged_pictures: 0, saved: true,
+      })
+    }
   }
-  if (!profileRes.data?.try_on_photo_url) {
-    return NextResponse.json({ error: 'No try-on photo found — add one in your profile settings', code: 'NO_PERSON_PHOTO' }, { status: 400 })
+
+  const apiKey = process.env.FASHN_API_KEY
+  const config = readTryOnConfig()
+  if (!apiKey || !config) {
+    return NextResponse.json({ error: 'Try-on is not set up yet', code: 'NOT_CONFIGURED' }, { status: 503 })
   }
 
-  if (UNSUPPORTED_CATEGORIES.has(itemRes.data.category)) {
+  const { data: profile } = await supabase.from('users').select('try_on_photo_url').eq('id', user.id).maybeSingle()
+  if (!profile?.try_on_photo_url) {
+    return NextResponse.json({ error: 'Add a try-on photo to see this on you', code: 'NO_PERSON_PHOTO' }, { status: 400 })
+  }
+
+  // Work out what to draw from the outfit's pieces and the user's own wardrobe.
+  const stored = (Array.isArray(outfit.pieces) ? outfit.pieces : []) as StoredPiece[]
+  const itemIds = [...new Set(stored.flatMap((p) => (typeof p.item_id === 'string' && p.item_id ? [p.item_id] : [])))]
+  const wardrobe = new Map<string, { category: string; image_url: string | null }>()
+  if (itemIds.length > 0) {
+    const { data: items, error } = await supabase
+      .from('wardrobe_items')
+      .select('id,category,image_url')
+      .eq('user_id', user.id)
+      .in('id', itemIds)
+    if (error) return NextResponse.json({ error: 'Could not read the outfit' }, { status: 500 })
+    for (const i of items ?? []) wardrobe.set(i.id, { category: i.category, image_url: i.image_url })
+  }
+  const pieces: OutfitPiece[] = stored.map((p) => {
+    const itemId = typeof p.item_id === 'string' && p.item_id ? p.item_id : null
+    const found = itemId ? wardrobe.get(itemId) : undefined
+    return {
+      label: typeof p.label === 'string' && p.label.trim() ? p.label : 'piece',
+      itemId,
+      category: found?.category ?? null,
+      imageRef: found?.image_url || null,
+    }
+  })
+
+  const plan = planTryOn(pieces)
+  if (!plan.ok) {
+    return NextResponse.json({ error: plan.message, code: plan.code, missing: plan.missing }, { status: 400 })
+  }
+
+  // Read every photo before reserving anything, so a bad photo costs nothing.
+  const person = await loadPersonPhoto(supabase, profile.try_on_photo_url)
+  if (!person) {
+    return NextResponse.json({ error: 'Could not read your try-on photo', code: 'IMAGE_UNAVAILABLE' }, { status: 500 })
+  }
+  const garments: TryOnImage[] = []
+  for (const s of plan.steps) {
+    const img = await loadGarmentPhoto(supabase, s.imageRef)
+    if (!img) {
+      return NextResponse.json(
+        { error: `Could not read the photo of your ${s.label}`, code: 'IMAGE_UNAVAILABLE' },
+        { status: 500 },
+      )
+    }
+    garments.push(img)
+  }
+
+  // The whole outfit must fit under this month's cap before FASHN is called.
+  const month = sydneyMonth(new Date())
+  const service = await createServiceClient()
+  const reserved = await reservePictures(service, {
+    userId: user.id, outfitId: outfit.id, month,
+    steps: plan.steps.map((s) => s.step), priceUnits: config.priceUnits, capUnits: config.capUnits,
+  })
+  if (!reserved) {
     return NextResponse.json(
-      { error: 'Try-on is not supported for this item type', code: 'UNSUPPORTED_CATEGORY' },
-      { status: 400 }
+      { error: 'Try-on is paused until next month', code: 'CAP_REACHED', resume_on: firstOfNextMonth(month) },
+      { status: 409 },
     )
   }
 
-  const garmentImage = await signWardrobeImage(supabase, itemRes.data.image_url!, 600)
-  if (!garmentImage) {
-    return NextResponse.json({ error: 'Could not access item image', code: 'IMAGE_UNAVAILABLE' }, { status: 500 })
-  }
-
+  let current: TryOnImage = person
+  let charged = 0
   try {
-    const runRes = await fetch(`${FASHN_BASE}/run`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.FASHN_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model_image: profileRes.data.try_on_photo_url,
-        garment_image: garmentImage,
-        category: CATEGORY_MAP[itemRes.data.category] ?? 'tops',
-      }),
-    })
-
-    const runJson = await runRes.json() as { id?: string; error?: string }
-    if (!runJson.id) throw new Error(runJson.error ?? 'Failed to start try-on')
-
-    const imageUrl = await pollFashn(runJson.id)
-    return NextResponse.json({ image_url: imageUrl })
+    for (let i = 0; i < plan.steps.length; i++) {
+      current = await runTryOn({ person: current, garment: garments[i], category: plan.steps[i].category, apiKey })
+      await chargePicture(service, reserved[i])
+      charged += 1
+    }
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Try-on failed'
-    return NextResponse.json({ error: message }, { status: 500 })
+    // Pictures FASHN did not return add nothing to spend.
+    await releasePictures(service, reserved.slice(charged))
+    const fromFashn = err instanceof FashnError
+    return NextResponse.json(
+      {
+        error: fromFashn
+          ? "Try-on didn't work this time. Try again later."
+          : 'Something went wrong. Try again later.',
+        code: 'TRY_ON_FAILED',
+        charged_pictures: charged,
+      },
+      { status: 502 },
+    )
   }
+
+  // FASHN deletes its copy within the hour: keep ours, privately, with the outfit.
+  const ext = current.mediaType === 'image/png' ? 'png' : current.mediaType === 'image/webp' ? 'webp' : 'jpg'
+  const path = `${user.id}/outfit-${outfit.id}-${randomUUID()}.${ext}`
+  const { error: uploadError } = await supabase.storage
+    .from(TRY_ON_BUCKET)
+    .upload(path, Buffer.from(current.base64, 'base64'), { contentType: current.mediaType, upsert: false })
+  if (uploadError) {
+    return NextResponse.json(
+      { error: 'Could not save the picture', code: 'SAVE_FAILED', charged_pictures: charged },
+      { status: 500 },
+    )
+  }
+
+  const madeAt = new Date().toISOString()
+  const { error: saveError } = await supabase
+    .from('outfits')
+    .update({ try_on_image_path: path, try_on_made_at: madeAt })
+    .eq('id', outfit.id)
+    .eq('user_id', user.id)
+  if (saveError) {
+    await supabase.storage.from(TRY_ON_BUCKET).remove([path])
+    return NextResponse.json(
+      { error: 'Could not save the picture', code: 'SAVE_FAILED', charged_pictures: charged },
+      { status: 500 },
+    )
+  }
+
+  // The replaced picture is no longer used. If this removal fails the file is only an
+  // orphan in the person's own folder, and deleting the try-on photo clears the folder.
+  if (previousPath) await supabase.storage.from(TRY_ON_BUCKET).remove([previousPath])
+
+  const skipped = plan.skipped.map((s) => ({ label: s.label, reason: s.reason }))
+  return NextResponse.json({
+    image_url: await signedPicture(supabase, path),
+    made_at: madeAt,
+    label: TRY_ON_LABEL,
+    skipped,
+    charged_pictures: charged,
+    saved: false,
+  })
 }
