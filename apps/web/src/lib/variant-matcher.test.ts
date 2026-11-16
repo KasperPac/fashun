@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 const mockCreate = vi.hoisted(() => vi.fn())
 vi.mock('@anthropic-ai/sdk', () => ({ default: class { messages = { create: mockCreate } } }))
@@ -24,5 +24,27 @@ describe('matchVariantToPhoto', () => {
   it('returns null on Claude error', async () => {
     mockCreate.mockRejectedValue(new Error('boom'))
     expect(await matchVariantToPhoto(variants, 'BASE64DATA')).toBeNull()
+  })
+})
+
+// Test named in docs/test-scripts/KAS-174.md (C4)
+const apiErr = (status: number, type: string) =>
+  Object.assign(new Error('SECRET-TEXT user@example.com'), { status, error: { error: { type, message: 'SECRET-TEXT' } } })
+
+describe('variant-matcher', () => {
+  afterEach(() => vi.restoreAllMocks())
+  it('variant-matcher: logs a reason on every failure path', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const cases: Array<[() => void, string]> = [
+      [() => mockCreate.mockRejectedValueOnce(apiErr(529, 'overloaded_error')), 'variant-matcher: anthropic 529 overloaded_error'],
+      [() => mockCreate.mockRejectedValueOnce(new Error('SECRET-TEXT user@example.com')), 'variant-matcher: error Error'],
+      [() => mockCreate.mockResolvedValueOnce({ content: [{ type: 'tool_use' }] }), 'variant-matcher: no text in reply'],
+    ]
+    for (const [setup, line] of cases) {
+      spy.mockClear()
+      setup()
+      await matchVariantToPhoto(variants, 'BASE64DATA')
+      expect(spy.mock.calls.map((c) => c.join(' '))).toEqual([line])
+    }
   })
 })

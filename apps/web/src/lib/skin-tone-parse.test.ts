@@ -71,4 +71,49 @@ describe('parseSkinToneReply', () => {
     expect(parseSkinToneReply('sorry, I cannot do that')).toEqual({ ok: false, reason: 'no JSON in reply' })
     expect(parseSkinToneReply('{"undertone": "warm", ')).toEqual({ ok: false, reason: 'no JSON in reply' })
   })
+
+  // Tests named in docs/test-scripts/KAS-174.md (section A)
+  it('parses hair colour regardless of case, spaces and hyphens', () => {
+    for (const v of ['Dark Brown', 'dark brown', 'dark-brown', 'DARK-BROWN', ' dark  brown ']) {
+      expect(ok(reply({ hairColour: v })).analysis.hairColour).toBe('dark-brown')
+    }
+  })
+  it('normalises case, spaces and hyphens for every field', () => {
+    const r = ok(JSON.stringify({ undertone: ' WARM ', depth: 'Medium', hairColour: ' Dark  Brown', eyeColour: 'HAZEL', suggestedStyles: ['Smart  Casual', 'smart-casual '] }))
+    expect(r.analysis).toEqual({ undertone: 'warm', depth: 'medium', hairColour: 'dark-brown', eyeColour: 'hazel', suggestedStyles: ['smart-casual'] })
+    expect(ok(reply({ eyeColour: 'Blue ' })).analysis.eyeColour).toBe('blue')
+  })
+  it('drops an unknown hair colour and keeps the reading', () => {
+    const r = ok(reply({ hairColour: 'salt and pepper' }))
+    expect(r.analysis).toMatchObject({ undertone: 'warm', depth: 'light', hairColour: null, eyeColour: 'blue' })
+    expect(r.analysis.suggestedStyles).toEqual(['casual', 'minimalist'])
+  })
+  it('drops an unknown eye colour and keeps the reading', () => {
+    const r = ok(reply({ eyeColour: 'violet' }))
+    expect(r.analysis).toMatchObject({ undertone: 'warm', depth: 'light', eyeColour: null, hairColour: 'blonde' })
+  })
+  it('drops only the unknown style', () => {
+    expect(ok(reply({ suggestedStyles: ['casual', 'goth', 'glam'] })).analysis.suggestedStyles).toEqual(['casual', 'glam'])
+  })
+  it('keeps the reading when no style matches', () => {
+    expect(ok(reply({ suggestedStyles: ['goth', 'punk'] })).analysis.suggestedStyles).toEqual([])
+    expect(ok(JSON.stringify({ undertone: 'warm', depth: 'light' })).analysis.suggestedStyles).toEqual([])
+  })
+  it('undertone and depth alone are enough', () => {
+    const r = ok(JSON.stringify({ undertone: 'cool', depth: 'deep' }))
+    expect(r.analysis).toEqual({ undertone: 'cool', depth: 'deep', hairColour: null, eyeColour: null, suggestedStyles: [] })
+  })
+  it('fails when undertone is missing or unknown', () => {
+    expect(parseSkinToneReply(JSON.stringify({ depth: 'light' })).ok).toBe(false)
+    expect(parseSkinToneReply(reply({ undertone: 'purple' })).ok).toBe(false)
+  })
+  it('fails when depth is missing or unknown', () => {
+    expect(parseSkinToneReply(JSON.stringify({ undertone: 'warm' })).ok).toBe(false)
+    expect(parseSkinToneReply(reply({ depth: 'dark' })).ok).toBe(false)
+  })
+  it('fails cleanly on an unreadable answer', () => {
+    for (const text of ['', 'I could not see a face.', '{"undertone": "warm", "depth": "li']) {
+      expect(parseSkinToneReply(text).ok).toBe(false)
+    }
+  })
 })

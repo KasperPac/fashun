@@ -18,3 +18,32 @@ describe('selfieFailureMessage', () => {
     expect(selfieFailureMessage(400)).toBe(PHOTO_PROBLEM_MESSAGE)
   })
 })
+
+describe('selfie messages for each status', () => {
+  const PHOTO = "We couldn't read your colours from that photo. Try again in daylight with your face filling most of the frame."
+  const SERVICE = "We couldn't read your colours just now. That's on our side, not your photo, so try again in a few minutes."
+
+  it('service failure shows the service message', () => {
+    for (const status of [500, 502, 503, 529, null]) expect(selfieFailureMessage(status)).toBe(SERVICE)
+  })
+  it('save failure shows the service message', () => {
+    expect(selfieFailureMessage(500)).toBe(SERVICE)
+  })
+  it('unreadable photo shows the photo message', () => {
+    expect(selfieFailureMessage(422)).toBe(PHOTO)
+  })
+  it('bad input rejected by the server (400) shows the photo message', () => {
+    expect(selfieFailureMessage(400)).toBe(PHOTO)
+  })
+  it('connection lost mid-upload shows the service message', () => {
+    expect(selfieFailureMessage(null)).toBe(SERVICE)
+  })
+  it('failure messages match approved wording', () => {
+    expect(PHOTO_PROBLEM_MESSAGE).toBe(PHOTO)
+    expect(SERVICE_PROBLEM_MESSAGE).toBe(SERVICE)
+    for (const m of [PHOTO_PROBLEM_MESSAGE, SERVICE_PROBLEM_MESSAGE]) {
+      expect(m).not.toMatch(/[?\uFFFD]/)
+      expect(m).toContain("'")
+    }
+  })
+})

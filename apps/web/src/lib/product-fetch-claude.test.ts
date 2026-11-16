@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 const mockCreate = vi.hoisted(() => vi.fn())
 vi.mock('@anthropic-ai/sdk', () => ({ default: class { messages = { create: mockCreate } } }))
@@ -102,5 +102,29 @@ describe('extractProductViaClaude', () => {
   it('returns null when the SDK call throws', async () => {
     mockCreate.mockRejectedValue(new Error('boom'))
     expect(await extractProductViaClaude('https://kmart.com/p/1')).toBeNull()
+  })
+})
+
+// Test named in docs/test-scripts/KAS-174.md (C4)
+const apiErr = (status: number, type: string) =>
+  Object.assign(new Error('SECRET-TEXT user@example.com'), { status, error: { error: { type, message: 'SECRET-TEXT' } } })
+
+describe('product-fetch-claude', () => {
+  afterEach(() => vi.restoreAllMocks())
+  it('product-fetch-claude: logs a reason on every failure path', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const cases: Array<[() => void, string]> = [
+      [() => mockCreate.mockRejectedValueOnce(apiErr(400, 'invalid_request_error')), 'product-fetch-claude: anthropic 400 invalid_request_error'],
+      [() => mockCreate.mockRejectedValueOnce(new Error('SECRET-TEXT user@example.com')), 'product-fetch-claude: error Error'],
+      [() => mockCreate.mockResolvedValueOnce({ content: [{ type: 'web_fetch_tool_result', content: { type: 'web_fetch_tool_error' } }] }), 'product-fetch-claude: web_fetch failed'],
+      [() => mockCreate.mockResolvedValueOnce({ content: [] }), 'product-fetch-claude: no text in reply'],
+      [() => mockCreate.mockResolvedValueOnce({ content: [{ type: 'text', text: 'SECRET-TEXT user@example.com' }] }), 'product-fetch-claude: no JSON in reply'],
+    ]
+    for (const [setup, line] of cases) {
+      spy.mockClear()
+      setup()
+      await extractProductViaClaude('https://kmart.com/p/1')
+      expect(spy.mock.calls.map((c) => c.join(' '))).toEqual([line])
+    }
   })
 })

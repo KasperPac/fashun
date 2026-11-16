@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 const mockCreate = vi.hoisted(() => vi.fn())
 vi.mock('@anthropic-ai/sdk', () => ({ default: class { messages = { create: mockCreate } } }))
@@ -83,5 +83,28 @@ describe('searchProduct', () => {
     await searchProduct('white tee', 'THE ICONIC')
     const sent = mockCreate.mock.calls[0][0].messages[0].content as string
     expect(sent).toContain('at the Australian retailer "THE ICONIC"')
+  })
+})
+
+// Test named in docs/test-scripts/KAS-174.md (C4)
+const apiErr = (status: number, type: string) =>
+  Object.assign(new Error('SECRET-TEXT user@example.com'), { status, error: { error: { type, message: 'SECRET-TEXT' } } })
+
+describe('product-search', () => {
+  afterEach(() => vi.restoreAllMocks())
+  it('product-search: logs a reason on every failure path', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const cases: Array<[() => void, string]> = [
+      [() => mockCreate.mockRejectedValueOnce(apiErr(401, 'authentication_error')), 'product-search: anthropic 401 authentication_error'],
+      [() => mockCreate.mockRejectedValueOnce(new Error('SECRET-TEXT user@example.com')), 'product-search: error Error'],
+      [() => mockCreate.mockResolvedValueOnce({ content: [] }), 'product-search: no text in reply'],
+      [() => mockCreate.mockResolvedValueOnce({ content: [{ type: 'text', text: 'SECRET-TEXT user@example.com' }] }), 'product-search: no JSON in reply'],
+    ]
+    for (const [setup, line] of cases) {
+      spy.mockClear()
+      setup()
+      await searchProduct('black shoes', 'THE ICONIC')
+      expect(spy.mock.calls.map((c) => c.join(' '))).toEqual([line])
+    }
   })
 })

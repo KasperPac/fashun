@@ -2,7 +2,7 @@ export const PHOTO_PROBLEM_MESSAGE =
   "We couldn't read your colours from that photo. Try again in daylight with your face filling most of the frame."
 
 export const SERVICE_PROBLEM_MESSAGE =
-  "Fashun's colour service isn't available right now. Please try again in a few minutes."
+  "We couldn't read your colours just now. That's on our side, not your photo, so try again in a few minutes."
 
 /**
  * The message for a failed selfie reading. `status` is the HTTP status of the reading call,

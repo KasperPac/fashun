@@ -16,11 +16,17 @@ const schema = z.object({
 export async function POST(req: Request) {
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!user) {
+    logClaudeFailure('skin-tone', 'not signed in')
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
 
   const body = await req.json().catch(() => ({}))
   const parsed = schema.safeParse(body)
-  if (!parsed.success) return NextResponse.json({ error: 'Invalid image' }, { status: 400 })
+  if (!parsed.success) {
+    logClaudeFailure('skin-tone', 'bad request')
+    return NextResponse.json({ error: 'Invalid image' }, { status: 400 })
+  }
 
   let message: Awaited<ReturnType<typeof anthropic.messages.create>>
   try {

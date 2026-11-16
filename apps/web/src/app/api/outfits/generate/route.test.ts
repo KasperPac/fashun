@@ -128,4 +128,26 @@ describe('POST /api/outfits/generate', () => {
     expect(res.status).toBe(500)
     expect(mockCreate).toHaveBeenCalledTimes(2) // retried once
   })
+
+  it('outfits-generate: logs a reason on every failure path', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const secret = 'SECRET-MODEL-TEXT'
+    const apiError = Object.assign(new Error(`secret ${secret}`), { status: 401, error: { error: { type: 'authentication_error', message: secret } } })
+    const failures: Array<[() => void, string]> = [
+      [() => mockCreate.mockRejectedValue(apiError), 'outfits-generate: anthropic 401 authentication_error'],
+      [() => mockCreate.mockResolvedValue({ content: [{ type: 'text', text: `not json ${secret}` }] }), 'outfits-generate: error SyntaxError'],
+      [() => mockCreate.mockResolvedValue({ content: [{ type: 'tool_use' }] }), 'outfits-generate: error Error'],
+    ]
+    for (const [setup, line] of failures) {
+      spy.mockClear()
+      wardrobeCallCount = 0
+      setup()
+      const res = await POST(new Request('http://localhost/api/outfits/generate', { method: 'POST', body: JSON.stringify({ item_id: '00000000-0000-0000-0000-000000000001' }) }))
+      expect(res.status).toBe(500)
+      const lines = spy.mock.calls.map((c) => c.join(' '))
+      expect(lines).toEqual([line, line])
+      expect(lines.join('')).not.toContain(secret)
+    }
+    spy.mockRestore()
+  })
 })

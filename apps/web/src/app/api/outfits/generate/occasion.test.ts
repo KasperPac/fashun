@@ -95,6 +95,25 @@ describe('POST /api/outfits/generate (occasion only)', () => {
     expect(suggestions).toHaveLength(3)
   })
 
+  it('outfits-generate: logs a reason on every failure path', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const secret = 'SECRET-MODEL-TEXT'
+    const apiError = Object.assign(new Error(`secret ${secret}`), { status: 529, error: { error: { type: 'overloaded_error', message: secret } } })
+    const failures: Array<[() => void, string]> = [
+      [() => mockCreate.mockRejectedValue(apiError), 'outfits-generate: anthropic 529 overloaded_error'],
+      [() => mockCreate.mockResolvedValue({ content: [{ type: 'text', text: `not json ${secret}` }] }), 'outfits-generate: error SyntaxError'],
+    ]
+    for (const [setup, line] of failures) {
+      spy.mockClear()
+      setup()
+      expect((await call({ occasion: 'formal' })).status).toBe(500)
+      const lines = spy.mock.calls.map((c) => c.join(' '))
+      expect(lines).toEqual([line, line])
+      expect(lines.join('')).not.toContain(secret)
+    }
+    spy.mockRestore()
+  })
+
   it('never returns an outfit made of invented ids, even after retrying', async () => {
     mockCreate.mockResolvedValue(reply([outfit([id(404), id(405), FOREIGN_ID])]))
     const res = await call({ occasion: 'formal' })

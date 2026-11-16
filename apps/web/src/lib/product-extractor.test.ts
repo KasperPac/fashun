@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 const mockCreate = vi.hoisted(() => vi.fn())
 vi.mock('@anthropic-ai/sdk', () => ({
@@ -58,5 +58,28 @@ describe('extractProduct', () => {
     const p = await extractProduct(page)
     expect(p.name).toBe('Olive Linen Shirt')
     expect(p.colours).toEqual(['#556B2F'])
+  })
+})
+
+// Test named in docs/test-scripts/KAS-174.md (C4)
+const apiErr = (status: number, type: string) =>
+  Object.assign(new Error('SECRET-TEXT user@example.com'), { status, error: { error: { type, message: 'SECRET-TEXT' } } })
+
+describe('product-extractor', () => {
+  afterEach(() => vi.restoreAllMocks())
+  it('product-extractor: logs a reason on every failure path', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const cases: Array<[() => void, string]> = [
+      [() => mockCreate.mockRejectedValueOnce(apiErr(429, 'rate_limit_error')), 'product-extractor: anthropic 429 rate_limit_error'],
+      [() => mockCreate.mockRejectedValueOnce(new Error('SECRET-TEXT user@example.com')), 'product-extractor: error Error'],
+      [() => mockCreate.mockResolvedValueOnce({ content: [{ type: 'tool_use' }] }), 'product-extractor: no text in reply'],
+      [() => mockCreate.mockResolvedValueOnce({ content: [{ type: 'text', text: 'SECRET-TEXT user@example.com' }] }), 'product-extractor: no JSON in reply'],
+    ]
+    for (const [setup, line] of cases) {
+      spy.mockClear()
+      setup()
+      await extractProduct(page)
+      expect(spy.mock.calls.map((c) => c.join(' '))).toEqual([line])
+    }
   })
 })

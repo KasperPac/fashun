@@ -21,6 +21,7 @@ vi.mock('@/lib/supabase/server', () => ({
 }))
 
 import { POST } from './route'
+import { selfieFailureMessage, PHOTO_PROBLEM_MESSAGE, SERVICE_PROBLEM_MESSAGE } from '@/lib/selfie-messages'
 
 const IMAGE = 'A'.repeat(200)
 
@@ -174,6 +175,102 @@ describe('POST /api/onboarding/skin-tone', () => {
       modelReplies(JSON.stringify({ undertone: 'warm', depth: 'light', hairColour: 'purple', eyeColour: 'blue', suggestedStyles: ['casual'] }))
       expect((await request()).status).toBe(200)
       expect(logged()).toEqual(['skin-tone: dropped: hairColour'])
+    })
+
+    // Tests named in docs/test-scripts/KAS-174.md (sections B and C)
+    const SERVICE_FAILURES: Array<[string, number, string]> = [
+      ['bad key', 401, 'authentication_error'],
+      ['no credit', 400, 'invalid_request_error'],
+      ['rejected request', 403, 'permission_error'],
+      ['rate limited', 429, 'rate_limit_error'],
+      ['overloaded', 529, 'overloaded_error'],
+    ]
+    const apiError = (status: number, type: string) =>
+      Object.assign(new Error('secret text ' + IMAGE), { status, error: { type: 'error', error: { type, message: 'secret text' } } })
+
+    it('service failure shows the service message', async () => {
+      for (const [, status, type] of SERVICE_FAILURES) {
+        mockCreate.mockRejectedValue(apiError(status, type))
+        const res = await request()
+        expect(res.status).toBe(502)
+        expect(selfieFailureMessage(res.status)).toBe(SERVICE_PROBLEM_MESSAGE)
+      }
+      mockCreate.mockRejectedValue(new Error('timed out'))
+      expect((await request()).status).toBe(502)
+    })
+
+    it('save failure shows the service message', async () => {
+      modelReplies(GOOD)
+      mockEq.mockResolvedValue({ error: { message: 'x', code: '23514' } })
+      const res = await request()
+      expect(res.status).toBe(500)
+      expect(selfieFailureMessage(res.status)).toBe(SERVICE_PROBLEM_MESSAGE)
+    })
+
+    it('unreadable photo shows the photo message', async () => {
+      for (const text of ['', 'sorry, I cannot do that', '{"undertone":"purple","depth":"light"}', '{"undertone":"warm"}']) {
+        modelReplies(text)
+        const res = await request()
+        expect(res.status).toBe(422)
+        expect(selfieFailureMessage(res.status)).toBe(PHOTO_PROBLEM_MESSAGE)
+      }
+      expect(mockUpdate).not.toHaveBeenCalled()
+    })
+
+    it('fails cleanly on an unreadable answer', async () => {
+      for (const text of ['', 'plain sentences only', '{"undertone": "warm", "depth": "li']) {
+        modelReplies(text)
+        expect((await request()).status).toBe(422)
+      }
+      expect(mockUpdate).not.toHaveBeenCalled()
+    })
+
+    it('logs a reason on every failure path', async () => {
+      const expectOneLine = async (setup: () => void, line: string) => {
+        vi.mocked(console.error).mockClear()
+        mockEq.mockResolvedValue({ error: null })
+        setup()
+        await request(line === 'skin-tone: bad request' ? {} : undefined)
+        expect(logged()).toEqual([line])
+      }
+      await expectOneLine(() => mockGetUser.mockResolvedValueOnce({ data: { user: null } }), 'skin-tone: not signed in')
+      await expectOneLine(() => {}, 'skin-tone: bad request')
+      for (const [, status, type] of SERVICE_FAILURES) {
+        await expectOneLine(() => mockCreate.mockRejectedValue(apiError(status, type)), `skin-tone: anthropic ${status} ${type}`)
+      }
+      await expectOneLine(() => mockCreate.mockResolvedValue({ content: [] }), 'skin-tone: no text in reply')
+      await expectOneLine(() => modelReplies('plain sentences'), 'skin-tone: no JSON in reply')
+      await expectOneLine(() => modelReplies('{"depth":"light"}'), 'skin-tone: parse failed: undertone')
+      await expectOneLine(() => modelReplies('{"undertone":"warm"}'), 'skin-tone: parse failed: depth')
+      await expectOneLine(() => { modelReplies(GOOD); mockEq.mockResolvedValue({ error: { message: 'x', code: '23514' } }) }, 'skin-tone: save failed 23514')
+    })
+
+    it('dropped field logs no model text', async () => {
+      modelReplies(JSON.stringify({ undertone: 'warm', depth: 'light', hairColour: 'SECRET-HAIR', eyeColour: 'SECRET-EYE', suggestedStyles: ['SECRET-STYLE'] }))
+      expect((await request()).status).toBe(200)
+      expect(logged()).toEqual(['skin-tone: dropped: hairColour', 'skin-tone: dropped: eyeColour', 'skin-tone: dropped: suggestedStyles'])
+      expect(logged().join('')).not.toContain('SECRET')
+    })
+
+    it('failure logs contain no photo, model text or personal data', async () => {
+      const email = 'test.person@example.com'
+      const name = 'Testy McTestface'
+      mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1', email, user_metadata: { full_name: name } } } })
+      const runs: Array<() => void> = [
+        () => mockCreate.mockRejectedValue(Object.assign(new Error(`${email} ${name} ${IMAGE}`), { status: 400, error: { error: { type: 'invalid_request_error', message: `${email} ${IMAGE}` } } })),
+        () => mockCreate.mockRejectedValue(new TypeError(`fetch failed ${email} ${name}`)),
+        () => modelReplies(`{"undertone":"MODEL-TEXT ${email} ${name}","depth":"light"}`),
+        () => modelReplies(`MODEL-TEXT ${email} ${name} ${IMAGE}`),
+        () => { modelReplies(GOOD); mockEq.mockResolvedValue({ error: { message: `${email} ${name}`, code: '23514' } }) },
+      ]
+      for (const run of runs) {
+        mockEq.mockResolvedValue({ error: null })
+        run()
+        await request()
+      }
+      expect(logged().length).toBe(runs.length)
+      const all = logged().join('\n')
+      for (const forbidden of [email, name, 'MODEL-TEXT', IMAGE, 'user-1']) expect(all).not.toContain(forbidden)
     })
   })
 })

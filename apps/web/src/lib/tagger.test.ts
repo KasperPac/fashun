@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 
 // vi.hoisted ensures this is available when vi.mock factory runs (hoisting order)
 const mockCreate = vi.hoisted(() =>
@@ -115,5 +115,29 @@ describe('tagImage', () => {
     expect(result.suggestedName).toBe('Black Sneakers')
     expect(result.category).toBe('shoes')
     expect(result.searchQuery).toBe('nike air force 1')
+  })
+})
+
+// Test named in docs/test-scripts/KAS-174.md (C4)
+const apiErr = (status: number, type: string) =>
+  Object.assign(new Error('SECRET-TEXT user@example.com'), { status, error: { error: { type, message: 'SECRET-TEXT' } } })
+
+describe('tagger', () => {
+  afterEach(() => vi.restoreAllMocks())
+  it('tagger: logs a reason on every failure path', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const cases: Array<[() => void, string]> = [
+      [() => mockCreate.mockRejectedValueOnce(apiErr(401, 'authentication_error')), 'tagger: anthropic 401 authentication_error'],
+      [() => mockCreate.mockRejectedValueOnce(apiErr(529, 'overloaded_error')), 'tagger: anthropic 529 overloaded_error'],
+      [() => mockCreate.mockRejectedValueOnce(new Error('SECRET-TEXT user@example.com')), 'tagger: error Error'],
+      [() => mockCreate.mockResolvedValueOnce({ content: [{ type: 'tool_use' }] }), 'tagger: no text in reply'],
+      [() => mockCreate.mockResolvedValueOnce({ content: [{ type: 'text', text: 'SECRET-TEXT user@example.com' }] }), 'tagger: no JSON in reply'],
+    ]
+    for (const [setup, line] of cases) {
+      spy.mockClear()
+      setup()
+      await tagImage('BASE64')
+      expect(spy.mock.calls.map((c) => c.join(' '))).toEqual([line])
+    }
   })
 })
