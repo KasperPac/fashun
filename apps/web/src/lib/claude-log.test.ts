@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
+import Anthropic from '@anthropic-ai/sdk'
 import { describeClaudeError, logClaudeError } from './claude-log'
 
 class FakeApiError extends Error {
@@ -20,11 +21,11 @@ describe('describeClaudeError', () => {
     expect(describeClaudeError(new TypeError('fetch failed for user@example.com'))).toBe('error TypeError')
     expect(describeClaudeError('boom')).toBe('error unknown')
   })
-  it('uses the class name when the SDK leaves name as "Error" (connection errors and timeouts)', () => {
-    class APIConnectionTimeoutError extends Error {}
-    class APIConnectionError extends Error {}
-    expect(describeClaudeError(new APIConnectionTimeoutError('Request timed out.'))).toBe('error APIConnectionTimeoutError')
-    expect(describeClaudeError(new APIConnectionError('Connection error for user@example.com'))).toBe('error APIConnectionError')
+  it('names timeouts and connection errors with fixed strings, using the SDK real classes', () => {
+    expect(describeClaudeError(new Anthropic.APIConnectionTimeoutError())).toBe('error APIConnectionTimeoutError')
+    expect(describeClaudeError(new Anthropic.APIConnectionTimeoutError({ message: 'for user@example.com' }))).toBe('error APIConnectionTimeoutError')
+    const lost = new Anthropic.APIConnectionError({ message: 'Connection error for user@example.com', cause: new TypeError('fetch failed') })
+    expect(describeClaudeError(lost)).toBe('error APIConnectionError')
     expect(describeClaudeError(new Error('plain'))).toBe('error Error')
   })
 })

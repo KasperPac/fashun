@@ -3,14 +3,20 @@
  * never the image, the model's text, or anything about the user.
  */
 
+import { APIConnectionError, APIConnectionTimeoutError } from '@anthropic-ai/sdk/error'
+
 const SAFE_TOKEN = /^[a-z0-9_.-]{1,60}$/i
 
 function safeToken(value: unknown): string | null {
   return typeof value === 'string' && SAFE_TOKEN.test(value) ? value : null
 }
 
-/** "anthropic 401 authentication_error" for SDK API errors, otherwise just the error class name. */
+/** "anthropic 401 authentication_error" for SDK API errors, connection errors and timeouts by fixed names, otherwise the error name. */
 export function describeClaudeError(err: unknown): string {
+  // Fixed strings chosen by instanceof: bundlers rename or drop class names, so names can't be relied on.
+  // The timeout class extends the connection class, so it is checked first.
+  if (err instanceof APIConnectionTimeoutError) return 'error APIConnectionTimeoutError'
+  if (err instanceof APIConnectionError) return 'error APIConnectionError'
   if (typeof err === 'object' && err !== null) {
     const e = err as { status?: unknown; error?: unknown; name?: unknown }
     if (typeof e.status === 'number') {
@@ -18,9 +24,7 @@ export function describeClaudeError(err: unknown): string {
       const type = safeToken(body?.error?.type)
       return type ? `anthropic ${e.status} ${type}` : `anthropic ${e.status}`
     }
-    // The SDK leaves `name` as "Error" for connection errors and timeouts: the class name tells them apart.
-    const ctor = (err as { constructor?: { name?: unknown } }).constructor?.name
-    const name = safeToken(e.name !== 'Error' ? e.name : ctor) ?? safeToken(e.name)
+    const name = safeToken(e.name)
     if (name) return `error ${name}`
   }
   return 'error unknown'
