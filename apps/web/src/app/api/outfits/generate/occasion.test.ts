@@ -250,4 +250,13 @@ describe('POST /api/outfits/generate (occasion only)', () => {
     await call({ occasion: 'formal' })
     expect(mockCreate).toHaveBeenCalledTimes(1)
   })
+
+  it('outfits-generate: logs one line per attempt when no outfit survives validation', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    mockCreate.mockResolvedValue(reply([outfit([id(404), id(405), FOREIGN_ID])]))
+    const res = await call({ occasion: 'formal' })
+    expect(res.status).toBe(500)
+    expect(spy.mock.calls.map((c) => c.join(' '))).toEqual(['outfits-generate: no usable outfits', 'outfits-generate: no usable outfits'])
+    spy.mockRestore()
+  })
 })

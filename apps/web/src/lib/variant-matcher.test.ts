@@ -18,7 +18,10 @@ describe('matchVariantToPhoto', () => {
 
   it('returns null when the label does not match any variant', async () => {
     mockCreate.mockResolvedValue({ content: [{ type: 'text', text: '{"label":"Pink"}' }] })
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
     expect(await matchVariantToPhoto(variants, 'BASE64DATA')).toBeNull()
+    expect(spy).toHaveBeenCalledExactlyOnceWith('variant-matcher: no matching option')
+    spy.mockRestore()
   })
 
   it('returns null on Claude error', async () => {

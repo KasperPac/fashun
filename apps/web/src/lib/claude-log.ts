@@ -18,7 +18,9 @@ export function describeClaudeError(err: unknown): string {
       const type = safeToken(body?.error?.type)
       return type ? `anthropic ${e.status} ${type}` : `anthropic ${e.status}`
     }
-    const name = safeToken(e.name)
+    // The SDK leaves `name` as "Error" for connection errors and timeouts: the class name tells them apart.
+    const ctor = (err as { constructor?: { name?: unknown } }).constructor?.name
+    const name = safeToken(e.name !== 'Error' ? e.name : ctor) ?? safeToken(e.name)
     if (name) return `error ${name}`
   }
   return 'error unknown'

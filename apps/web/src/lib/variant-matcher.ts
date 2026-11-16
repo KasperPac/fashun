@@ -36,7 +36,9 @@ Return ONLY JSON: {"label":"exact option label"}`,
     }
     const parsed = extractJson<{ label?: unknown }>(content.text, 'object')
     const label = parsed?.label
-    return variants.find(v => v.label === label) ?? null
+    const match = variants.find(v => v.label === label)
+    if (!match) logClaudeFailure('variant-matcher', 'no matching option')
+    return match ?? null
   } catch (err) {
     logClaudeError('variant-matcher', err)
     return null

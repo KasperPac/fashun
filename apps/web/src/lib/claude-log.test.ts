@@ -20,6 +20,13 @@ describe('describeClaudeError', () => {
     expect(describeClaudeError(new TypeError('fetch failed for user@example.com'))).toBe('error TypeError')
     expect(describeClaudeError('boom')).toBe('error unknown')
   })
+  it('uses the class name when the SDK leaves name as "Error" (connection errors and timeouts)', () => {
+    class APIConnectionTimeoutError extends Error {}
+    class APIConnectionError extends Error {}
+    expect(describeClaudeError(new APIConnectionTimeoutError('Request timed out.'))).toBe('error APIConnectionTimeoutError')
+    expect(describeClaudeError(new APIConnectionError('Connection error for user@example.com'))).toBe('error APIConnectionError')
+    expect(describeClaudeError(new Error('plain'))).toBe('error Error')
+  })
 })
 
 describe('logClaudeError', () => {

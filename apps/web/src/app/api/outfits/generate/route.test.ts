@@ -142,7 +142,7 @@ describe('POST /api/outfits/generate', () => {
       spy.mockClear()
       wardrobeCallCount = 0
       setup()
-      const res = await POST(new Request('http://localhost/api/outfits/generate', { method: 'POST', body: JSON.stringify({ item_id: '00000000-0000-0000-0000-000000000001' }) }))
+      const res = (await POST(new Request('http://localhost/api/outfits/generate', { method: 'POST', body: JSON.stringify({ item_id: '00000000-0000-0000-0000-000000000001' }) })))!
       expect(res.status).toBe(500)
       const lines = spy.mock.calls.map((c) => c.join(' '))
       expect(lines).toEqual([line, line])

@@ -35,7 +35,7 @@ describe('selfie messages for each status', () => {
   it('connection lost shows the service message', async () => {
     // Mirrors the selfie page: fetch itself throws, the page's catch reports "no status" (null).
     const lost = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'))
-    let status: number | null | undefined
+    let status: number | null
     try {
       const res = await lost('/api/onboarding/skin-tone', { method: 'POST' })
       status = res.status
