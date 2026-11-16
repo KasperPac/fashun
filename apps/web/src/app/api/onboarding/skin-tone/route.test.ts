@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 const { mockCreate } = vi.hoisted(() => ({ mockCreate: vi.fn() }))
 vi.mock('@anthropic-ai/sdk', () => ({
@@ -94,9 +94,9 @@ describe('POST /api/onboarding/skin-tone', () => {
   it.each([
     ['not JSON', 'sorry, I cannot do that'],
     ['broken JSON', '{"undertone": "warm", '],
-    ['missing fields', '{"undertone":"warm","depth":"light"}'],
-    ['invalid values', JSON.stringify({ undertone: 'purple', depth: 'light', hairColour: 'blonde', eyeColour: 'blue', suggestedStyles: ['casual'] })],
-    ['no styles', JSON.stringify({ undertone: 'warm', depth: 'light', hairColour: 'blonde', eyeColour: 'blue', suggestedStyles: [] })],
+    ['missing depth', '{"undertone":"warm"}'],
+    ['missing undertone', '{"depth":"light"}'],
+    ['invalid undertone', JSON.stringify({ undertone: 'purple', depth: 'light', hairColour: 'blonde', eyeColour: 'blue', suggestedStyles: ['casual'] })],
   ])('returns 422 and saves nothing for a malformed response (%s)', async (_n, text) => {
     modelReplies(text)
     const res = await request()
@@ -104,20 +104,76 @@ describe('POST /api/onboarding/skin-tone', () => {
     expect(mockUpdate).not.toHaveBeenCalled()
   })
 
+  it('forgives a minor mismatch: variants, unknown hair/eye, odd styles', async () => {
+    modelReplies(JSON.stringify({
+      undertone: 'Warm', depth: 'light', hairColour: 'Dark Brown', eyeColour: 'violet',
+      suggestedStyles: ['smart casual', 'goth', 'casual', 'business', 'glam', 'streetwear'],
+    }))
+    const res = await request()
+    expect(res.status).toBe(200)
+    const json = await res.json()
+    expect(json).toMatchObject({ hairColour: 'dark-brown', eyeColour: null, suggestedStyles: ['smart-casual', 'casual', 'business', 'glam'] })
+    expect(mockUpdate.mock.calls[0][0]).toMatchObject({ hair_colour: 'dark-brown', eye_colour: null })
+  })
+
+  it('saves an empty style list rather than failing', async () => {
+    modelReplies(JSON.stringify({ undertone: 'warm', depth: 'light', hairColour: 'blonde', eyeColour: 'blue', suggestedStyles: [] }))
+    expect((await request()).status).toBe(200)
+    expect(mockUpdate.mock.calls[0][0].suggested_styles).toEqual([])
+  })
+
   it('returns 422 for a non-text model response', async () => {
     mockCreate.mockResolvedValue({ content: [] })
     expect((await request()).status).toBe(422)
   })
 
-  it('returns 502 when the AI call fails', async () => {
-    mockCreate.mockRejectedValue(new Error('down'))
-    expect((await request()).status).toBe(502)
-    expect(mockUpdate).not.toHaveBeenCalled()
-  })
+  describe('logging', () => {
+    const logged = () => vi.mocked(console.error).mock.calls.map((c) => c.join(' '))
+    beforeEach(() => { vi.spyOn(console, 'error').mockImplementation(() => {}) })
+    afterEach(() => vi.restoreAllMocks())
 
-  it('returns 500 when saving fails', async () => {
-    modelReplies(GOOD)
-    mockEq.mockResolvedValue({ error: { message: 'boom' } })
-    expect((await request()).status).toBe(500)
+    it('returns 502 and logs status and type when the AI call fails', async () => {
+      const err = Object.assign(new Error('invalid x-api-key sk-ant-secret ' + IMAGE), {
+        status: 401, error: { type: 'error', error: { type: 'authentication_error', message: 'invalid x-api-key' } },
+      })
+      mockCreate.mockRejectedValue(err)
+      expect((await request()).status).toBe(502)
+      expect(mockUpdate).not.toHaveBeenCalled()
+      expect(logged()).toEqual(['skin-tone: anthropic 401 authentication_error'])
+    })
+
+    it('returns 502 for a network-style failure and logs only the error name', async () => {
+      mockCreate.mockRejectedValue(new Error('down'))
+      expect((await request()).status).toBe(502)
+      expect(logged()).toEqual(['skin-tone: error Error'])
+    })
+
+    it('returns 500 when saving fails and logs the code only', async () => {
+      modelReplies(GOOD)
+      mockEq.mockResolvedValue({ error: { message: 'violates check for user-1', code: '23514' } })
+      expect((await request()).status).toBe(500)
+      expect(logged()).toEqual(['skin-tone: save failed 23514'])
+    })
+
+    it('logs the failing field on a 422 and never the model text or image', async () => {
+      const secret = 'SECRET-MODEL-TEXT'
+      modelReplies(`{"undertone":"${secret}","depth":"light","note":"${IMAGE}"}`)
+      expect((await request()).status).toBe(422)
+      expect(logged()).toEqual(['skin-tone: parse failed: undertone'])
+      expect(logged().join('')).not.toContain(secret)
+      expect(logged().join('')).not.toContain(IMAGE)
+    })
+
+    it('logs no JSON in reply', async () => {
+      modelReplies('sorry, I cannot do that')
+      await request()
+      expect(logged()).toEqual(['skin-tone: no JSON in reply'])
+    })
+
+    it('logs which fields were dropped', async () => {
+      modelReplies(JSON.stringify({ undertone: 'warm', depth: 'light', hairColour: 'purple', eyeColour: 'blue', suggestedStyles: ['casual'] }))
+      expect((await request()).status).toBe(200)
+      expect(logged()).toEqual(['skin-tone: dropped: hairColour'])
+    })
   })
 })

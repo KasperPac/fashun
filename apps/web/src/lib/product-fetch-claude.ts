@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { sanitiseOccasionTags, type WardrobeCategory } from '@fashun/shared'
 import type { ExtractedProduct, ColourVariant } from './product-extractor'
 import { extractJson } from './extract-json'
+import { logClaudeError, logClaudeFailure } from './claude-log'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -54,18 +55,27 @@ Rules:
       (b: { type: string; content?: { type?: string } }) =>
         b.type === 'web_fetch_tool_result' && b.content?.type === 'web_fetch_tool_error',
     )
-    if (fetchFailed) return null
+    if (fetchFailed) {
+      logClaudeFailure('product-fetch-claude', 'web_fetch failed')
+      return null
+    }
 
     // Final text block is the answer (tool-use / tool-result blocks precede it).
     const texts = message.content.filter((b): b is { type: 'text'; text: string } => b.type === 'text')
     const last = texts[texts.length - 1]
-    if (!last) return null
+    if (!last) {
+      logClaudeFailure('product-fetch-claude', 'no text in reply')
+      return null
+    }
 
     // The model may narrate before the JSON (esp. after a tool call), so extract
     // the object out of any prose/fence rather than parsing the whole block.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const parsed = extractJson<any>(last.text, 'object')
-    if (!parsed) return null
+    if (!parsed) {
+      logClaudeFailure('product-fetch-claude', 'no JSON in reply')
+      return null
+    }
 
     const category: WardrobeCategory = CATEGORIES.includes(parsed.category) ? parsed.category : 'tops'
     const colourVariants: ColourVariant[] = Array.isArray(parsed.colourVariants)
@@ -90,7 +100,8 @@ Rules:
       colourVariants,
       colours,
     }
-  } catch {
+  } catch (err) {
+    logClaudeError('product-fetch-claude', err)
     return null
   }
 }

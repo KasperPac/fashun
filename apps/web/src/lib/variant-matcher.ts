@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import type { ColourVariant } from './product-extractor'
 import { extractJson } from './extract-json'
 import { mediaTypeFromBase64 } from './image-media-type'
+import { logClaudeError, logClaudeFailure } from './claude-log'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -29,11 +30,15 @@ Return ONLY JSON: {"label":"exact option label"}`,
       }],
     })
     const content = message.content[0]
-    if (content.type !== 'text') return null
+    if (content.type !== 'text') {
+      logClaudeFailure('variant-matcher', 'no text in reply')
+      return null
+    }
     const parsed = extractJson<{ label?: unknown }>(content.text, 'object')
     const label = parsed?.label
     return variants.find(v => v.label === label) ?? null
-  } catch {
+  } catch (err) {
+    logClaudeError('variant-matcher', err)
     return null
   }
 }

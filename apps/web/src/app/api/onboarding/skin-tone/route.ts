@@ -4,19 +4,13 @@ import { createServerClient } from '@/lib/supabase/server'
 import { determineColourSeason, getProfileColours, HAIR_COLOURS, EYE_COLOURS, STYLE_PREFS } from '@fashun/shared'
 import type { ColourProfileResponse } from '@fashun/shared'
 import { z } from 'zod'
+import { logClaudeError, logClaudeFailure } from '@/lib/claude-log'
+import { parseSkinToneReply } from '@/lib/skin-tone-parse'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 const schema = z.object({
   imageBase64: z.string().min(100),
-})
-
-const AnalysisSchema = z.object({
-  undertone: z.enum(['warm', 'cool', 'neutral']),
-  depth: z.enum(['light', 'medium', 'deep']),
-  hairColour: z.enum(HAIR_COLOURS),
-  eyeColour: z.enum(EYE_COLOURS),
-  suggestedStyles: z.array(z.enum(STYLE_PREFS)).min(1).max(4),
 })
 
 export async function POST(req: Request) {
@@ -46,33 +40,30 @@ export async function POST(req: Request) {
 {"undertone": "warm|cool|neutral", "depth": "light|medium|deep", "hairColour": "${HAIR_COLOURS.join('|')}", "eyeColour": "${EYE_COLOURS.join('|')}", "suggestedStyles": ["style", "style"]}
 undertone: warm = yellow/olive/peachy, cool = pink/blue/rosy, neutral = mix of both.
 depth: light = fair/light, medium = medium/tan/olive, deep = dark/deep brown.
-hairColour and eyeColour: pick the closest option.
-suggestedStyles: 2 to 4 of ${STYLE_PREFS.join(', ')} that would suit this person.
+hairColour and eyeColour: use exactly one of the listed values, the closest option.
+suggestedStyles: 2 to 4, each exactly one of ${STYLE_PREFS.join(', ')}, that would suit this person.
 No explanation, no markdown, just the JSON object.`,
           },
         ],
       }],
     })
-  } catch {
+  } catch (err) {
+    logClaudeError('skin-tone', err)
     return NextResponse.json({ error: 'Could not analyse selfie' }, { status: 502 })
   }
 
-  let analysis: z.infer<typeof AnalysisSchema>
-  try {
-    const textContent = 'content' in message ? message.content[0] : undefined
-    if (!textContent || textContent.type !== 'text') throw new Error('unexpected response type')
-    // Strip markdown code fences if Claude wraps the JSON
-    const cleaned = textContent.text
-      .replace(/^```(?:json)?\s*/i, '')
-      .replace(/\s*```\s*$/i, '')
-      .trim()
-    // Extract first JSON object in case there's surrounding text
-    const jsonMatch = cleaned.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) throw new Error('no JSON found')
-    analysis = AnalysisSchema.parse(JSON.parse(jsonMatch[0]))
-  } catch {
+  const textContent = 'content' in message ? message.content[0] : undefined
+  if (!textContent || textContent.type !== 'text') {
+    logClaudeFailure('skin-tone', 'no text in reply')
     return NextResponse.json({ error: 'Could not analyse skin tone' }, { status: 422 })
   }
+  const reading = parseSkinToneReply(textContent.text)
+  if (!reading.ok) {
+    logClaudeFailure('skin-tone', reading.reason)
+    return NextResponse.json({ error: 'Could not analyse skin tone' }, { status: 422 })
+  }
+  for (const field of reading.dropped) logClaudeFailure('skin-tone', `dropped: ${field}`)
+  const analysis = reading.analysis
 
   const season = determineColourSeason(analysis.undertone, analysis.depth)
   const { best, avoid } = getProfileColours(season)
@@ -91,7 +82,10 @@ No explanation, no markdown, just the JSON object.`,
       suggested_styles: analysis.suggestedStyles,
     })
     .eq('id', user.id)
-  if (error) return NextResponse.json({ error: 'Could not save colour profile' }, { status: 500 })
+  if (error) {
+    logClaudeFailure('skin-tone', `save failed ${error.code ?? 'unknown'}`)
+    return NextResponse.json({ error: 'Could not save colour profile' }, { status: 500 })
+  }
 
   const result: ColourProfileResponse = {
     undertone: analysis.undertone,

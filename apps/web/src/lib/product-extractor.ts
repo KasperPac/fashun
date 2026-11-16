@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { sanitiseOccasionTags, type OccasionTag, type WardrobeCategory } from '@fashun/shared'
 import type { ScrapedPage } from './product-scraper'
 import { extractJson } from './extract-json'
+import { logClaudeError, logClaudeFailure } from './claude-log'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -66,11 +67,17 @@ Rules:
       messages: [{ role: 'user', content: prompt }],
     })
     const content = message.content[0]
-    if (content.type !== 'text') return fallback
+    if (content.type !== 'text') {
+      logClaudeFailure('product-extractor', 'no text in reply')
+      return fallback
+    }
     // The model may wrap the JSON in prose/fence; extract the object out of it.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const parsed = extractJson<any>(content.text, 'object')
-    if (!parsed) return fallback
+    if (!parsed) {
+      logClaudeFailure('product-extractor', 'no JSON in reply')
+      return fallback
+    }
 
     const category: WardrobeCategory = CATEGORIES.includes(parsed.category) ? parsed.category : 'tops'
     const colourVariants: ColourVariant[] = Array.isArray(parsed.colourVariants)
@@ -95,7 +102,8 @@ Rules:
       colourVariants,
       colours,
     }
-  } catch {
+  } catch (err) {
+    logClaudeError('product-extractor', err)
     return fallback
   }
 }

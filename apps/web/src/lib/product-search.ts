@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { extractJson } from './extract-json'
+import { logClaudeError, logClaudeFailure } from './claude-log'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -33,9 +34,15 @@ After searching, reply with ONLY a JSON array (no markdown):
     // the array out of the prose/fence rather than parsing the whole block.
     const texts = message.content.filter((b): b is { type: 'text'; text: string } => b.type === 'text')
     const last = texts[texts.length - 1]
-    if (!last) return []
+    if (!last) {
+      logClaudeFailure('product-search', 'no text in reply')
+      return []
+    }
     const parsed = extractJson<ProductCandidate[]>(last.text, 'array')
-    if (!Array.isArray(parsed)) return []
+    if (!Array.isArray(parsed)) {
+      logClaudeFailure('product-search', 'no JSON in reply')
+      return []
+    }
     return parsed
       .filter((c: ProductCandidate) => c && typeof c.url === 'string' && /^https?:\/\//.test(c.url))
       .map((c: ProductCandidate) => ({
@@ -44,7 +51,8 @@ After searching, reply with ONLY a JSON array (no markdown):
         imageUrl: typeof c.imageUrl === 'string' ? c.imageUrl : null,
         retailer: typeof c.retailer === 'string' ? c.retailer : (store || null),
       }))
-  } catch {
+  } catch (err) {
+    logClaudeError('product-search', err)
     return []
   }
 }

@@ -94,8 +94,9 @@ export interface ProcessItemResponse {
 export interface ColourProfileResponse {
   undertone: SkinUndertone
   depth: SkinDepth
-  hairColour: HairColour
-  eyeColour: EyeColour
+  /** Null when the photo reading didn't give a usable value; shown as "not set". */
+  hairColour: HairColour | null
+  eyeColour: EyeColour | null
   season: ColourSeason
   bestColours: string[]
   avoidColours: string[]
