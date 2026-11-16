@@ -9,6 +9,7 @@ import {
   type BuiltOutfit, type OwnedItem,
 } from '@/lib/outfit-builder'
 import { signWardrobeImage } from '@/lib/wardrobe-image'
+import { logClaudeError, logClaudeFailure } from '@/lib/claude-log'
 
 let _anthropic: Anthropic | null = null
 function getAnthropic(): Anthropic {
@@ -107,8 +108,11 @@ async function generateForOccasion(supabase: Awaited<ReturnType<typeof createSer
       if (content.type !== 'text') throw new Error('Unexpected content type')
       const raw = content.text.trim().replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
       const parsed = OccasionSuggestionsSchema.parse(JSON.parse(raw))
-      outfits.push(...validateSuggestions(parsed, eligible, occasion, colourSeason, seen, target - outfits.length).slice(0, target - outfits.length))
-    } catch {
+      const usable = validateSuggestions(parsed, eligible, occasion, colourSeason, seen, target - outfits.length).slice(0, target - outfits.length)
+      if (usable.length === 0) logClaudeFailure('outfits-generate', 'no usable outfits')
+      outfits.push(...usable)
+    } catch (err) {
+      logClaudeError('outfits-generate', err)
       // try once more; the outcome is judged below
     }
   }
@@ -243,7 +247,8 @@ export async function POST(req: Request) {
       const raw = content.text.trim().replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
       const suggestions = SuggestionsSchema.parse(JSON.parse(raw))
       return NextResponse.json({ suggestions })
-    } catch {
+    } catch (err) {
+      logClaudeError('outfits-generate', err)
       if (attempt === 1) return NextResponse.json({ error: 'Failed to generate outfits' }, { status: 500 })
     }
   }

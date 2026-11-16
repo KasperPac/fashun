@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
 import { onboardingHref, showOnboardingSignOut } from '@/lib/onboarding-back'
 import { photoToJpegBase64 } from '@/lib/image-resize'
+import { selfieFailureMessage } from '@/lib/selfie-messages'
 import { Button } from '@/components/ui/Button'
 import { SelfieFrame } from '@/components/ui/Onboarding'
 
@@ -47,6 +48,7 @@ function SelfieContent() {
   const [file, setFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [phase, setPhase] = useState<Phase>('idle')
+  const [failureStatus, setFailureStatus] = useState<number | null>(null)
 
   useEffect(() => {
     return () => {
@@ -72,16 +74,30 @@ function SelfieContent() {
   async function readColours() {
     if (!file) return
     setPhase('reading')
+    let imageBase64: string
     try {
-      const imageBase64 = await photoToJpegBase64(file)
+      imageBase64 = await photoToJpegBase64(file)
+    } catch {
+      // The photo itself couldn't be read, so it gets the "try another photo" message.
+      setFailureStatus(422)
+      setPhase('failed')
+      return
+    }
+    try {
       const res = await fetch('/api/onboarding/skin-tone', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ imageBase64 }),
       })
-      if (!res.ok) throw new Error('could not read')
+      if (!res.ok) {
+        setFailureStatus(res.status)
+        setPhase('failed')
+        return
+      }
       router.push(onboardingHref('/onboarding/profile', from))
     } catch {
+      // Network failure: the service couldn't be reached.
+      setFailureStatus(null)
       setPhase('failed')
     }
   }
@@ -119,9 +135,7 @@ function SelfieContent() {
 
       {phase === 'failed' && (
         <div role="alert" className="flex flex-col gap-3">
-          <p className="text-base font-semibold">
-            We couldn&apos;t read your colours from that photo. Try again in daylight with your face filling most of the frame.
-          </p>
+          <p className="text-base font-semibold">{selfieFailureMessage(failureStatus)}</p>
           <Button onClick={reset}>Try again</Button>
           <Button variant="text" onClick={() => router.push(onboardingHref('/onboarding/profile', from, 'manual=1'))}>
             Enter my details by hand

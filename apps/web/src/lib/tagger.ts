@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { sanitiseOccasionTags, type OccasionTag, type WardrobeCategory } from '@fashun/shared'
 import { extractJson } from './extract-json'
 import { mediaTypeFromBase64 } from './image-media-type'
+import { logClaudeError, logClaudeFailure } from './claude-log'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -63,11 +64,17 @@ No markdown, no explanation, just the JSON.`,
     })
 
     const content = message.content[0]
-    if (content.type !== 'text') return FALLBACK
+    if (content.type !== 'text') {
+      logClaudeFailure('tagger', 'no text in reply')
+      return FALLBACK
+    }
     // The model may wrap the JSON in prose/a fence; extract the object out of it.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const parsed = extractJson<any>(content.text, 'object')
-    if (!parsed) return FALLBACK
+    if (!parsed) {
+      logClaudeFailure('tagger', 'no JSON in reply')
+      return FALLBACK
+    }
     return {
       isClothing: parsed.isClothing !== false,
       category: CATEGORIES.includes(parsed.category) ? parsed.category : FALLBACK.category,
@@ -77,7 +84,8 @@ No markdown, no explanation, just the JSON.`,
       suggestedName: parsed.suggestedName ?? FALLBACK.suggestedName,
       searchQuery: typeof parsed.searchQuery === 'string' ? parsed.searchQuery : '',
     }
-  } catch {
+  } catch (err) {
+    logClaudeError('tagger', err)
     return FALLBACK
   }
 }
