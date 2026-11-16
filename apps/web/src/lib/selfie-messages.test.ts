@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { selfieFailureMessage, PHOTO_PROBLEM_MESSAGE, SERVICE_PROBLEM_MESSAGE } from './selfie-messages'
 
 describe('selfieFailureMessage', () => {
@@ -32,11 +32,23 @@ describe('selfie messages for each status', () => {
   it('unreadable photo shows the photo message', () => {
     expect(selfieFailureMessage(422)).toBe(PHOTO)
   })
-  it('bad input rejected by the server (400) shows the photo message', () => {
-    expect(selfieFailureMessage(400)).toBe(PHOTO)
+  it('connection lost shows the service message', async () => {
+    // Mirrors the selfie page: fetch itself throws, the page's catch reports "no status" (null).
+    const lost = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'))
+    let status: number | null | undefined
+    try {
+      const res = await lost('/api/onboarding/skin-tone', { method: 'POST' })
+      status = res.status
+    } catch {
+      status = null
+    }
+    expect(lost).toHaveBeenCalledTimes(1)
+    expect(status).toBeNull()
+    expect(selfieFailureMessage(status)).toBe(SERVICE)
+    expect(selfieFailureMessage(status)).not.toBe(PHOTO)
   })
-  it('connection lost mid-upload shows the service message', () => {
-    expect(selfieFailureMessage(null)).toBe(SERVICE)
+  it('rejected upload shows the photo message (400 reply)', () => {
+    expect(selfieFailureMessage(400)).toBe(PHOTO)
   })
   it('failure messages match approved wording', () => {
     expect(PHOTO_PROBLEM_MESSAGE).toBe(PHOTO)

@@ -217,6 +217,31 @@ describe('POST /api/onboarding/skin-tone', () => {
       expect(mockUpdate).not.toHaveBeenCalled()
     })
 
+    it('rejected upload shows the photo message and logs a reason', async () => {
+      const bad: unknown[] = [{}, { imageBase64: '' }, { imageBase64: 'short' }, { imageBase64: 12345 }, { imageBase64: null }]
+      for (const body of bad) {
+        vi.mocked(console.error).mockClear()
+        const res = await request(body)
+        expect(res.status).toBe(400)
+        expect(selfieFailureMessage(res.status)).toBe(PHOTO_PROBLEM_MESSAGE)
+        expect(logged()).toEqual(['skin-tone: bad request'])
+      }
+      // An unreadable request body is rejected the same way.
+      vi.mocked(console.error).mockClear()
+      const res = await POST(new Request('http://localhost', { method: 'POST', body: 'not json' }))
+      expect(res.status).toBe(400)
+      expect(logged()).toEqual(['skin-tone: bad request'])
+      expect(mockCreate).not.toHaveBeenCalled()
+    })
+
+    it('a rejected upload logs no photo, model text or personal data', async () => {
+      const email = 'test.person@example.com'
+      mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1', email } } })
+      await request({ imageBase64: 'SECRET-PHOTO', note: email })
+      expect(logged()).toEqual(['skin-tone: bad request'])
+      for (const forbidden of ['SECRET-PHOTO', email, 'user-1']) expect(logged().join('')).not.toContain(forbidden)
+    })
+
     it('fails cleanly on an unreadable answer', async () => {
       for (const text of ['', 'plain sentences only', '{"undertone": "warm", "depth": "li']) {
         modelReplies(text)
