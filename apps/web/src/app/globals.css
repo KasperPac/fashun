@@ -1,26 +1,85 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* Fashun v2 design system: C · Occasion blocks (design-spec r3, section C) */
+@theme {
+  /* surfaces and ink */
+  --color-page: #F4F4F2;
+  --color-card: #FFFFFF;
+  --color-tile: #F0F0EC;
+  --color-ink: #14161A;
+  --color-ink-2: #3D4047;
+  --color-on-dark: #FFFFFF;
+  --color-on-dark-2: #E6E7EA;
+  --color-nav-muted: #A9AEB6;
+  --color-signal: #F6D06B;
+  --color-danger: #B42318;
+  --color-skeleton: #E2E2DE;
+  --color-step-todo: #4A4E57;
+  /* occasions */
+  --color-occ-casual: #BFE3F5;
+  --color-occ-smart: #F6D06B;
+  --color-occ-work: #C7D3BF;
+  --color-occ-formal: #23262E;
+  /* type */
+  --font-display: var(--font-barlow-condensed), "Avenir Next Condensed", "Arial Narrow", sans-serif;
+  --font-sans: var(--font-inter), "Helvetica Neue", Arial, sans-serif;
+  /* motion */
+  --animate-pulse-skeleton: pulse-skeleton 1.2s ease-in-out infinite;
+  --animate-sheet-up: sheet-up 220ms ease-out;
+  --animate-dialog-in: dialog-in 160ms ease-out;
+  --animate-fade-in: fade-in 150ms ease-out;
+  --animate-rise: rise 180ms ease-out both;
+  --animate-scan: scan 6s linear infinite;
+  --animate-reveal: reveal 240ms ease-out both;
+
+  @keyframes pulse-skeleton { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+  @keyframes sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  @keyframes dialog-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes scan { to { transform: rotate(360deg); } }
+  @keyframes reveal { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* Occasion theme: set data-occasion on a screen root. */
+[data-occasion] {
+  --block: #14161A;
+  --on-block: #FFFFFF;
+  --on-block-2: #E6E7EA;
+  --kicker: #F6D06B;
 }
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+[data-occasion="house"] { --block: #14161A; --on-block: #FFFFFF; --on-block-2: #E6E7EA; --kicker: #F6D06B; }
+[data-occasion="casual"] { --block: #BFE3F5; --on-block: #14161A; --on-block-2: #3D4047; --kicker: #14161A; }
+[data-occasion="smart"] { --block: #F6D06B; --on-block: #14161A; --on-block-2: #3D4047; --kicker: #14161A; }
+[data-occasion="work"] { --block: #C7D3BF; --on-block: #14161A; --on-block-2: #3D4047; --kicker: #14161A; }
+[data-occasion="formal"] { --block: #23262E; --on-block: #FFFFFF; --on-block-2: #E6E7EA; --kicker: #F6D06B; }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-page);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-weight: 500;
+}
+
+/* Focus: 3px ring, 2px offset; yellow on dark surfaces. */
+:focus-visible {
+  outline: 3px solid var(--color-ink);
+  outline-offset: 2px;
+}
+.on-dark :focus-visible {
+  outline-color: var(--color-signal);
+}
+
+/* Reduced motion: everything becomes a short fade; the selfie ring stays still. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 120ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 120ms !important;
+  }
+  .animate-sheet-up, .animate-dialog-in, .animate-rise, .animate-reveal {
+    animation-name: fade-in !important;
+  }
+  .animate-scan { animation: none !important; }
+  .animate-pulse-skeleton { animation: none !important; }
 }

@@ -37,6 +37,7 @@ import { POST } from './route'
 describe('POST /api/outfits/try-on', () => {
   beforeEach(() => {
     vi.useFakeTimers()
+    vi.stubEnv('ENABLE_PAID_EXTRAS', 'true')
     vi.clearAllMocks()
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
     mockCreateSignedUrl.mockResolvedValue({ data: { signedUrl: 'https://signed/garment.jpg' }, error: null })
@@ -46,6 +47,18 @@ describe('POST /api/outfits/try-on', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+    vi.unstubAllEnvs()
+  })
+
+  it('is off by default: returns 404 FEATURE_OFF and calls nothing', async () => {
+    vi.stubEnv('ENABLE_PAID_EXTRAS', '')
+    const res = await POST(new Request('http://localhost/api/outfits/try-on', {
+      method: 'POST', body: JSON.stringify({ item_id: '00000000-0000-0000-0000-000000000001' }),
+    }))
+    expect(res.status).toBe(404)
+    expect((await res.json()).code).toBe('FEATURE_OFF')
+    expect(mockGetUser).not.toHaveBeenCalled()
+    expect(mockFetch).not.toHaveBeenCalled()
   })
 
   it('returns 401 when unauthenticated', async () => {

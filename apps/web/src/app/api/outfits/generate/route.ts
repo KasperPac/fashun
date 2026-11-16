@@ -1,9 +1,14 @@
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
-import { SEASON_PROMPT_CONTEXT } from '@fashun/shared'
-import type { ColourSeason } from '@fashun/shared'
+import { SEASON_PROMPT_CONTEXT, OCCASIONS, OCCASION_LABELS } from '@fashun/shared'
+import type { ColourSeason, OccasionTag } from '@fashun/shared'
 import { z } from 'zod'
+import {
+  OUTFIT_COUNT, describeFewer, describeShortfall, eligibleItems, missingCategories, possibleOutfitCount, presentCategories, seasonLabel, validateSuggestions,
+  type BuiltOutfit, type OwnedItem,
+} from '@/lib/outfit-builder'
+import { signWardrobeImage } from '@/lib/wardrobe-image'
 
 let _anthropic: Anthropic | null = null
 function getAnthropic(): Anthropic {
@@ -11,7 +16,120 @@ function getAnthropic(): Anthropic {
   return _anthropic
 }
 
-const BodySchema = z.object({ item_id: z.string().uuid() })
+// v1: build outfits around one chosen item. Occasion mode: build from the whole wardrobe.
+const BodySchema = z.union([
+  z.object({ item_id: z.string().uuid() }),
+  z.object({ occasion: z.enum(OCCASIONS) }),
+])
+
+const OccasionSuggestionsSchema = z.array(z.object({
+  name: z.string().min(1),
+  description: z.string(),
+  reason: z.string(),
+  item_ids: z.array(z.string()).min(1).max(8),
+})).min(1).max(OUTFIT_COUNT)
+
+const ColourListSchema = z.array(z.string()).nullable().optional()
+
+function buildOccasionPrompt(
+  occasion: OccasionTag,
+  season: ColourSeason,
+  bestColours: string[],
+  avoidColours: string[],
+  items: OwnedItem[],
+  count: number,
+): { system: string; user: string } {
+  const ctx = SEASON_PROMPT_CONTEXT[season]
+  const label = seasonLabel(season)
+  const system = `You are a personal colour and style consultant. You only use clothes the user already owns, and you only refer to them by the ids you are given. Return only valid JSON, no explanation, no markdown.`
+  const lines = items
+    .map(i => `- [id:${i.id}] ${i.name} | ${i.category} | ${(i.colours ?? []).join(', ') || 'unknown colour'} | ${(i.occasion_tags ?? []).join(', ') || 'untagged'}`)
+    .join('\n')
+  const user = `The user's colour season is ${label}. ${label} suits: ${ctx.suits}. Avoid: ${ctx.avoid}.
+Their best colours: ${bestColours.join(', ') || 'none saved'}. Colours to avoid: ${avoidColours.join(', ') || 'none saved'}.
+
+Build ${count} different complete outfit${count === 1 ? '' : 's'} for the occasion: ${OCCASION_LABELS[occasion]}.
+
+Their wardrobe (use ONLY these items, by id):
+${lines}
+
+Rules:
+1. Every outfit has at least one top, one bottom and one pair of shoes. Outerwear, bags and accessories are optional.
+2. Use only ids from the list above. Never invent an item.
+3. Each outfit must suit the occasion. Never use an item tagged only casual for a formal outfit.
+4. The reason is ONE sentence of at most 140 characters, using the colour names of the pieces (never hex codes). Use this pattern: "{Colour A} and {colour B} are both in your ${label} palette, and {short styling reason}." If only one palette colour is used: "{Colour A} is one of your best ${label} colours, and {short styling reason}."
+
+Return exactly this JSON (array of ${count}):
+[{"name":"2-3 word name","description":"One sentence.","reason":"One sentence in the pattern above.","item_ids":["uuid","uuid","uuid"]}]`
+  return { system, user }
+}
+
+async function generateForOccasion(supabase: Awaited<ReturnType<typeof createServerClient>>, userId: string, occasion: OccasionTag) {
+  const [profileRes, wardrobeRes] = await Promise.all([
+    (supabase.from('users').select('colour_season,best_colours,avoid_colours').eq('id', userId).single() as unknown as Promise<{ data: { colour_season: string | null; best_colours: string[] | null; avoid_colours: string[] | null } | null; error: unknown }>),
+    (supabase.from('wardrobe_items').select('id,name,category,colours,occasion_tags,image_url').eq('user_id', userId).eq('ownership', 'owned') as unknown as Promise<{ data: Array<OwnedItem & { image_url?: string | null }> | null; error: unknown }>),
+  ])
+  if (wardrobeRes.error) return NextResponse.json({ error: 'Failed to load wardrobe' }, { status: 500 })
+
+  const season = profileRes.data?.colour_season ?? ''
+  if (!Object.keys(SEASON_PROMPT_CONTEXT).includes(season)) {
+    return NextResponse.json({ error: 'Add your colour profile first so outfits can match your palette.', code: 'no_colour_profile' }, { status: 422 })
+  }
+  const colourSeason = season as ColourSeason
+
+  const eligible = eligibleItems(Array.isArray(wardrobeRes.data) ? wardrobeRes.data : [], occasion)
+  const shortfall = describeShortfall(eligible, occasion)
+  if (shortfall) {
+    return NextResponse.json({
+      error: shortfall,
+      code: 'not_enough_items',
+      missing: missingCategories(eligible),
+      have: presentCategories(eligible),
+    }, { status: 422 })
+  }
+
+  const target = possibleOutfitCount(eligible)
+  const best = ColourListSchema.safeParse(profileRes.data?.best_colours).data ?? []
+  const avoid = ColourListSchema.safeParse(profileRes.data?.avoid_colours).data ?? []
+  const { system, user } = buildOccasionPrompt(occasion, colourSeason, best, avoid, eligible, target)
+
+  const outfits: BuiltOutfit[] = []
+  const seen = new Set<string>()
+  for (let attempt = 0; attempt < 2 && outfits.length < target; attempt++) {
+    try {
+      const message = await getAnthropic().messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 1536,
+        system,
+        messages: [{ role: 'user', content: user }],
+      })
+      const content = message.content[0]
+      if (content.type !== 'text') throw new Error('Unexpected content type')
+      const raw = content.text.trim().replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
+      const parsed = OccasionSuggestionsSchema.parse(JSON.parse(raw))
+      outfits.push(...validateSuggestions(parsed, eligible, occasion, colourSeason, seen, target - outfits.length).slice(0, target - outfits.length))
+    } catch {
+      // try once more; the outcome is judged below
+    }
+  }
+  if (outfits.length === 0) return NextResponse.json({ error: 'Failed to generate outfits' }, { status: 500 })
+  const imageById = new Map((wardrobeRes.data ?? []).map((i) => [i.id, i.image_url ?? null]))
+  const withImages = await Promise.all(outfits.map(async (o) => ({
+    ...o,
+    pieces: await Promise.all(o.pieces.map(async (p) => {
+      const stored = imageById.get(p.item_id)
+      return { ...p, image_url: stored ? await signWardrobeImage(supabase, stored, 3600) : null }
+    })),
+  })))
+  return NextResponse.json({
+    suggestions: withImages,
+    season: colourSeason,
+    ...(outfits.length < OUTFIT_COUNT ? { missing: missingCategories(eligible) } : {}),
+    // The wardrobe only allows this many different outfits: asking again gives the same ones.
+    ...(target < OUTFIT_COUNT && outfits.length === target ? { limited: true, message: describeFewer(eligible, occasion) } : {}),
+    ...(outfits.length < target ? { message: `Only ${outfits.length} of ${target} outfits could be built. Try again.` } : {}),
+  })
+}
 
 const PieceSchema = z.object({
   label: z.string(),
@@ -93,6 +211,8 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}))
   const parsed = BodySchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 })
+
+  if ('occasion' in parsed.data) return generateForOccasion(supabase, user.id, parsed.data.occasion)
 
   const [itemRes, profileRes, wardrobeRes] = await Promise.all([
     (supabase.from('wardrobe_items').select('id,name,category,colours,image_url').eq('id', parsed.data.item_id).eq('user_id', user.id).single() as unknown as Promise<{ data: { id: string; name: string; category: string; colours: string[] | null; image_url: string } | null; error: unknown }>),

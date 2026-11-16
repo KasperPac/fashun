@@ -6,9 +6,11 @@ const mockCreate = vi.hoisted(() =>
     content: [{
       type: 'text',
       text: JSON.stringify({
+        isClothing: true,
         category: 'tops',
         colours: ['#1a1a6e', '#ffffff'],
         styleTags: ['casual', 'smart-casual'],
+        occasionTags: ['casual', 'work'],
         suggestedName: 'Navy Linen Shirt',
         searchQuery: 'Uniqlo navy linen shirt',
       }),
@@ -30,8 +32,20 @@ describe('tagImage', () => {
     expect(result.category).toBe('tops')
     expect(result.colours).toContain('#1a1a6e')
     expect(result.styleTags).toContain('casual')
+    expect(result.occasionTags).toEqual(['casual', 'work'])
     expect(result.suggestedName).toBe('Navy Linen Shirt')
     expect(result.searchQuery).toBe('Uniqlo navy linen shirt')
+  })
+
+  it('flags a photo that is not clothing, and treats a missing flag as clothing', async () => {
+    mockCreate.mockResolvedValueOnce({
+      content: [{ type: 'text', text: JSON.stringify({ isClothing: false, category: 'tops', colours: [], styleTags: [], suggestedName: 'Dog' }) }],
+    })
+    expect((await tagImage('base64imagedata')).isClothing).toBe(false)
+    mockCreate.mockResolvedValueOnce({
+      content: [{ type: 'text', text: JSON.stringify({ category: 'tops', colours: [], styleTags: [], suggestedName: 'Item' }) }],
+    })
+    expect((await tagImage('base64imagedata')).isClothing).toBe(true)
   })
 
   it('returns an empty searchQuery when absent or malformed', async () => {
@@ -54,8 +68,31 @@ describe('tagImage', () => {
     })
     const result = await tagImage('base64imagedata')
     expect(result.category).toBe('tops')   // fallback default
+    expect(result.isClothing).toBe(true)
     expect(result.colours).toEqual([])
     expect(result.styleTags).toEqual([])
+    expect(result.occasionTags).toEqual(['casual'])
+  })
+
+  it('suggests at least one occasion: drops old/unknown values, defaults when none are valid', async () => {
+    mockCreate.mockResolvedValueOnce({
+      content: [{ type: 'text', text: JSON.stringify({ category: 'tops', occasionTags: ['dinner', 'formal', 'formal', 'event'], suggestedName: 'Shirt' }) }],
+    })
+    expect((await tagImage('base64imagedata')).occasionTags).toEqual(['formal'])
+
+    for (const bad of [[], ['dinner'], 'casual', undefined]) {
+      mockCreate.mockResolvedValueOnce({
+        content: [{ type: 'text', text: JSON.stringify({ category: 'tops', occasionTags: bad, suggestedName: 'Shirt' }) }],
+      })
+      expect((await tagImage('base64imagedata')).occasionTags).toEqual(['casual'])
+    }
+  })
+
+  it('falls back to tops for an unknown category', async () => {
+    mockCreate.mockResolvedValueOnce({
+      content: [{ type: 'text', text: JSON.stringify({ category: 'hats', suggestedName: 'Cap' }) }],
+    })
+    expect((await tagImage('base64imagedata')).category).toBe('tops')
   })
 
   it('sends image/jpeg media_type for a JPEG base64 (phone photos)', async () => {

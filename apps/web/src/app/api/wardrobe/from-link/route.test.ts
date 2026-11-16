@@ -31,7 +31,7 @@ import { POST } from './route'
 
 const extracted = {
   name: 'Rust Linen Shirt', category: 'tops', retailer: 'THE ICONIC',
-  imageUrl: 'https://cdn.shop.com/shirt.jpg', price: 89.95, styleTags: ['smart-casual'],
+  imageUrl: 'https://cdn.shop.com/shirt.jpg', price: 89.95, styleTags: ['smart-casual'], occasionTags: ['smart-casual', 'work'],
   colourVariants: [{ label: 'Rust', hex: '#B7410E' }, { label: 'Olive', hex: '#556B2F' }],
   colours: ['#B7410E'],
 }
@@ -72,6 +72,8 @@ describe('POST /api/wardrobe/from-link (URL mode)', () => {
     expect(json.product.processedImageUrl).toBe('https://signed/preview.jpg')
     expect(json.product.storeUrl).toBe('https://shop.com/p/1')
     expect(json.product.colourVariants).toHaveLength(2)
+    expect(json.product.category).toBe('tops')
+    expect(json.product.occasionTags).toEqual(['smart-casual', 'work'])
     expect(json.product.colours).toEqual(['#B7410E']) // first variant default, no photo
   })
 

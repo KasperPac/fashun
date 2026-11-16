@@ -1,3 +1,5 @@
+import { paidExtrasEnabled } from './paid-extras'
+
 export class PhotoroomError extends Error {
   constructor(message: string) {
     super(message)
@@ -7,9 +9,11 @@ export class PhotoroomError extends Error {
 
 /**
  * Remove background from an image using Photoroom API.
- * Returns base64-encoded transparent PNG.
+ * Returns base64-encoded transparent PNG. With paid extras off, returns the
+ * original image unchanged and makes no network call.
  */
 export async function removeBackground(imageBase64: string): Promise<string> {
+  if (!paidExtrasEnabled()) return imageBase64
   const blob = base64ToBlob(imageBase64, 'image/jpeg')
   const form = new FormData()
   form.append('image_file', blob, 'image.jpg')

@@ -1,11 +1,26 @@
 export type SkinUndertone = 'warm' | 'cool' | 'neutral'
 export type SkinDepth = 'light' | 'medium' | 'deep'
 export type ColourSeason = 'spring' | 'summer' | 'autumn' | 'winter'
-export type StylePref =
-  | 'casual' | 'smart-casual' | 'business' | 'streetwear'
-  | 'minimalist' | 'athleisure' | 'bohemian' | 'glam'
+export const HAIR_COLOURS = [
+  'black', 'dark-brown', 'brown', 'auburn', 'red', 'blonde', 'grey', 'white',
+] as const
+export type HairColour = (typeof HAIR_COLOURS)[number]
+export const EYE_COLOURS = ['brown', 'hazel', 'green', 'blue', 'grey', 'amber'] as const
+export type EyeColour = (typeof EYE_COLOURS)[number]
+export const STYLE_PREFS = [
+  'casual', 'smart-casual', 'business', 'streetwear',
+  'minimalist', 'athleisure', 'bohemian', 'glam',
+] as const
+export type StylePref = (typeof STYLE_PREFS)[number]
 export type WardrobeCategory = 'tops' | 'bottoms' | 'shoes' | 'outerwear' | 'bags' | 'accessories'
-export type OccasionTag = 'work' | 'casual' | 'dinner' | 'event'
+export const OCCASIONS = ['casual', 'smart-casual', 'work', 'formal'] as const
+export type OccasionTag = (typeof OCCASIONS)[number]
+export const OCCASION_LABELS: Record<OccasionTag, string> = {
+  casual: 'Casual',
+  'smart-casual': 'Smart casual',
+  work: 'Work',
+  formal: 'Formal',
+}
 export type Ownership = 'owned' | 'wishlist'
 
 export interface CategoryBudgets {
@@ -31,7 +46,12 @@ export interface UserProfile {
   email: string
   skinUndertone?: SkinUndertone
   skinDepth?: SkinDepth
+  hairColour?: HairColour
+  eyeColour?: EyeColour
   colourSeason?: ColourSeason
+  bestColours?: string[]
+  avoidColours?: string[]
+  suggestedStyles?: StylePref[]
   stylePrefs: StylePref[]
   budgets: CategoryBudgets
   tryOnPhotoUrl?: string
@@ -66,5 +86,18 @@ export interface ProcessItemResponse {
   category: WardrobeCategory
   colours: string[]
   styleTags: string[]
+  occasionTags: OccasionTag[]
   suggestedName: string
+}
+
+/** Response of the selfie analysis endpoint. The selfie itself is never stored. */
+export interface ColourProfileResponse {
+  undertone: SkinUndertone
+  depth: SkinDepth
+  hairColour: HairColour
+  eyeColour: EyeColour
+  season: ColourSeason
+  bestColours: string[]
+  avoidColours: string[]
+  suggestedStyles: StylePref[]
 }

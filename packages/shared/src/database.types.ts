@@ -142,39 +142,54 @@ export type Database = {
       }
       users: {
         Row: {
+          avoid_colours: string[]
+          best_colours: string[]
           budgets: Json | null
           colour_season: string | null
           created_at: string | null
           email: string
+          eye_colour: string | null
+          hair_colour: string | null
           id: string
           onboarding_completed_at: string | null
           skin_depth: string | null
           skin_undertone: string | null
           style_prefs: string[] | null
+          suggested_styles: string[]
           try_on_photo_url: string | null
         }
         Insert: {
+          avoid_colours?: string[] | null
+          best_colours?: string[] | null
           budgets?: Json | null
           colour_season?: string | null
           created_at?: string | null
           email: string
+          eye_colour?: string | null
+          hair_colour?: string | null
           id: string
           onboarding_completed_at?: string | null
           skin_depth?: string | null
           skin_undertone?: string | null
           style_prefs?: string[] | null
+          suggested_styles?: string[] | null
           try_on_photo_url?: string | null
         }
         Update: {
+          avoid_colours?: string[] | null
+          best_colours?: string[] | null
           budgets?: Json | null
           colour_season?: string | null
           created_at?: string | null
           email?: string
+          eye_colour?: string | null
+          hair_colour?: string | null
           id?: string
           onboarding_completed_at?: string | null
           skin_depth?: string | null
           skin_undertone?: string | null
           style_prefs?: string[] | null
+          suggested_styles?: string[] | null
           try_on_photo_url?: string | null
         }
         Relationships: []

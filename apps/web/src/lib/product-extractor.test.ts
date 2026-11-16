@@ -25,6 +25,7 @@ beforeEach(() => {
       name: 'Rust Linen Shirt',
       category: 'tops',
       styleTags: ['smart-casual'],
+      occasionTags: ['smart-casual', 'dinner'],
       colourVariants: [{ label: 'Rust', hex: '#B7410E' }, { label: 'Olive', hex: '#556B2F' }],
       colours: ['#B7410E'],
     }) }],
@@ -37,6 +38,7 @@ describe('extractProduct', () => {
     expect(p.name).toBe('Rust Linen Shirt')
     expect(p.category).toBe('tops')
     expect(p.colourVariants).toHaveLength(2)
+    expect(p.occasionTags).toEqual(['smart-casual'])
     expect(p.imageUrl).toBe('https://cdn.shop.com/shirt.jpg')
     expect(p.price).toBe(89.95)
     expect(p.retailer).toBe('THE ICONIC')

@@ -8,6 +8,15 @@ export interface ScrapedPage {
   textSnippet: string
 }
 
+function decodeEntities(value: string): string {
+  return value
+    .replace(/&quot;/g, '"')
+    .replace(/&#0?39;|&apos;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+}
+
 function metaContent(html: string, property: string): string | null {
   // Matches <meta property="og:x" content="..."> in either attribute order.
   // content value must close with the same delimiter it opened with, so values
@@ -18,7 +27,8 @@ function metaContent(html: string, property: string): string | null {
     'i',
   )
   const m = html.match(re)
-  return m ? (m[1] ?? m[2] ?? m[3] ?? m[4] ?? null) : null
+  const raw = m ? (m[1] ?? m[2] ?? m[3] ?? m[4] ?? null) : null
+  return raw === null ? null : decodeEntities(raw)
 }
 
 function firstProductJsonLd(html: string): Record<string, unknown> | null {
@@ -67,13 +77,18 @@ export async function scrapeProductPage(url: string): Promise<ScrapedPage> {
   const priceRaw = metaContent(html, 'product:price:amount') ?? metaContent(html, 'og:price:amount')
   const price = priceRaw ? Number.parseFloat(priceRaw) : null
 
+  const title = metaContent(html, 'og:title') ?? titleTag
+  const imageUrl = metaContent(html, 'og:image')
+  const jsonLd = firstProductJsonLd(html)
+  if (!title && !imageUrl && !jsonLd) throw new Error('Page has no readable product data')
+
   return {
     url,
-    title: metaContent(html, 'og:title') ?? titleTag,
-    imageUrl: metaContent(html, 'og:image'),
+    title,
+    imageUrl,
     price: Number.isFinite(price as number) ? price : null,
     retailer: metaContent(html, 'og:site_name'),
-    jsonLd: firstProductJsonLd(html),
+    jsonLd,
     textSnippet: textSnippet(html),
   }
 }

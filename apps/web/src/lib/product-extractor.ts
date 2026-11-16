@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
-import type { WardrobeCategory } from '@fashun/shared'
+import { sanitiseOccasionTags, type OccasionTag, type WardrobeCategory } from '@fashun/shared'
 import type { ScrapedPage } from './product-scraper'
 import { extractJson } from './extract-json'
 
@@ -17,6 +17,7 @@ export interface ExtractedProduct {
   imageUrl: string | null
   price: number | null
   styleTags: string[]
+  occasionTags: OccasionTag[]
   colourVariants: ColourVariant[]
   colours: string[]
 }
@@ -32,6 +33,7 @@ export async function extractProduct(page: ScrapedPage): Promise<ExtractedProduc
     imageUrl: page.imageUrl,
     price: page.price,
     styleTags: [],
+    occasionTags: ['casual'],
     colourVariants: [],
     colours: [],
   }
@@ -48,6 +50,7 @@ Return ONLY valid JSON (no markdown):
   "name": "Short descriptive name e.g. Rust Linen Shirt",
   "category": "tops|bottoms|shoes|outerwear|bags|accessories",
   "styleTags": ["casual|smart-casual|business|streetwear|minimalist|athleisure|bohemian|glam"],
+  "occasionTags": ["one or more of: casual|smart-casual|work|formal"],
   "colourVariants": [{"label": "named colour shown on the page", "hex": "#rrggbb"}],
   "colours": ["#rrggbb"]
 }
@@ -79,6 +82,8 @@ Rules:
       ? parsed.colours.filter((c: string) => HEX.test(c))
       : []
 
+    const occasionTags = sanitiseOccasionTags(parsed.occasionTags)
+
     return {
       name: typeof parsed.name === 'string' && parsed.name ? parsed.name : fallback.name,
       category,
@@ -86,6 +91,7 @@ Rules:
       imageUrl: page.imageUrl,
       price: page.price,
       styleTags: Array.isArray(parsed.styleTags) ? parsed.styleTags : [],
+      occasionTags: occasionTags.length ? occasionTags : fallback.occasionTags,
       colourVariants,
       colours,
     }

@@ -5,6 +5,7 @@ const mockFetch = vi.fn()
 
 beforeEach(() => {
   vi.stubEnv('SERPAPI_API_KEY', 'test-key')
+  vi.stubEnv('ENABLE_PAID_EXTRAS', 'true')
   vi.stubGlobal('fetch', mockFetch)
   mockFetch.mockReset()
 })

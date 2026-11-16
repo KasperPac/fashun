@@ -7,7 +7,7 @@ import { signWardrobeImage } from '@/lib/wardrobe-image'
 import { z } from 'zod'
 import { randomUUID } from 'crypto'
 
-const schema = z.object({ imageBase64: z.string().min(100) })
+const schema = z.object({ imageBase64: z.string().min(100), uploadOnly: z.boolean().optional() })
 
 export async function POST(req: Request) {
   const supabase = await createServerClient()
@@ -21,8 +21,24 @@ export async function POST(req: Request) {
   // 1. Use original image (Photoroom bg removal disabled — add PHOTOROOM_API_KEY to enable)
   const processedBase64 = parsed.data.imageBase64
 
+  // Adding a photo to a piece whose details are already filled in: store it, skip reading it.
+  if (parsed.data.uploadOnly) {
+    const path = `${user.id}/${randomUUID()}.${processedBase64.startsWith('/9j') ? 'jpg' : 'png'}`
+    const { error } = await supabase.storage
+      .from('wardrobe-images')
+      .upload(path, Buffer.from(processedBase64, 'base64'), {
+        contentType: processedBase64.startsWith('/9j') ? 'image/jpeg' : 'image/png',
+        upsert: false,
+      })
+    if (error) return NextResponse.json({ error: 'Upload failed' }, { status: 500 })
+    return NextResponse.json({ processedImageUrl: await signWardrobeImage(supabase, path, 3600) })
+  }
+
   // 2. Tag with Claude Vision (soft failure — returns fallback on error)
   const tags = await tagImage(processedBase64)
+
+  // Not a piece of clothing: tell the screen, and keep the photo out of storage.
+  if (!tags.isClothing) return NextResponse.json({ notClothing: true })
 
   // 3. Upload to Supabase Storage
   // Detect format from base64 header (JPEG starts with /9j, PNG with iVBOR)
@@ -58,6 +74,7 @@ export async function POST(req: Request) {
     category: tags.category,
     colours: tags.colours,
     styleTags: tags.styleTags,
+    occasionTags: tags.occasionTags,
     suggestedName: tags.suggestedName,
     searchQuery: tags.searchQuery,
     candidates,
