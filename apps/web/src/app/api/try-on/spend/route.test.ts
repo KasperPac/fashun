@@ -52,6 +52,20 @@ describe('GET /api/try-on/spend', () => {
     expect(formatUsd(toUnits(json.spent_usd))).toBe('US$0.23') // not US$0.24, which rounding each charge would give
   })
 
+  it('reports the price and spend when only the cap is missing', async () => {
+    vi.stubEnv('TRY_ON_MONTHLY_CAP_USD', '')
+    fake.tables.try_on_ledger.push(row('2026-11'), row('2026-11'))
+    const json = await (await GET()).json()
+    expect(json).toMatchObject({ images: 2, spent_usd: 0.15, price_usd: 0.075, cap_usd: null, remaining_usd: null })
+  })
+
+  it('reports the cap but no spend when only the price is missing', async () => {
+    vi.stubEnv('TRY_ON_PRICE_USD', '')
+    fake.tables.try_on_ledger.push(row('2026-11'))
+    const json = await (await GET()).json()
+    expect(json).toMatchObject({ images: 1, spent_usd: null, price_usd: null, cap_usd: 7.5, remaining_usd: null })
+  })
+
   it('shows zero before any picture is made', async () => {
     const json = await (await GET()).json()
     expect(json.spent_usd).toBe(0)

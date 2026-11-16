@@ -15,6 +15,8 @@ class Fake {
   currentUser: string | null = A
   rpcCalls: Array<Record<string, unknown>> = []
   uploadError = false
+  /** How many updates to the ledger fail before they work again. */
+  ledgerUpdateFailures = 0
 
   reset() {
     this.tables = { users: [], outfits: [], wardrobe_items: [], try_on_ledger: [] }
@@ -22,6 +24,7 @@ class Fake {
     this.currentUser = A
     this.rpcCalls = []
     this.uploadError = false
+    this.ledgerUpdateFailures = 0
   }
 
   private from(table: string) {
@@ -30,6 +33,10 @@ class Fake {
     let patch: Row = {}
     const chain: Record<string, unknown> = {}
     const done = () => {
+      if (op === 'update' && table === 'try_on_ledger' && this.ledgerUpdateFailures > 0) {
+        this.ledgerUpdateFailures -= 1
+        return { data: [] as Row[], error: { message: 'ledger update failed' } }
+      }
       if (op === 'update') rows.forEach((r) => Object.assign(r, patch))
       if (op === 'delete') this.tables[table] = this.tables[table].filter((r) => !rows.includes(r))
       return { data: rows.map((r) => ({ ...r })), error: null }

@@ -318,6 +318,28 @@ describe('POST /api/outfits/try-on: failures add no spend', () => {
     expect(fake.tables.outfits[0].try_on_image_path).toBeNull()
   })
 
+  it('a ledger failure after FASHN returned an image keeps that image counted', async () => {
+    seed()
+    fake.ledgerUpdateFailures = 99 // every ledger write fails, including the second try
+    const res = await post()
+    expect(res.status).toBe(502)
+    expect((await res.json()).charged_pictures).toBe(1)
+    expect(fashnRuns).toHaveLength(1)
+    // The returned image's reservation stays (counts toward the cap); only the image never made is released.
+    expect(ledger()).toHaveLength(1)
+    expect(ledger()[0].status).toBe('reserved')
+    expect(fake.tables.outfits[0].try_on_image_path).toBeNull()
+  })
+
+  it('a ledger write that fails once is retried and the image is charged', async () => {
+    seed()
+    fake.ledgerUpdateFailures = 1
+    const res = await post()
+    expect(res.status).toBe(502)
+    expect(charged()).toHaveLength(1)
+    expect(ledger()).toHaveLength(1)
+  })
+
   it('second step failure uses no try-on and counts the first image for the owner', async () => {
     seed()
     fashnFailOnRun = 2

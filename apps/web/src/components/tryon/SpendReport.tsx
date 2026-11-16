@@ -36,12 +36,14 @@ export default function SpendReportView({ report }: { report: SpendReport }) {
       <p className="font-display text-[13px] font-bold uppercase tracking-[1.5px] text-ink-2">This month · {monthName(report.month)}</p>
       {spentUnits === null ? (
         <p role="status" className="mt-2 text-[15px] font-semibold">
-          Spend isn&apos;t shown because the price per image isn&apos;t set. The image counts below are still right.
+          Spend isn&apos;t shown because {capUnits === null ? 'neither the price per image nor the monthly cap is' : "the price per image isn't"} set. The image counts below are still right.
         </p>
       ) : (
         <>
           <p className="mt-2 font-display text-[52px] font-extrabold leading-none">{formatUsd(spentUnits)}</p>
-          {capUnits !== null && (
+          {capUnits === null ? (
+            <p className="mt-2 text-[15px] font-semibold">The monthly cap isn&apos;t set, so no new try-on pictures are made.</p>
+          ) : (
             <>
               <p className="mt-1 text-base">of {formatUsd(capUnits)} cap</p>
               <SpendMeter spentUnits={spentUnits} capUnits={capUnits} month={report.month} />

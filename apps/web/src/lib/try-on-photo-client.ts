@@ -25,7 +25,7 @@ export interface PhotoApi {
 }
 
 /** Reads the person's photo state. "off" when try-on is switched off (the section is then not shown). */
-export async function loadPhotoState(api: Pick<PhotoApi, 'fetch'>): Promise<PhotoState> {
+export async function loadPhotoState(api: { fetch: (input: string) => Promise<Response> }): Promise<PhotoState> {
   try {
     const res = await api.fetch('/api/try-on/photo')
     if (res.status === 404) return { kind: 'off' }

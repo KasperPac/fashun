@@ -26,7 +26,7 @@ const QuerySchema = z.object({
 })
 
 /** One fixed reason per failure. Never the error text, an address, a name or an email, which could hold personal data. */
-function logFailure(reason: 'fashn_refused' | 'fashn_timeout' | 'unexpected' | 'storage_failed' | 'save_failed') {
+function logFailure(reason: 'fashn_refused' | 'fashn_timeout' | 'unexpected' | 'storage_failed' | 'save_failed' | 'ledger_failed') {
   console.error(`try-on failed: ${reason}`)
 }
 
@@ -189,16 +189,28 @@ export async function POST(req: Request) {
   }
 
   let current: TryOnImage = person
-  let charged = 0
+  let returned = 0 // images FASHN gave back: each is charged to us, whatever happens next
+  let charged = 0 // of those, the ones now recorded as spend
   try {
     for (let i = 0; i < plan.steps.length; i++) {
       current = await runTryOn({ person: current, garment: garments[i], category: plan.steps[i].category, apiKey })
+      returned += 1
       await chargePicture(service, reserved[i])
       charged += 1
     }
   } catch (err) {
+    // An image FASHN returned stays counted even if recording it failed: try once more, and if the
+    // ledger still can't be written leave its reservation in place rather than under-count.
+    if (returned > charged) {
+      try {
+        await chargePicture(service, reserved[charged])
+        charged += 1
+      } catch {
+        logFailure('ledger_failed')
+      }
+    }
     // Pictures FASHN did not return add nothing to spend.
-    await releasePictures(service, reserved.slice(charged))
+    await releasePictures(service, reserved.slice(returned))
     const fromFashn = err instanceof FashnError
     logFailure(err instanceof FashnTimeoutError ? 'fashn_timeout' : fromFashn ? 'fashn_refused' : 'unexpected')
     return NextResponse.json(
@@ -207,7 +219,7 @@ export async function POST(req: Request) {
           ? "Try-on didn't work this time. Try again later."
           : 'Something went wrong. Try again later.',
         code: 'TRY_ON_FAILED',
-        charged_pictures: charged,
+        charged_pictures: returned,
       },
       { status: 502 },
     )

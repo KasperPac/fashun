@@ -60,12 +60,27 @@ describe('Try-on spend page', () => {
   })
 
   it('shows the counts but no spend when the price setting is missing', () => {
-    const html = render({ ...json, spent_usd: null, cap_usd: null, price_usd: null, remaining_usd: null, previous: [{ month: '2026-10', images: 5, spent_usd: null, pictures: 2 }] })
+    const html = render({ ...json, spent_usd: null, price_usd: null, remaining_usd: null, previous: [{ month: '2026-10', images: 5, spent_usd: null, pictures: 2 }] })
     expect(html).toContain('the price per image isn&#x27;t set')
     expect(html).not.toContain('role="meter"')
     expect(html).not.toContain('Price per image')
     expect(html).toMatch(/FASHN images<\/dt><dd[^>]*>42</)
     expect(html).toContain('–')
+  })
+
+  it('says the cap is missing when only the price is set, and still shows the price', () => {
+    const html = render({ ...json, cap_usd: null, remaining_usd: null })
+    expect(html).toContain('US$3.15')
+    expect(html).toContain('The monthly cap isn&#x27;t set, so no new try-on pictures are made.')
+    expect(html).not.toContain('the price per image isn&#x27;t set')
+    expect(html).not.toContain('role="meter"')
+    expect(html).toContain('Price per image')
+    expect(html).toContain('US$0.075')
+  })
+
+  it('names both settings when neither is set', () => {
+    const html = render({ ...json, spent_usd: null, cap_usd: null, price_usd: null, remaining_usd: null })
+    expect(html).toContain('neither the price per image nor the monthly cap is set')
   })
 
   it('keeps only the newest 12 previous months', () => {

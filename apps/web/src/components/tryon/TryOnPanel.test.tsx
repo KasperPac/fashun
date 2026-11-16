@@ -10,7 +10,7 @@ const TOP_BOTTOM = [piece('Tee', 'tops'), piece('Jeans', 'bottoms')]
 const WITH_SHOES = [...TOP_BOTTOM, piece('Trainers', 'shoes'), piece('Belt', 'accessories')]
 const NEW = { url: 'https://signed/new.jpg', madeAt: '2026-11-16T02:00:00Z' }
 
-function props(over: Partial<TryOnPanelViewProps> & { pieces?: PanelPiece[]; state?: Partial<Extract<TryOnPanelViewProps['state'], { kind: 'ready' }>> } = {}): TryOnPanelViewProps {
+function props(over: Partial<Omit<TryOnPanelViewProps, 'state'>> & { pieces?: PanelPiece[]; state?: Partial<Extract<TryOnPanelViewProps['state'], { kind: 'ready' }>> } = {}): TryOnPanelViewProps {
   return {
     outfitName: 'Friday dinner',
     plan: planPanel(over.pieces ?? TOP_BOTTOM),

@@ -30,12 +30,18 @@ function parsePositive(raw: string | undefined): number | null {
   return Number.isFinite(n) && n > 0 ? n : null
 }
 
-/** Monthly cap and price per picture from settings. null when either is missing or not a positive number, so nothing is ever drawn unconfigured. */
-export function readTryOnConfig(): TryOnConfig | null {
+/** Each setting on its own; null when it is missing or not a positive number. Lets the owner's spend page say exactly which one is missing. */
+export function readTryOnSettings(): { capUnits: number | null; priceUnits: number | null } {
   const cap = parsePositive(process.env.TRY_ON_MONTHLY_CAP_USD)
   const price = parsePositive(process.env.TRY_ON_PRICE_USD)
-  if (cap === null || price === null) return null
-  return { capUnits: toUnits(cap), priceUnits: toUnits(price) }
+  return { capUnits: cap === null ? null : toUnits(cap), priceUnits: price === null ? null : toUnits(price) }
+}
+
+/** Monthly cap and price per picture from settings. null when either is missing or not a positive number, so nothing is ever drawn unconfigured. */
+export function readTryOnConfig(): TryOnConfig | null {
+  const { capUnits, priceUnits } = readTryOnSettings()
+  if (capUnits === null || priceUnits === null) return null
+  return { capUnits, priceUnits }
 }
 
 /** True when this user is the owner named in TRY_ON_OWNER_USER_ID. */
