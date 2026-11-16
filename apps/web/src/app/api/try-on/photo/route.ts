@@ -51,7 +51,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'The photo must be under 10 MB', code: 'BAD_PHOTO' }, { status: 400 })
   }
   const bytes = new Uint8Array(await file.arrayBuffer())
-  const mediaType = file.type === 'image/png' || file.type === 'image/webp' || file.type === 'image/jpeg'
+  const isJpeg = bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
+  const mediaType = file.type === 'image/png' || file.type === 'image/webp' || (file.type === 'image/jpeg' && isJpeg)
     ? mediaTypeFromBytes(bytes)
     : null
   if (!mediaType || mediaType !== file.type) {
@@ -80,6 +81,22 @@ export async function POST(req: Request) {
   // The replaced photo is no longer used; deleting the photo later clears the folder anyway.
   if (profile?.try_on_photo_url) await supabase.storage.from(TRY_ON_BUCKET).remove([profile.try_on_photo_url])
 
+  return NextResponse.json({ ok: true })
+}
+
+/** PUT: records that the person agreed to the privacy note (the date is kept). Stores no photo. */
+export async function PUT() {
+  if (!tryOnEnabled()) return off()
+  const supabase = await createServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { data: profile } = await supabase.from('users').select('try_on_consent_at').eq('id', user.id).maybeSingle()
+  if (!profile) return NextResponse.json({ error: 'Could not save your agreement' }, { status: 500 })
+  if (!profile.try_on_consent_at) {
+    const { error } = await supabase.from('users').update({ try_on_consent_at: new Date().toISOString() }).eq('id', user.id)
+    if (error) return NextResponse.json({ error: 'Could not save your agreement' }, { status: 500 })
+  }
   return NextResponse.json({ ok: true })
 }
 

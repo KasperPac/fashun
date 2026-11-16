@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import {
-  firstOfNextMonth, isTryOnOwner, planTryOn, readTryOnConfig, summariseSpend, sydneyMonth, toUnits,
+  firstOfNextMonth, formatUsd, fromUnits, isTryOnOwner, planTryOn, readTryOnConfig, summariseSpend, sydneyMonth, toUnits, tryOnNow,
   type OutfitPiece,
 } from './try-on'
 
@@ -39,7 +39,7 @@ describe('planTryOn', () => {
 })
 
 describe('sydneyMonth', () => {
-  it('rolls over at midnight Sydney time, in summer (UTC+11) and winter (UTC+10)', () => {
+  it('month boundary follows Sydney daylight saving', () => {
     expect(sydneyMonth(new Date('2026-11-30T12:59:59Z'))).toBe('2026-11')
     expect(sydneyMonth(new Date('2026-11-30T13:00:00Z'))).toBe('2026-12')
     expect(sydneyMonth(new Date('2026-06-30T13:59:59Z'))).toBe('2026-06')
@@ -82,5 +82,48 @@ describe('summariseSpend', () => {
       { month: '2026-10', pictures: 100, spentUsd: 7.5 },
     ])
     expect(toUnits(0.075)).toBe(750)
+  })
+})
+
+describe('spend is images times price to the cent', () => {
+  it('keeps odd numbers of images exact and rounds half up', () => {
+    const price = toUnits(0.075)
+    expect(formatUsd(1 * price)).toBe('US$0.08')
+    expect(formatUsd(3 * price)).toBe('US$0.23')
+    expect(formatUsd(99 * price)).toBe('US$7.43')
+    expect(formatUsd(4 * price)).toBe('US$0.30')
+    expect(formatUsd(0)).toBe('US$0.00')
+    expect(fromUnits(99 * price)).toBe(7.425)
+  })
+})
+
+describe('paused message names the next month', () => {
+  it('says 1 December in November and 1 January in December', () => {
+    expect(firstOfNextMonth('2026-11')).toBe('2026-12-01')
+    expect(firstOfNextMonth('2026-12')).toBe('2027-01-01')
+  })
+})
+
+describe('tryOnNow (preview-only test date)', () => {
+  it('uses the test date outside production', () => {
+    vi.stubEnv('TRY_ON_TEST_DATE', '2026-12-01T00:05:00+11:00')
+    vi.stubEnv('VERCEL_ENV', 'preview')
+    expect(tryOnNow().toISOString()).toBe('2026-11-30T13:05:00.000Z')
+    expect(sydneyMonth(tryOnNow())).toBe('2026-12')
+  })
+  it('is ignored in production, on Vercel or not', () => {
+    vi.stubEnv('TRY_ON_TEST_DATE', '2026-12-01T00:05:00+11:00')
+    vi.stubEnv('VERCEL_ENV', 'production')
+    expect(tryOnNow().toISOString()).not.toBe('2026-11-30T13:05:00.000Z')
+    vi.stubEnv('VERCEL_ENV', '')
+    vi.stubEnv('NODE_ENV', 'production')
+    expect(tryOnNow().toISOString()).not.toBe('2026-11-30T13:05:00.000Z')
+  })
+  it('is ignored when it is not a real date or not set', () => {
+    vi.stubEnv('VERCEL_ENV', 'preview')
+    vi.stubEnv('TRY_ON_TEST_DATE', 'tomorrow')
+    expect(Math.abs(tryOnNow().getTime() - Date.now())).toBeLessThan(1000)
+    vi.stubEnv('TRY_ON_TEST_DATE', '')
+    expect(Math.abs(tryOnNow().getTime() - Date.now())).toBeLessThan(1000)
   })
 })

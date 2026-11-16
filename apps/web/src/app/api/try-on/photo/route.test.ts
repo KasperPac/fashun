@@ -6,7 +6,7 @@ vi.mock('@/lib/supabase/server', async () => {
   return { createServerClient: async () => f.userClient(), createServiceClient: async () => f.serviceClient() }
 })
 
-import { DELETE, GET, POST } from './route'
+import { DELETE, GET, POST, PUT } from './route'
 
 const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3])
 
@@ -26,14 +26,33 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs())
 
 describe('/api/try-on/photo', () => {
-  it('returns 404 from every method when try-on is off', async () => {
+  it('records agreement on its own, once, with no photo stored', async () => {
+    expect((await PUT()).status).toBe(200)
+    const first = fake.tables.users.find((u) => u.id === A)?.try_on_consent_at
+    expect(first).toBeTruthy()
+    expect(fake.tables.users.find((u) => u.id === A)?.try_on_photo_url).toBeNull()
+    expect(fake.buckets['try-on-photos'].size).toBe(1)
+    await PUT()
+    expect(fake.tables.users.find((u) => u.id === A)?.try_on_consent_at).toBe(first)
+    expect((await upload()).status).toBe(200) // agreed, so no consent flag needed
+  })
+
+  it('does not record agreement for B when A agrees, and needs a sign-in', async () => {
+    await PUT()
+    expect(fake.tables.users.find((u) => u.id === B)?.try_on_consent_at).toBe('x')
+    fake.currentUser = null
+    expect((await PUT()).status).toBe(401)
+  })
+
+  it('server refuses try-on when it is switched off', async () => {
     vi.stubEnv('ENABLE_TRY_ON', '')
+    expect((await PUT()).status).toBe(404)
     expect((await GET()).status).toBe(404)
     expect((await upload({ consent: true })).status).toBe(404)
     expect((await DELETE()).status).toBe(404)
   })
 
-  it('refuses the first photo without consent and stores nothing', async () => {
+  it('server refuses a try-on photo without agreement', async () => {
     const res = await upload()
     expect(res.status).toBe(400)
     expect((await res.json()).code).toBe('CONSENT_REQUIRED')
@@ -49,7 +68,7 @@ describe('/api/try-on/photo', () => {
     expect(fake.tables.users[0].try_on_consent_at).toBeTruthy()
   })
 
-  it('replaces the photo without asking again and removes the old file', async () => {
+  it('Replace keeps one try-on photo', async () => {
     await upload({ consent: true })
     const first = fake.tables.users[0].try_on_photo_url as string
     expect((await upload()).status).toBe(200)
@@ -59,13 +78,24 @@ describe('/api/try-on/photo', () => {
     expect(fake.buckets['try-on-photos'].has(second)).toBe(true)
   })
 
-  it('rejects files that are not a real JPEG, PNG or WebP', async () => {
+  it('rejects a bad try-on photo with a plain message', async () => {
     expect((await upload({ consent: true, type: 'image/gif' })).status).toBe(400)
     expect((await upload({ consent: true, bytes: new Uint8Array([1, 2, 3]), type: 'image/png' })).status).toBe(400)
     expect((await upload({ consent: true, bytes: new Uint8Array() })).status).toBe(400)
   })
 
-  it('GET gives the person their own photo and never another person\'s', async () => {
+  it('rejects a bad try-on photo with a plain message', async () => {
+    const res = await upload({ consent: true, bytes: new Uint8Array([0x68, 0x69]), type: 'image/jpeg' })
+    expect(res.status).toBe(400)
+    const json = await res.json()
+    expect(json.code).toBe('BAD_PHOTO')
+    expect(fake.tables.users[0].try_on_photo_url).toBeNull()
+    const big = await upload({ consent: true, bytes: new Uint8Array(10 * 1024 * 1024 + 1).fill(1).map((_, i) => (i < 3 ? [0xff, 0xd8, 0xff][i] : 1)) })
+    expect(big.status).toBe(400)
+    expect(fake.buckets['try-on-photos'].size).toBe(1)
+  })
+
+  it('one user can never read another\'s try-on photo or pictures', async () => {
     await upload({ consent: true })
     const mine = await (await GET()).json()
     expect(mine.image_url).toContain(`/${A}/`)
@@ -73,7 +103,7 @@ describe('/api/try-on/photo', () => {
     expect((await (await GET()).json()).image_url).toContain(`/${B}/`)
   })
 
-  it('delete removes the photo and every try-on picture, and keeps the outfits', async () => {
+  it('deleting the try-on photo removes every try-on picture and keeps the outfits', async () => {
     await upload({ consent: true })
     fake.buckets['try-on-photos'].set(`${A}/outfit-o1-x.jpg`, JPEG)
     fake.buckets['try-on-photos'].set(`${A}/outfit-orphan.jpg`, JPEG)
@@ -99,5 +129,36 @@ describe('/api/try-on/photo', () => {
   it('delete returns 401 when signed out', async () => {
     fake.currentUser = null
     expect((await DELETE()).status).toBe(401)
+  })
+
+  it('deleted try-on files can no longer be opened', async () => {
+    await upload({ consent: true })
+    const path = fake.tables.users[0].try_on_photo_url as string
+    await DELETE()
+    expect((await (await GET()).json()).image_url).toBeNull()
+    expect(fake.buckets['try-on-photos'].has(path)).toBe(false)
+    const { data, error } = await fake.userClient().storage.from('try-on-photos').download(path)
+    expect(data).toBeNull()
+    expect(error).toBeTruthy()
+  })
+
+  it('one user can never change or use another\'s try-on photo', async () => {
+    await upload({ consent: true })
+    const aPath = fake.tables.users[0].try_on_photo_url as string
+    fake.currentUser = B
+    expect((await upload()).status).toBe(200) // B replaces B's own
+    expect((await DELETE()).status).toBe(200) // B deletes B's own
+    expect(fake.tables.users.find((u) => u.id === A)?.try_on_photo_url).toBe(aPath)
+    expect(fake.buckets['try-on-photos'].has(aPath)).toBe(true)
+    expect([...fake.buckets['try-on-photos'].keys()].filter((k) => k.startsWith(`${B}/`))).toEqual([])
+  })
+
+  it('try-on files are never public', async () => {
+    await upload({ consent: true })
+    fake.currentUser = null
+    expect((await GET()).status).toBe(401)
+    expect((await DELETE()).status).toBe(401)
+    expect((await upload({ consent: true })).status).toBe(401)
+    expect(fake.tables.users[0].try_on_photo_url).not.toBeNull()
   })
 })

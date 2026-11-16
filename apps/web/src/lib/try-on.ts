@@ -44,6 +44,29 @@ export function isTryOnOwner(userId: string): boolean {
   return !!owner && owner === userId
 }
 
+/**
+ * "Now" for the try-on month logic. TRY_ON_TEST_DATE (an ISO date-time with offset) replaces the
+ * clock on preview and local runs only, so QA can see the new month. It is ignored in production
+ * (VERCEL_ENV=production, or NODE_ENV=production when not on Vercel) and when it isn't a valid date.
+ */
+export function tryOnNow(): Date {
+  const raw = process.env.TRY_ON_TEST_DATE?.trim()
+  const inProduction = process.env.VERCEL_ENV
+    ? process.env.VERCEL_ENV === 'production'
+    : process.env.NODE_ENV === 'production'
+  if (raw && !inProduction) {
+    const date = new Date(raw)
+    if (!Number.isNaN(date.getTime())) return date
+  }
+  return new Date()
+}
+
+/** Whole units -> "US$3.15", to the cent, halves rounded up. */
+export function formatUsd(units: number): string {
+  const cents = Math.floor((units + UNIT / 200) / (UNIT / 100))
+  return `US$${(cents / 100).toFixed(2)}`
+}
+
 /** The calendar month in Sydney, as "YYYY-MM". */
 export function sydneyMonth(now: Date): string {
   const parts = new Intl.DateTimeFormat('en-CA', {

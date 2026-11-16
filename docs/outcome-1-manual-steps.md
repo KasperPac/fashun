@@ -28,7 +28,7 @@ Paid extras, behind one switch (try-on has its own, below):
 
 With the switch off, nothing in outcome 1 calls SerpAPI Google Lens (photo-to-shop search, returns no matches) or Photoroom (background removal, original photo kept). Adding a piece by link and by photo still works.
 
-Try-on (Fashn.ai) is not turned on by `ENABLE_PAID_EXTRAS`. It has its own switch and settings, `ENABLE_TRY_ON`, `FASHN_API_KEY`, `TRY_ON_MONTHLY_CAP_USD`, `TRY_ON_PRICE_USD` and `TRY_ON_OWNER_USER_ID`, and needs `supabase/migrations/008_try_on.sql` applied first.
+Try-on (Fashn.ai) is not turned on by `ENABLE_PAID_EXTRAS`. It has its own switch and settings, `ENABLE_TRY_ON`, `FASHN_API_KEY`, `TRY_ON_MONTHLY_CAP_USD`, `TRY_ON_PRICE_USD` and `TRY_ON_OWNER_USER_ID`, and needs `supabase/migrations/008_try_on.sql` applied first. `TRY_ON_TEST_DATE` (an ISO date-time such as `2026-12-01T00:05:00+11:00`) makes the try-on month logic use that date for QA's new-month check. Set it on Preview only: it is ignored when `VERCEL_ENV` is `production`.
 
 Only if the switch is turned on are these also needed: `SERPAPI_API_KEY`, `PHOTOROOM_API_KEY`.
 

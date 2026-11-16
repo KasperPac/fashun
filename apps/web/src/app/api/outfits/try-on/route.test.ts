@@ -93,7 +93,7 @@ afterEach(() => {
 })
 
 describe('POST /api/outfits/try-on: switch and sign-in', () => {
-  it('returns 404 and calls nothing when try-on is off, even with paid extras on', async () => {
+  it('server refuses try-on when it is switched off', async () => {
     vi.stubEnv('ENABLE_TRY_ON', '')
     vi.stubEnv('ENABLE_PAID_EXTRAS', 'true')
     seed()
@@ -132,7 +132,7 @@ describe('POST /api/outfits/try-on: switch and sign-in', () => {
 })
 
 describe('POST /api/outfits/try-on: drawing', () => {
-  it('draws the top, then the bottom onto that result (two steps), sending base64 to v1.6', async () => {
+  it('top and bottom outfit makes one picture in two steps', async () => {
     seed()
     const res = await post()
     expect(res.status).toBe(200)
@@ -157,7 +157,7 @@ describe('POST /api/outfits/try-on: drawing', () => {
     expect(charged()).toHaveLength(2)
   })
 
-  it('draws a dress in one step', async () => {
+  it('dress or jumpsuit outfit makes one picture in one step', async () => {
     seed({
       pieces: [piece('Red dress', DRESS)],
       items: [{ id: DRESS, category: 'dresses', image_url: `${A}/dress.jpg` }],
@@ -169,7 +169,7 @@ describe('POST /api/outfits/try-on: drawing', () => {
     expect(charged()).toHaveLength(1)
   })
 
-  it('draws a jumpsuit in one step', async () => {
+  it('dress or jumpsuit outfit makes one picture in one step', async () => {
     seed({
       pieces: [piece('Black jumpsuit', DRESS)],
       items: [{ id: DRESS, category: 'jumpsuits', image_url: `${A}/j.jpg` }],
@@ -179,7 +179,7 @@ describe('POST /api/outfits/try-on: drawing', () => {
     expect(fashnRuns[0].inputs.category).toBe('one-pieces')
   })
 
-  it('skips shoes and accessories and lists them back', async () => {
+  it('shoes and accessories are shown beside the picture, not sent', async () => {
     seed({
       pieces: [piece('White tee', TOP), piece('Blue jeans', BOTTOM), piece('White sneakers', SHOES), piece('Tote', BAG)],
       items: [
@@ -209,7 +209,7 @@ describe('POST /api/outfits/try-on: drawing', () => {
 })
 
 describe('POST /api/outfits/try-on: refusals that charge nothing', () => {
-  it('refuses when a garment has no photo, with nothing charged and no FASHN call', async () => {
+  it('a piece without a photo is never charged', async () => {
     seed({ items: [
       { id: TOP, category: 'tops', image_url: null },
       { id: BOTTOM, category: 'bottoms', image_url: `${A}/bottom.jpg` },
@@ -223,7 +223,7 @@ describe('POST /api/outfits/try-on: refusals that charge nothing', () => {
     expect(ledger()).toHaveLength(0)
   })
 
-  it('refuses an outfit with nothing to draw (only shoes)', async () => {
+  it('outfit with nothing to draw explains what is missing and charges nothing', async () => {
     seed({
       pieces: [piece('Sneakers', SHOES)],
       items: [{ id: SHOES, category: 'shoes', image_url: `${A}/s.jpg` }],
@@ -254,7 +254,7 @@ describe('POST /api/outfits/try-on: refusals that charge nothing', () => {
 })
 
 describe('POST /api/outfits/try-on: saved pictures', () => {
-  it('returns the saved picture with no FASHN call and no spend, even with the cap used up', async () => {
+  it('saved picture shows again without a new call or charge', async () => {
     seed()
     await post()
     const spendBefore = charged().length
@@ -281,7 +281,7 @@ describe('POST /api/outfits/try-on: saved pictures', () => {
     expect(mockFetch).not.toHaveBeenCalled()
   })
 
-  it('"try again" makes a new picture, adds spend and replaces the old file', async () => {
+  it('Try again warns first, then makes and charges a new picture', async () => {
     seed()
     await post()
     const oldPath = fake.tables.outfits[0].try_on_image_path as string
@@ -296,7 +296,7 @@ describe('POST /api/outfits/try-on: saved pictures', () => {
 })
 
 describe('POST /api/outfits/try-on: failures add no spend', () => {
-  it('a failed FASHN call adds nothing and keeps the outfit as it was', async () => {
+  it('FASHN refusal shows the failure message and charges nothing', async () => {
     seed()
     fashnFailOnRun = 1
     const res = await post()
@@ -308,7 +308,7 @@ describe('POST /api/outfits/try-on: failures add no spend', () => {
     expect(fake.tables.outfits[0].try_on_image_path).toBeNull()
   })
 
-  it('a timed-out FASHN call adds nothing', async () => {
+  it('slow FASHN gives up within 90 seconds and charges nothing', async () => {
     seed()
     fashnHang = true
     const res = await post()
@@ -317,7 +317,7 @@ describe('POST /api/outfits/try-on: failures add no spend', () => {
     expect(fake.tables.outfits[0].try_on_image_path).toBeNull()
   })
 
-  it('if step 2 fails only the picture FASHN returned counts, and the outfit keeps no picture', async () => {
+  it('second step failure shows the failure message', async () => {
     seed()
     fashnFailOnRun = 2
     const res = await post()
@@ -339,7 +339,7 @@ describe('POST /api/outfits/try-on: failures add no spend', () => {
 })
 
 describe('POST /api/outfits/try-on: the monthly cap', () => {
-  it('refuses before calling FASHN when the cap is used up', async () => {
+  it('server refuses try-on once the cap is used up', async () => {
     seed()
     vi.stubEnv('TRY_ON_MONTHLY_CAP_USD', '0.10')
     fake.tables.try_on_ledger.push({ id: 'old', month: '2026-11', status: 'charged', cost_usd: 0.075 })
@@ -352,7 +352,7 @@ describe('POST /api/outfits/try-on: the monthly cap', () => {
     expect(ledger()).toHaveLength(1)
   })
 
-  it('refuses a two-step outfit when only the first step would fit, never calling FASHN', async () => {
+  it('a picture that would pass the cap is never started', async () => {
     seed()
     vi.stubEnv('TRY_ON_MONTHLY_CAP_USD', '0.10') // room for one picture, not two
     const res = await post()
@@ -368,7 +368,7 @@ describe('POST /api/outfits/try-on: the monthly cap', () => {
     expect(charged()).toHaveLength(2)
   })
 
-  it('a one-outfit test cap lets one outfit through and stops the next', async () => {
+  it('two requests at the cap never exceed it', async () => {
     seed()
     vi.stubEnv('TRY_ON_MONTHLY_CAP_USD', '0.15')
     await post()
@@ -377,7 +377,7 @@ describe('POST /api/outfits/try-on: the monthly cap', () => {
     expect(charged()).toHaveLength(2)
   })
 
-  it('counts a new month from the 1st, Sydney time', async () => {
+  it('try-on resumes at midnight on the 1st Sydney time', async () => {
     seed()
     vi.stubEnv('TRY_ON_MONTHLY_CAP_USD', '0.15')
     // Used up in November (Sydney)...
@@ -391,7 +391,7 @@ describe('POST /api/outfits/try-on: the monthly cap', () => {
     expect(ledger().map((r) => r.month)).toEqual(['2026-11', '2026-11', '2026-12', '2026-12'])
   })
 
-  it('GET says paused until the 1st when the cap is used up, and the saved picture still shows', async () => {
+  it('cap used up shows the paused message and keeps saved pictures', async () => {
     seed()
     vi.stubEnv('TRY_ON_MONTHLY_CAP_USD', '0.15')
     await post()

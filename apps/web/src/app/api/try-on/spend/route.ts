@@ -1,15 +1,12 @@
 import { NextResponse } from 'next/server'
 import { createServerClient, createServiceClient } from '@/lib/supabase/server'
-import { tryOnEnabled } from '@/lib/paid-extras'
 import { chargedSpendByMonth } from '@/lib/try-on-ledger'
-import { fromUnits, isTryOnOwner, readTryOnConfig, sydneyMonth, toUnits } from '@/lib/try-on'
+import { fromUnits, isTryOnOwner, readTryOnConfig, sydneyMonth, toUnits, tryOnNow } from '@/lib/try-on'
 
 const notFound = () => NextResponse.json({ error: 'Not found' }, { status: 404 })
 
 /** Owner-only: this month's try-on spend, the cap, pictures made and previous months. */
 export async function GET() {
-  if (!tryOnEnabled()) return notFound()
-
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -17,7 +14,7 @@ export async function GET() {
 
   const config = readTryOnConfig()
   const months = await chargedSpendByMonth(await createServiceClient())
-  const month = sydneyMonth(new Date())
+  const month = sydneyMonth(tryOnNow())
   const current = months.find((m) => m.month === month)
   const spentUnits = toUnits(current?.spentUsd ?? 0)
 

@@ -9,7 +9,7 @@ import {
 } from '@/lib/try-on-ledger'
 import { loadGarmentPhoto, loadPersonPhoto, TRY_ON_BUCKET } from '@/lib/try-on-images'
 import {
-  TRY_ON_LABEL, firstOfNextMonth, planTryOn, readTryOnConfig, sydneyMonth,
+  TRY_ON_LABEL, firstOfNextMonth, planTryOn, readTryOnConfig, sydneyMonth, tryOnNow,
   type OutfitPiece,
 } from '@/lib/try-on'
 
@@ -60,7 +60,7 @@ export async function GET(req: Request) {
 
   const imageUrl = outfit.try_on_image_path ? await signedPicture(supabase, outfit.try_on_image_path) : null
 
-  const month = sydneyMonth(new Date())
+  const month = sydneyMonth(tryOnNow())
   const config = readTryOnConfig()
   let paused = true
   if (config) {
@@ -163,7 +163,7 @@ export async function POST(req: Request) {
   }
 
   // The whole outfit must fit under this month's cap before FASHN is called.
-  const month = sydneyMonth(new Date())
+  const month = sydneyMonth(tryOnNow())
   const service = await createServiceClient()
   const reserved = await reservePictures(service, {
     userId: user.id, outfitId: outfit.id, month,
@@ -213,7 +213,7 @@ export async function POST(req: Request) {
     )
   }
 
-  const madeAt = new Date().toISOString()
+  const madeAt = tryOnNow().toISOString()
   const { error: saveError } = await supabase
     .from('outfits')
     .update({ try_on_image_path: path, try_on_made_at: madeAt })

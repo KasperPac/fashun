@@ -22,7 +22,7 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs() })
 
 describe('GET /api/try-on/spend', () => {
-  it('shows the owner this month, the cap, the pictures and previous months, to the cent', async () => {
+  it('owner sees spend, cap, count and previous months', async () => {
     fake.tables.try_on_ledger.push(...Array.from({ length: 13 }, () => row('2026-11')), row('2026-10'), row('2026-10'), row('2026-11', 'reserved'))
     const res = await GET()
     expect(res.status).toBe(200)
@@ -44,7 +44,7 @@ describe('GET /api/try-on/spend', () => {
     expect(json.previous).toEqual([])
   })
 
-  it('returns 404 to any other signed-in account, with no figures', async () => {
+  it('spend panel is not found for anyone but the owner', async () => {
     fake.currentUser = B
     const res = await GET()
     expect(res.status).toBe(404)
@@ -56,9 +56,23 @@ describe('GET /api/try-on/spend', () => {
     expect((await GET()).status).toBe(404)
   })
 
-  it('returns 404 when try-on is off, even for the owner', async () => {
+  it('still shows the owner the history when try-on is switched off, and 404 to others', async () => {
     vi.stubEnv('ENABLE_TRY_ON', '')
+    expect((await GET()).status).toBe(200)
+    fake.currentUser = B
     expect((await GET()).status).toBe(404)
+  })
+
+  it('uses the preview-only test date for the month, and ignores it in production', async () => {
+    fake.tables.try_on_ledger.push(row('2026-11'))
+    vi.stubEnv('TRY_ON_TEST_DATE', '2026-12-01T00:05:00+11:00')
+    vi.stubEnv('VERCEL_ENV', 'preview')
+    const json = await (await GET()).json()
+    expect(json.month).toBe('2026-12')
+    expect(json.pictures).toBe(0)
+    expect(json.previous).toEqual([{ month: '2026-11', spent_usd: 0.075, pictures: 1 }])
+    vi.stubEnv('VERCEL_ENV', 'production')
+    expect((await (await GET()).json()).month).toBe('2026-11')
   })
 
   it('returns 401 when signed out', async () => {

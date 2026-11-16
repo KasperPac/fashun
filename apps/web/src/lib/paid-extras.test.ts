@@ -82,7 +82,7 @@ describe('with try-on on and paid extras off', () => {
     vi.stubEnv('ENABLE_PAID_EXTRAS', '')
   })
 
-  it('image search still makes no call', async () => {
+  it('try-on on makes no image search or background removal call', async () => {
     expect(await searchByImage('https://signed/photo.jpg', 'shirt')).toEqual([])
     expect(mockFetch).not.toHaveBeenCalled()
   })
