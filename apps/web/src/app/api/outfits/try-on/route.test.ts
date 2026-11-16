@@ -330,6 +330,21 @@ describe('POST /api/outfits/try-on: failures add no spend', () => {
     expect(fake.tables.outfits[0].try_on_image_path).toBeNull()
   })
 
+  it('a charged failure shows in the owner\'s panel and not to the person', async () => {
+    seed()
+    fashnFailOnRun = 2
+    expect((await post()).status).toBe(502)
+    const mine = await (await GET(new Request(`http://localhost/api/outfits/try-on?outfit_id=${OUTFIT}`))).json()
+    expect(mine.paused).toBe(false) // still offered, no try-on used up
+    expect(mine.image_url).toBeNull()
+    expect(JSON.stringify(mine)).not.toContain('spent')
+    vi.stubEnv('TRY_ON_OWNER_USER_ID', A)
+    const owner = await (await SPEND()).json()
+    expect(owner.images).toBe(1)
+    expect(owner.spent_usd).toBe(0.075)
+    expect(owner.pictures).toBe(0)
+  })
+
   it('storage failure saves nothing, uses no try-on and counts FASHN\'s charged images for the owner', async () => {
     seed()
     fake.uploadError = true
