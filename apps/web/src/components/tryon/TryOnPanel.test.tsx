@@ -20,6 +20,7 @@ function props(over: Partial<Omit<TryOnPanelViewProps, 'state'>> & { pieces?: Pa
     elapsedMs: over.elapsedMs ?? 0,
     onStart: over.onStart ?? (() => {}),
     onTryAgain: over.onTryAgain ?? (() => {}),
+    notYet: over.notYet,
   }
 }
 const html = (p: TryOnPanelViewProps) => renderToStaticMarkup(<TryOnPanelView {...p} />)
@@ -122,8 +123,20 @@ describe('On you panel', () => {
     fetchSpy.mockRestore()
   })
 
-  it('connection lost shows the failure message, never a blank screen', () => {
+  it('server failure still says nothing was charged', () => {
     expect(html(props({ phase: 'failed' }))).toContain('Nothing was charged. Try again later.')
     expect(html(props({ phase: 'failed' }))).toContain('>See it on me<')
+  })
+
+  it('connection lost never says nothing was charged, offers a check and no new paid try-on', () => {
+    const out = html(props({ phase: 'lost', picture: NEW }))
+    expect(out).toContain('Connection lost')
+    expect(out).toContain('may still be on its way')
+    expect(out).toContain('Check for my picture')
+    expect(out).not.toContain('Nothing was charged')
+    expect(out).not.toContain('>Try again<')
+    expect(out).not.toContain('See it on me')
+    expect(out).toContain('src="https://signed/new.jpg"')
+    expect(html(props({ phase: 'lost', notYet: true }))).toContain('No new picture yet.')
   })
 })

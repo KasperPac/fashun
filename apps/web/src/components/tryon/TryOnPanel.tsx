@@ -7,16 +7,16 @@ import { PieceTile } from '@/components/outfits/HangTag'
 import { savedDate } from '@/lib/saved-outfits'
 import { TRY_ON_LABEL } from '@/lib/try-on'
 import {
-  FAILED_BODY, FAILED_TITLE, NO_PHOTO_LINE, PAUSED_BODY, besideLine, pausedTitle, planPanel,
+  FAILED_BODY, FAILED_TITLE, LOST_BODY, LOST_NOT_YET, LOST_TITLE, NO_PHOTO_LINE, PAUSED_BODY, besideLine, pausedTitle, planPanel,
   type BesidePiece, type PanelPiece, type PanelPlan,
 } from '@/lib/try-on-panel'
 import {
-  LOAD_FAILED, createRunner, loadPanel, progressLines,
+  LOAD_FAILED, checkPicture, createRunner, loadPanel, progressLines,
   type PanelApi, type PanelState, type Picture,
 } from '@/lib/try-on-panel-client'
 import TryOnFrame from './TryOnFrame'
 
-export type Phase = 'idle' | 'working' | 'failed'
+export type Phase = 'idle' | 'working' | 'failed' | 'lost'
 
 const realApi: PanelApi = { fetch: (input, init) => fetch(input, init) }
 
@@ -46,13 +46,17 @@ export interface TryOnPanelViewProps {
   elapsedMs: number
   onStart: () => void
   onTryAgain: () => void
+  /** Looks again at the saved picture (free). */
+  onCheck?: () => void
+  /** True after a check that found nothing new. */
+  notYet?: boolean
   /** Called with the label line, which takes focus when a picture arrives. */
   onLabel?: (el: HTMLParagraphElement | null) => void
   announce?: string
 }
 
 /** Everything the "On you" panel shows once its state has loaded (states 3b to 3i). */
-export function TryOnPanelView({ outfitName, plan, state, picture, phase, elapsedMs, onStart, onTryAgain, onLabel, announce }: TryOnPanelViewProps) {
+export function TryOnPanelView({ outfitName, plan, state, picture, phase, elapsedMs, onStart, onTryAgain, onCheck, notYet, onLabel, announce }: TryOnPanelViewProps) {
   const beside = plan.kind === 'ready' ? plan.beside : []
   const line = besideLine(beside)
   const paused = state.paused ? pausedTitle(state.resumeOn) ?? 'Try-on is paused' : null
@@ -102,7 +106,14 @@ export function TryOnPanelView({ outfitName, plan, state, picture, phase, elapse
         </div>
       )}
 
-      {!working && (
+      {phase === 'lost' && (
+        <div role="alert" className="flex flex-col gap-2">
+          <Notice title={LOST_TITLE} focusTitle>{notYet ? `${LOST_NOT_YET} ${LOST_BODY}` : LOST_BODY}</Notice>
+          <Button variant="secondary" onClick={onCheck}>Check for my picture</Button>
+        </div>
+      )}
+
+      {!working && phase !== 'lost' && (
         plan.kind === 'missing' ? (
           <Notice title={plan.title}>
             Tap the piece <span className="lg:hidden">above</span><span className="hidden lg:inline">on the left</span> to add its photo.
@@ -147,6 +158,7 @@ export default function TryOnPanel({
   const [elapsed, setElapsed] = useState(0)
   const [announce, setAnnounce] = useState('')
   const [arrived, setArrived] = useState(false)
+  const [notYet, setNotYet] = useState(false)
   const [runner] = useState(() => createRunner(api))
 
   useEffect(() => {
@@ -174,6 +186,7 @@ export default function TryOnPanel({
     const started = runner.start(outfitId, { regenerate, previousMadeAt: picture?.madeAt ?? null })
     if (!started) return // a second tap while one is running does nothing
     setConfirm(false)
+    setNotYet(false)
     setArrived(false)
     setElapsed(0)
     setPhase('working')
@@ -187,10 +200,31 @@ export default function TryOnPanel({
         setPaused({ resumeOn: r.resumeOn })
         setPhase('idle')
       } else {
-        setPhase('failed')
+        setPhase(r.kind === 'lost' ? 'lost' : 'failed')
       }
     })
   }
+
+  // Only looks (a free read); never starts a new picture.
+  const check = useCallback(() => {
+    void checkPicture(api, outfitId, picture?.madeAt ?? null).then((r) => {
+      if (r.kind === 'picture') {
+        setPicture(r.picture)
+        setPhase('idle')
+        setNotYet(false)
+        setArrived(true)
+        setAnnounce('Your try-on is ready.')
+      } else {
+        setNotYet(r.kind === 'none')
+      }
+    })
+  }, [api, outfitId, picture])
+
+  useEffect(() => {
+    if (phase !== 'lost') return
+    window.addEventListener('online', check)
+    return () => window.removeEventListener('online', check)
+  }, [phase, check])
 
   if (state === null) {
     return (
@@ -217,6 +251,8 @@ export default function TryOnPanel({
           elapsedMs={elapsed}
           onStart={() => run(false)}
           onTryAgain={() => setConfirm(true)}
+          onCheck={check}
+          notYet={notYet}
           onLabel={focusLabel}
           announce={announce}
         />

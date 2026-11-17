@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { PICTURE_TIMEOUT_MS, createRunner, loadPanel, makePicture, progressLines, type PanelApi } from './try-on-panel-client'
+import { PICTURE_TIMEOUT_MS, checkPicture, createRunner, loadPanel, makePicture, progressLines, type PanelApi } from './try-on-panel-client'
 
 const json = (body: unknown, status = 200) => ({ ok: status < 200 || status >= 300 ? false : true, status, json: async () => body }) as Response
 const PICTURE = { image_url: 'https://signed/new.jpg', made_at: '2026-11-17T02:00:00Z' }
@@ -56,14 +56,14 @@ describe('makePicture', () => {
 
     // Not finished (still the old picture, or none): the person sees the failure message, never a blank screen.
     const notFinished: PanelApi = { fetch: async (_u, init) => { if (init?.method === 'POST') throw new TypeError('lost'); return json({ image_url: null }) } }
-    expect(await makePicture(notFinished, 'o1', { regenerate: false, previousMadeAt: null })).toEqual({ kind: 'failed' })
+    expect(await makePicture(notFinished, 'o1', { regenerate: false, previousMadeAt: null })).toEqual({ kind: 'lost' })
     const sameOld: PanelApi = { fetch: async (_u, init) => { if (init?.method === 'POST') throw new TypeError('lost'); return json(PICTURE) } }
-    expect(await makePicture(sameOld, 'o1', { regenerate: true, previousMadeAt: PICTURE.made_at })).toEqual({ kind: 'failed' })
+    expect(await makePicture(sameOld, 'o1', { regenerate: true, previousMadeAt: PICTURE.made_at })).toEqual({ kind: 'lost' })
     const offlineForGood: PanelApi = { fetch: async () => { throw new TypeError('lost') } }
-    expect(await makePicture(offlineForGood, 'o1', { regenerate: false, previousMadeAt: null })).toEqual({ kind: 'failed' })
+    expect(await makePicture(offlineForGood, 'o1', { regenerate: false, previousMadeAt: null })).toEqual({ kind: 'lost' })
   })
 
-  it('gives up at 90 seconds and shows the failure', async () => {
+  it('gives up at 90 seconds and says the connection was lost, not that nothing was charged', async () => {
     const api: PanelApi = {
       fetch: (_url, init) => new Promise<Response>((_res, rej) => {
         if (init?.method === 'POST') init.signal?.addEventListener('abort', () => rej(new DOMException('aborted', 'AbortError')))
@@ -72,7 +72,23 @@ describe('makePicture', () => {
     }
     const done = makePicture(api, 'o1', { regenerate: false, previousMadeAt: null })
     await vi.advanceTimersByTimeAsync(PICTURE_TIMEOUT_MS)
-    expect(await done).toEqual({ kind: 'failed' })
+    expect(await done).toEqual({ kind: 'lost' })
+  })
+
+  it('a server answer that says it failed is still "failed" (nothing charged)', async () => {
+    expect(await makePicture({ fetch: async () => json({ code: 'TRY_ON_FAILED' }, 502) }, 'o1', { regenerate: true, previousMadeAt: null })).toEqual({ kind: 'failed' })
+  })
+})
+
+describe('checkPicture', () => {
+  it('finds a newer picture, none, or cannot reach the server; only ever a GET', async () => {
+    const fetchMock = vi.fn(async (...args: [string, RequestInit?]) => { void args; return json(PICTURE) })
+    expect(await checkPicture({ fetch: fetchMock }, 'o1', null)).toMatchObject({ kind: 'picture' })
+    expect(fetchMock.mock.calls.every((c) => c[1] === undefined)).toBe(true)
+    expect(await checkPicture({ fetch: async () => json(PICTURE) }, 'o1', PICTURE.made_at)).toEqual({ kind: 'none' })
+    expect(await checkPicture({ fetch: async () => json({ image_url: null }) }, 'o1', null)).toEqual({ kind: 'none' })
+    expect(await checkPicture({ fetch: async () => { throw new TypeError('offline') } }, 'o1', null)).toEqual({ kind: 'unreachable' })
+    expect(await checkPicture({ fetch: async () => json({}, 500) }, 'o1', null)).toEqual({ kind: 'unreachable' })
   })
 })
 

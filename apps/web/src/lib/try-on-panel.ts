@@ -78,4 +78,7 @@ export function pausedTitle(resumeOn: string | null): string | null {
 export const PAUSED_BODY = 'Your saved try-ons still show.'
 export const FAILED_TITLE = "Try-on didn't work this time"
 export const FAILED_BODY = 'Nothing was charged. Try again later.'
+export const LOST_TITLE = 'Connection lost'
+export const LOST_BODY = 'Your picture may still be on its way. If it finishes, it shows here once you are back online. Check again in a moment.'
+export const LOST_NOT_YET = 'No new picture yet.'
 export const NO_PHOTO_LINE = 'Add a try-on photo to see this on you'

@@ -55,12 +55,15 @@ export type RunResult =
   | { kind: 'picture'; picture: Picture }
   | { kind: 'paused'; resumeOn: string | null }
   | { kind: 'failed' }
+  /** No answer from the server (connection dropped or the wait ended): the picture may still be made. Never "nothing was charged". */
+  | { kind: 'lost' }
 
 /**
  * Asks for a picture. A saved picture is free; `regenerate` makes a new one. The wait ends at 90
  * seconds. If the connection drops or the wait ends, one look at the saved picture tells whether
- * the server finished anyway, so the person sees the finished picture or the failure message, and
- * a retry never has to guess. `previousMadeAt` is the picture's date before this request.
+ * the server finished anyway. If that look finds nothing new (or can't be made), the result is
+ * 'lost', not 'failed': we can't know whether a picture was made or charged. Only an answer from
+ * the server saying it failed is 'failed'. Nothing here ever sends a second POST. `previousMadeAt` is the picture's date before this request.
  */
 export async function makePicture(
   api: PanelApi,
@@ -92,15 +95,23 @@ export async function makePicture(
   }
 }
 
-async function recover(api: PanelApi, outfitId: string, previousMadeAt: string | null): Promise<RunResult> {
+export type CheckResult = { kind: 'picture'; picture: Picture } | { kind: 'none' } | { kind: 'unreachable' }
+
+/** One look (GET, free) at the outfit's saved picture: is there one newer than `previousMadeAt`? */
+export async function checkPicture(api: PanelApi, outfitId: string, previousMadeAt: string | null): Promise<CheckResult> {
   try {
     const res = await api.fetch(`/api/outfits/try-on?outfit_id=${encodeURIComponent(outfitId)}`)
-    if (!res.ok) return { kind: 'failed' }
+    if (!res.ok) return { kind: 'unreachable' }
     const picture = parsePicture((await res.json()) as { image_url?: unknown; made_at?: unknown })
-    return picture && picture.madeAt !== previousMadeAt ? { kind: 'picture', picture } : { kind: 'failed' }
+    return picture && picture.madeAt !== previousMadeAt ? { kind: 'picture', picture } : { kind: 'none' }
   } catch {
-    return { kind: 'failed' }
+    return { kind: 'unreachable' }
   }
+}
+
+async function recover(api: PanelApi, outfitId: string, previousMadeAt: string | null): Promise<RunResult> {
+  const found = await checkPicture(api, outfitId, previousMadeAt)
+  return found.kind === 'picture' ? found : { kind: 'lost' }
 }
 
 /** Lets only one picture request run at a time: a second tap while one is running does nothing. */
