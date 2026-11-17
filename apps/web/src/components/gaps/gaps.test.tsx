@@ -154,8 +154,7 @@ describe('Suggestions sheet', () => {
   it('UI-22 and checks 20: no add, save or wishlist control; nothing is written to the wardrobe', () => {
     const html = sheet({ name: 'items', items: [sug(1), sug(2)] })
     expect(html.toLowerCase()).not.toMatch(/add to wardrobe|save|wishlist|add a piece/)
-    const buttons = [...html.matchAll(/<button[^>]*>([^<]*)</g)].map((m) => m[1])
-    expect(buttons.every((b) => b === 'See it at the shop')).toBe(true)
+    expect(html).not.toContain('<button')
   })
 
   it('suggestions are not added to the wardrobe: the gap is still there after browsing', () => {
@@ -192,10 +191,16 @@ describe('Suggestions sheet', () => {
     expect(sheet({ name: 'offline' })).toContain("You&#x27;re offline. Connect to the internet to see suggestions.")
     expect(sheet({ name: 'error' })).toContain("We couldn&#x27;t load suggestions just now.")
   })
+})
 
-  it('the shop button is shown off until the shop-link build (no link, no new tab yet)', () => {
+describe('Shop link button', () => {
+  it('UI-16 shop link opens the shop\'s own page in a new tab: a link with target _blank and a full accessible name', () => {
     const html = sheet({ name: 'items', items: [sug(1)] })
-    expect(html).toMatch(/<button[^>]*disabled[^>]*>See it at the shop</)
-    expect(html).not.toContain('target="_blank"')
+    const a = html.match(/<a[^>]*>See it at the shop/)?.[0] ?? ''
+    expect(a).toContain('target="_blank"')
+    expect(a).toContain('rel="noopener noreferrer"')
+    expect(a).toContain('aria-label="See Loafers 1 at Kmart (opens in a new tab)"')
+    expect(a).toContain('href="/api/gaps/shop-link?occasion=work&amp;category=shoes&amp;t=Loafers+1"')
+    expect(html).not.toContain('<button')
   })
 })

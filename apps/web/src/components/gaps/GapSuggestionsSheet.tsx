@@ -13,7 +13,7 @@ import { ColourSwatch } from '@/components/ui/ColourSwatch'
 import {
   GAP_ALL_FOUND_LINE, GAP_LOAD_FAILED_LINE, GAP_OFFLINE_LINE, GAP_OTHER_THINGS_WORK_LINE,
   GAP_PRICES_NOTE, GAP_STILL_LOOKING_LINE, GAP_UNAVAILABLE_LINE,
-  budgetHref, lookingLine, nothingFoundLine, pausedLine, photoHref, priceSpoken, priceText, sheetIntro, suggestionsHref,
+  budgetHref, lookingLine, nothingFoundLine, pausedLine, photoHref, priceSpoken, priceText, sheetIntro, shopLinkHref, suggestionsHref,
   type GapRow,
 } from '@/lib/gap-card'
 
@@ -73,16 +73,17 @@ function ItemCard({ item, occasion, row, season }: { item: GapSuggestion; occasi
           </p>
         </div>
       </div>
-      {/* The shop link is looked up in Build 7; until then the button is shown but off. */}
-      <button
-        type="button"
-        disabled
-        aria-disabled="true"
-        aria-label={`See ${item.title} at ${item.shop}`}
-        className={`${buttonClasses({ variant: 'secondary', compact: true, disabled: true })} mt-3`}
+      {/* A plain link that opens a new tab at once (so iPhone Safari allows it); the app then looks the shop's page up and forwards. */}
+      <a
+        href={shopLinkHref(occasion, row.category, item.title)}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label={`See ${item.title} at ${item.shop} (opens in a new tab)`}
+        className={`${buttonClasses({ variant: 'secondary', compact: true })} mt-3`}
       >
         See it at the shop
-      </button>
+        <svg aria-hidden="true" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 11l6-6M6 5h5v5" /></svg>
+      </a>
     </li>
   )
 }

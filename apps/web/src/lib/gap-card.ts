@@ -134,6 +134,11 @@ export function suggestionsHref(occasion: OccasionTag, category: GapCategory): s
   return `/api/gaps/suggestions?${new URLSearchParams({ occasion, category }).toString()}`
 }
 
+/** The address that opens one item on its shop's own website (the app looks the link up when it is tapped). */
+export function shopLinkHref(occasion: OccasionTag, category: GapCategory, title: string): string {
+  return `/api/gaps/shop-link?${new URLSearchParams({ occasion, category, t: title }).toString()}`
+}
+
 export function budgetHref(occasion: OccasionTag): string {
   return `/profile/budget?from=style-me&occasion=${occasion}`
 }
