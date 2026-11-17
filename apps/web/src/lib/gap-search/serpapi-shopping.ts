@@ -18,6 +18,7 @@ export function gapSearchFixturesEnabled(): boolean {
 const FIXTURES: Record<GapSearchCategory, unknown> = { tops, bottoms, shoes }
 
 const ENDPOINT = 'https://serpapi.com/search.json'
+const SEARCH_TIMEOUT_MS = 12_000
 
 /** Reads "$49.95" or "A$1,200.00" when the response has no extracted_price. */
 function parsePrice(item: Record<string, unknown>): number | null {
@@ -73,7 +74,7 @@ export const serpapiShopping: ProductSource = {
     })
     let res: Response
     try {
-      res = await fetch(`${ENDPOINT}?${params.toString()}`)
+      res = await fetch(`${ENDPOINT}?${params.toString()}`, { signal: AbortSignal.timeout(SEARCH_TIMEOUT_MS) })
     } catch {
       throw new ProductSourceError('Product search could not be reached')
     }

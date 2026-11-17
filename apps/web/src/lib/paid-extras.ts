@@ -11,3 +11,8 @@ export function paidExtrasEnabled(): boolean {
 export function tryOnEnabled(): boolean {
   return process.env.ENABLE_TRY_ON === 'true'
 }
+
+/** Gap suggestions (product search for wardrobe gaps) are off unless ENABLE_GAP_SUGGESTIONS is exactly "true". Independent of the other two switches. */
+export function gapSuggestionsEnabled(): boolean {
+  return process.env.ENABLE_GAP_SUGGESTIONS === 'true'
+}

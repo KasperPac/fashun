@@ -39,6 +39,71 @@ export type Database = {
   }
   public: {
     Tables: {
+      gap_search_usage: {
+        Row: {
+          month: string
+          searches: number
+        }
+        Insert: {
+          month: string
+          searches?: number
+        }
+        Update: {
+          month?: string
+          searches?: number
+        }
+        Relationships: []
+      }
+      gap_suggestions: {
+        Row: {
+          category: string
+          created_at: string
+          day: string
+          department: string
+          id: string
+          items: Json
+          occasion: string
+          price_max: number
+          price_min: number
+          tier: string
+          user_id: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          day: string
+          department: string
+          id?: string
+          items?: Json
+          occasion: string
+          price_max: number
+          price_min: number
+          tier: string
+          user_id: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          day?: string
+          department?: string
+          id?: string
+          items?: Json
+          occasion?: string
+          price_max?: number
+          price_min?: number
+          tier?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gap_suggestions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invite_codes: {
         Row: {
           code: string
@@ -330,6 +395,13 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      gap_search_reserve: {
+        Args: {
+          p_cap: number
+          p_month: string
+        }
+        Returns: number | null
+      }
       try_on_reserve: {
         Args: {
           p_cap_units: number

@@ -6,6 +6,7 @@ import type { GapCandidate, GapSearchCategory, GapSearchQuery, ProductSource } f
 export type { GapCandidate, GapSearchCategory, GapSearchQuery, ProductSource, RawProduct } from './product-source'
 export { ProductSourceError } from './product-source'
 export { MAX_CANDIDATES } from './filters'
+export { gapSearchFixturesEnabled } from './serpapi-shopping'
 
 export interface GapSearchInput {
   occasion: GapSearchQuery['occasion']

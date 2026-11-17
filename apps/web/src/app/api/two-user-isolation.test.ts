@@ -14,37 +14,39 @@ const A_OUTFIT = '20000000-0000-4000-8000-000000000001'
 const B_ITEM = '10000000-0000-4000-8000-0000000000b1'
 const uid = () => (db.current === 'A' ? A : B)
 
+function from(table: string) {
+  let rows = db.tables[table] ?? []
+  let op: 'select' | 'insert' | 'update' | 'delete' = 'select'
+  let patch: Row = {}
+  const chain: Record<string, unknown> = {}
+  const run = () => {
+    if (op === 'select') return rows
+    const hit = new Set(rows)
+    const all = db.tables[table]
+    if (op === 'delete') db.tables[table] = all.filter((r) => !hit.has(r))
+    if (op === 'update') rows.forEach((r) => Object.assign(r, patch))
+    return rows
+  }
+  const filter = (fn: (r: Row) => boolean) => { rows = rows.filter(fn); return chain }
+  chain.select = () => chain
+  chain.order = () => chain
+  chain.eq = (c: string, v: unknown) => filter((r) => r[c] === v)
+  chain.neq = (c: string, v: unknown) => filter((r) => r[c] !== v)
+  chain.in = (c: string, v: unknown[]) => filter((r) => v.includes(r[c]))
+  chain.contains = (c: string, v: unknown[]) => filter((r) => v.every((x) => (r[c] as unknown[]).includes(x)))
+  chain.insert = (v: Row) => { op = 'insert'; const row = { id: crypto.randomUUID(), created_at: 'now', ...v }; db.tables[table].push(row); rows = [row]; return chain }
+  chain.upsert = (v: Row) => { (db.tables[table] ??= []).push({ id: crypto.randomUUID(), ...v }); return Promise.resolve({ error: null }) }
+  chain.update = (v: Row) => { op = 'update'; patch = v; return chain }
+  chain.delete = () => { op = 'delete'; return chain }
+  chain.single = () => Promise.resolve({ data: run()[0] ?? null, error: rows.length ? null : { message: 'none' } })
+  chain.maybeSingle = () => Promise.resolve({ data: run()[0] ?? null, error: null })
+  chain.then = (res: (v: unknown) => unknown, rej: (e: unknown) => unknown) => Promise.resolve({ data: run(), error: null }).then(res, rej)
+  return chain
+}
+
 vi.mock('@/lib/supabase/server', () => ({
   createServerClient: async () => {
     const me = uid()
-    function from(table: string) {
-      let rows = db.tables[table] ?? []
-      let op: 'select' | 'insert' | 'update' | 'delete' = 'select'
-      let patch: Row = {}
-      const chain: Record<string, unknown> = {}
-      const run = () => {
-        if (op === 'select') return rows
-        const hit = new Set(rows)
-        const all = db.tables[table]
-        if (op === 'delete') db.tables[table] = all.filter((r) => !hit.has(r))
-        if (op === 'update') rows.forEach((r) => Object.assign(r, patch))
-        return rows
-      }
-      const filter = (fn: (r: Row) => boolean) => { rows = rows.filter(fn); return chain }
-      chain.select = () => chain
-      chain.order = () => chain
-      chain.eq = (c: string, v: unknown) => filter((r) => r[c] === v)
-      chain.neq = (c: string, v: unknown) => filter((r) => r[c] !== v)
-      chain.in = (c: string, v: unknown[]) => filter((r) => v.includes(r[c]))
-      chain.contains = (c: string, v: unknown[]) => filter((r) => v.every((x) => (r[c] as unknown[]).includes(x)))
-      chain.insert = (v: Row) => { op = 'insert'; const row = { id: crypto.randomUUID(), created_at: 'now', ...v }; db.tables[table].push(row); rows = [row]; return chain }
-      chain.update = (v: Row) => { op = 'update'; patch = v; return chain }
-      chain.delete = () => { op = 'delete'; return chain }
-      chain.single = () => Promise.resolve({ data: run()[0] ?? null, error: rows.length ? null : { message: 'none' } })
-      chain.maybeSingle = () => Promise.resolve({ data: run()[0] ?? null, error: null })
-      chain.then = (res: (v: unknown) => unknown, rej: (e: unknown) => unknown) => Promise.resolve({ data: run(), error: null }).then(res, rej)
-      return chain
-    }
     return {
       auth: { getUser: async () => ({ data: { user: { id: me } } }) },
       from,
@@ -54,7 +56,11 @@ vi.mock('@/lib/supabase/server', () => ({
       }) },
     }
   },
+  createServiceClient: async () => ({ from, rpc: async () => ({ data: 1, error: null }) }),
 }))
+
+const mockSearch = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/gap-search', async (orig) => ({ ...(await orig<typeof import('@/lib/gap-search')>()), findGapCandidates: mockSearch }))
 
 const mockCreate = vi.hoisted(() => vi.fn())
 vi.mock('@anthropic-ai/sdk', () => ({ default: class { messages = { create: mockCreate } } }))
@@ -63,12 +69,14 @@ import * as wardrobe from './wardrobe/route'
 import * as outfits from './outfits/route'
 import * as generate from './outfits/generate/route'
 import * as profile from './onboarding/profile/route'
+import * as gapSuggestions from './gaps/suggestions/route'
 
 const req = (method: string, body?: unknown, url = 'http://localhost/api/x') =>
   new Request(url, { method, ...(body !== undefined && { body: JSON.stringify(body) }) })
 
 beforeEach(() => {
   vi.clearAllMocks()
+  vi.unstubAllEnvs()
   db.current = 'B'
   db.tables = {
     users: [
@@ -170,5 +178,34 @@ describe('user B cannot reach user A through any route', () => {
     expect(res.status).toBe(422)
     expect((await res.json()).have).toEqual(['tops'])
     expect(mockCreate).not.toHaveBeenCalled()
+  })
+
+  it('one user cannot see or change another\'s tier, budget or suggestions', async () => {
+    vi.stubEnv('ENABLE_GAP_SUGGESTIONS', 'true')
+    vi.stubEnv('SERPAPI_API_KEY', 'test-key')
+    const aItem = { title: 'A secret loafers', shop: 'Rodd & Gunn', price: 300, imageUrl: null, link: 'https://roddandgunn.com/a', productId: 'a1' }
+    const gapDay = (await import('@/lib/gap-suggestions')).gapDay
+    const today = gapDay(new Date())
+    db.tables.gap_suggestions = [
+      { user_id: A, occasion: 'work', category: 'shoes', tier: 'premium', department: 'womens', price_min: 200, price_max: 700, day: today, items: [aItem] },
+    ]
+    // B has no tier: B gets the pick-a-budget answer, not A's tier or A's stored items.
+    const none = await (await gapSuggestions.GET(req('GET', undefined, `http://localhost/api/gaps/suggestions?occasion=work&category=shoes&user_id=${A}&tier=premium`))).json()
+    expect(none).toEqual({ status: 'no_tier', message: 'Pick a budget to get suggestions' })
+    expect(mockSearch).not.toHaveBeenCalled()
+
+    // B picks a tier: B searches for itself and gets B's own items, never A's stored ones.
+    db.tables.users.find((u) => u.id === B)!.budget_tier = 'budget'
+    const bItem = { title: 'B shoes', shop: 'Kmart', price: 30, imageUrl: null, link: 'https://kmart.com.au/b', productId: 'b1' }
+    mockSearch.mockResolvedValue([bItem])
+    const mine = await (await gapSuggestions.GET(req('GET', undefined, 'http://localhost/api/gaps/suggestions?occasion=work&category=shoes'))).json()
+    expect(mine).toMatchObject({ status: 'ok', items: [bItem], stored: false })
+    expect(JSON.stringify(mine)).not.toContain('secret')
+    expect(mockSearch).toHaveBeenCalledWith(expect.objectContaining({ tier: 'budget', department: 'both' }))
+    expect(db.tables.gap_suggestions.filter((r) => r.user_id === B)).toHaveLength(1)
+
+    // A's tier and budget are unchanged by anything B did; B's stored row is B's own.
+    expect(db.tables.users.find((u) => u.id === A)).toMatchObject({ budget_tier: 'premium', department: 'womens', budgets: { shoes: [200, 700] } })
+    expect(db.tables.gap_suggestions.find((r) => r.user_id === A)?.items).toEqual([aItem])
   })
 })
