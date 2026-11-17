@@ -1,5 +1,5 @@
 import { BUDGET_TIER_DEFINITIONS, OCCASION_LABELS } from '@fashun/shared'
-import type { BudgetTier, Department, OccasionTag } from '@fashun/shared'
+import type { BudgetTier, Department, OccasionTag, WardrobeItem } from '@fashun/shared'
 import { wardrobeGaps, type GapCategory, type GapItem } from './wardrobe-gaps'
 import { dollars } from './budget-view'
 
@@ -37,6 +37,13 @@ function onlyOneLabel(category: GapCategory, occasion: OccasionTag, department: 
   if (category === 'tops') return occasion === 'formal' ? 'Another formal shirt or top' : `Another ${o} top`
   if (category === 'bottoms') return department === 'mens' ? `Another pair of ${o} trousers` : `More ${o} trousers or skirts`
   return `Another pair of ${o} shoes`
+}
+
+/** `/api/wardrobe` items (camelCase) in the shape the gap count reads (`occasion_tags`). */
+export function toGapItems(items: readonly WardrobeItem[]): GapItem[] {
+  return items.map((i) => ({
+    id: i.id, name: i.name, category: i.category, colours: i.colours, occasion_tags: i.occasionTags, ownership: i.ownership,
+  }))
 }
 
 /** The gap rows for one occasion, from the owned items only. Empty means no card. */

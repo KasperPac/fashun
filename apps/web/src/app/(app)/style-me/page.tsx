@@ -13,7 +13,7 @@ import FillTheGapsCard from '@/components/gaps/FillTheGapsCard'
 import GapSuggestionsSheet from '@/components/gaps/GapSuggestionsSheet'
 import { DEFAULT_DEPARTMENT } from '@fashun/shared'
 import { SEASON_NAMES } from '@/lib/profile-view'
-import { gapRows, type GapRow, type GapStatus } from '@/lib/gap-card'
+import { gapRows, toGapItems, type GapRow, type GapStatus } from '@/lib/gap-card'
 import { prefersReducedMotion, rememberOccasion, useLastOccasion, useOnline } from '@/lib/browser-state'
 import {
   OCCASION_DESCRIPTIONS,
@@ -331,7 +331,7 @@ function StyleMeContent() {
   const gapCard = (
     <div className="mt-8 w-full max-w-[480px]">
       <FillTheGapsCard
-        rows={gapRows(items, occasion, gapStatus?.status === 'ready' ? gapStatus.department : DEFAULT_DEPARTMENT)}
+        rows={gapRows(toGapItems(items), occasion, gapStatus?.status === 'ready' ? gapStatus.department : DEFAULT_DEPARTMENT)}
         status={gapStatus}
         online={online}
         occasion={occasion}

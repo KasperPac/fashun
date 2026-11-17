@@ -12,8 +12,8 @@ const PHOTO_TIMEOUT_MS = 5_000
 const MODEL = 'claude-haiku-4-5-20251001'
 
 async function loadPhoto(url: string): Promise<string> {
-  if (!isPubliclyFetchable(url)) throw new Error('photo address not allowed')
-  const res = await fetch(url, { headers: { Accept: 'image/*' }, signal: AbortSignal.timeout(PHOTO_TIMEOUT_MS) })
+  if (!url.startsWith('https://') || !isPubliclyFetchable(url)) throw new Error('photo address not allowed')
+  const res = await fetch(url, { headers: { Accept: 'image/*' }, redirect: 'error', signal: AbortSignal.timeout(PHOTO_TIMEOUT_MS) })
   if (!res.ok) throw new Error('photo could not be fetched')
   if (Number(res.headers.get('content-length') ?? 0) > MAX_PHOTO_BYTES) throw new Error('photo too large')
   const bytes = Buffer.from(await res.arrayBuffer())

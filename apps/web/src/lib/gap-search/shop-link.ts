@@ -3,39 +3,44 @@ import { ProductSourceError } from './product-source'
 
 const ENDPOINT = 'https://serpapi.com/search.json'
 const SEARCH_TIMEOUT_MS = 12_000
-const GENERIC_SECOND_LEVEL = new Set(['com', 'net', 'org', 'co', 'gov', 'edu'])
-
-/** Shops whose web address is not their name. Keys and values are normalised. */
-const HOST_ALIASES: Record<string, readonly string[]> = { handm: ['hm'] }
-
-/** "https://www2.hm.com/en_au/x" -> "hm"; "kmart.com.au" -> "kmart". Null when it is not an https address. */
-function hostLabel(link: string): string | null {
-  let url: URL
-  try {
-    url = new URL(link)
-  } catch {
-    return null
-  }
-  if (url.protocol !== 'https:') return null
-  const parts = url.hostname.toLowerCase().split('.')
-  if (parts.length < 2) return null
-  parts.pop()
-  if (parts.length > 1 && GENERIC_SECOND_LEVEL.has(parts[parts.length - 1])) parts.pop()
-  return parts[parts.length - 1] ?? null
+/**
+ * Each example shop's real website (normalised shop name -> hosts). A link counts only on one of these
+ * hosts or a subdomain of it, so kmart.com, kmart.xyz and other look-alikes are refused.
+ */
+const SHOP_HOSTS: Record<string, readonly string[]> = {
+  kmart: ['kmart.com.au'],
+  target: ['target.com.au'],
+  bigw: ['bigw.com.au'],
+  uniqlo: ['uniqlo.com'],
+  cottonon: ['cottonon.com'],
+  handm: ['hm.com'],
+  countryroad: ['countryroad.com.au'],
+  myer: ['myer.com.au'],
+  davidjones: ['davidjones.com'],
+  theiconic: ['theiconic.com.au'],
+  roddandgunn: ['roddandgunn.com'],
+  rmwilliams: ['rmwilliams.com.au'],
+  mjbale: ['mjbale.com'],
 }
 
 /**
  * True only for an https address on the named shop's own website (kmart.com.au, www.kmart.com.au and
- * shop.kmart.com.au for "Kmart"). Google and any other host, including look-alikes such as
- * kmart.example.com, are refused.
+ * shop.kmart.com.au for "Kmart"). Google, any other host and look-alikes such as kmart.com or
+ * kmart.example.com are refused.
  */
 export function linkBelongsToShop(link: string | null | undefined, shop: string): boolean {
   if (!link) return false
-  const label = hostLabel(link)
-  const wanted = normaliseShopName(shop)
-  if (!label || !wanted) return false
-  const normLabel = label.replace(/[^a-z0-9]/g, '')
-  return normLabel === wanted || (HOST_ALIASES[wanted] ?? []).includes(normLabel)
+  let url: URL
+  try {
+    url = new URL(link)
+  } catch {
+    return false
+  }
+  if (url.protocol !== 'https:' || url.username || url.password) return false
+  const hosts = SHOP_HOSTS[normaliseShopName(shop)]
+  if (!hosts) return false
+  const host = url.hostname.toLowerCase()
+  return hosts.some((h) => host === h || host.endsWith(`.${h}`))
 }
 
 /** The first web result on the shop's own site, from one Google search. Null when there is none. */

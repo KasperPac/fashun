@@ -50,6 +50,20 @@ const SEASONS: ColourSeason[] = ['spring', 'summer', 'autumn', 'winter']
 const isSeason = (value: string | null): value is ColourSeason =>
   SEASONS.some((s) => s === value)
 
+/** The columns loadProfile reads. The browser client's generics type the answer as never, so the row is named here. */
+interface ProfileRow {
+  colour_season: string | null
+  skin_depth: string | null
+  skin_undertone: string | null
+  hair_colour: string | null
+  eye_colour: string | null
+  best_colours: string[] | null
+  avoid_colours: string[] | null
+  suggested_styles: string[] | null
+  budget_tier: string | null
+  department: string | null
+}
+
 export async function loadProfile(): Promise<ProfileData | null> {
   const { data: auth } = await supabase.auth.getUser()
   if (!auth.user) throw new Error('Not signed in')
@@ -60,19 +74,20 @@ export async function loadProfile(): Promise<ProfileData | null> {
     .maybeSingle()
   if (error) throw error
   if (!data) return null
-  const depth = data.skin_depth as keyof typeof SKIN_TONE_NAMES | null
-  const undertone = data.skin_undertone as keyof typeof UNDERTONE_NAMES | null
+  const row: ProfileRow = data
+  const depth = row.skin_depth as keyof typeof SKIN_TONE_NAMES | null
+  const undertone = row.skin_undertone as keyof typeof UNDERTONE_NAMES | null
   return {
-    season: isSeason(data.colour_season) ? data.colour_season : null,
+    season: isSeason(row.colour_season) ? row.colour_season : null,
     skinTone: depth && SKIN_TONE_NAMES[depth] ? SKIN_TONE_NAMES[depth] : null,
     undertone: undertone && UNDERTONE_NAMES[undertone] ? UNDERTONE_NAMES[undertone] : null,
-    hair: data.hair_colour,
-    eyes: data.eye_colour,
-    best: data.best_colours ?? [],
-    avoid: data.avoid_colours ?? [],
-    styles: (data.suggested_styles ?? []) as StylePref[],
-    budgetTier: isBudgetTier(data.budget_tier) ? data.budget_tier : null,
-    department: isDepartment(data.department) ? data.department : DEFAULT_DEPARTMENT,
+    hair: row.hair_colour,
+    eyes: row.eye_colour,
+    best: row.best_colours ?? [],
+    avoid: row.avoid_colours ?? [],
+    styles: (row.suggested_styles ?? []) as StylePref[],
+    budgetTier: isBudgetTier(row.budget_tier) ? row.budget_tier : null,
+    department: isDepartment(row.department) ? row.department : DEFAULT_DEPARTMENT,
   }
 }
 

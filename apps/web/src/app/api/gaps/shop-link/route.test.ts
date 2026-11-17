@@ -78,6 +78,16 @@ describe('GET /api/gaps/shop-link', () => {
     expect((db.tables.gap_suggestions[0].items as Row[])[0].link).toBe('https://www.kmart.com.au/product/black-loafers')
   })
 
+  it('finds the item when the same gap has two rows from one day (budget changed)', async () => {
+    db.tables.gap_suggestions = [
+      { id: 'old', user_id: A, occasion: 'work', category: 'shoes', day: '2026-11-18', items: [{ title: 'Other', shop: 'Kmart' }] },
+      { id: 'r1', user_id: A, occasion: 'work', category: 'shoes', day: '2026-11-18', items: [{ ...GOOGLE_ITEM }] },
+    ]
+    const res = await get()
+    expect(res.status).toBe(302)
+    expect(res.headers.get('location')).toBe('https://www.kmart.com.au/product/black-loafers')
+    expect((db.tables.gap_suggestions[1].items as Row[])[0].link).toBe('https://www.kmart.com.au/product/black-loafers')
+  })
   it('a second tap on the same item makes no search', async () => {
     await get()
     lookup.mockClear()

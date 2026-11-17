@@ -11,15 +11,17 @@ const full = (tag: string) => [
 ]
 
 describe('wardrobeGaps', () => {
-  it('reports missing Work shoes', () => {
+  it('no Work shoes gives a Work shoes gap', () => {
     const gaps = wardrobeGaps(full('work').filter((i) => i.category !== 'shoes'), 'work')
     expect(gaps).toEqual([{ category: 'shoes', occasion: 'work', kind: 'missing', label: 'Work shoes', card: 'No Work shoes yet' }])
   })
-  it('reports an only-one Casual top, and nothing with two of each', () => {
+  it('one Casual top offers another Casual top', () => {
     const items = full('casual').filter((i) => i.id !== 't2')
     expect(wardrobeGaps(items, 'casual')).toEqual([
       { category: 'tops', occasion: 'casual', kind: 'only-one', label: 'another Casual top', card: 'another Casual top' },
     ])
+  })
+  it('two of each for an occasion shows no card', () => {
     expect(wardrobeGaps(full('casual'), 'casual')).toEqual([])
   })
   it('words only-one bottoms and shoes', () => {
@@ -33,13 +35,13 @@ describe('wardrobeGaps', () => {
       ['shoes', 'missing', 'No Formal shoes yet'],
     ])
   })
-  it('never counts wishlist items as owned', () => {
+  it('wishlist items do not count as owned for gaps', () => {
     const items = [...full('work').filter((i) => i.category !== 'shoes'), item('w1', 'shoes', ['work'], 'wishlist'), item('w2', 'shoes', ['work'], 'wishlist')]
     expect(wardrobeGaps(items, 'work').map((g) => [g.category, g.kind])).toEqual([['shoes', 'missing']])
     const one = [...full('work'), item('w3', 'tops', ['work'], 'wishlist')].filter((i) => i.id !== 't2')
     expect(wardrobeGaps(one, 'work').map((g) => [g.category, g.kind])).toEqual([['tops', 'only-one']])
   })
-  it('ignores outerwear, bags and accessories', () => {
+  it('gaps cover only tops, bottoms and shoes', () => {
     const extras = [item('o', 'outerwear', null), item('g', 'bags', null), item('a', 'accessories', null)]
     expect(wardrobeGaps([...full('work'), ...extras], 'work')).toEqual([])
     expect(wardrobeGaps(extras, 'work').map((g) => g.category)).toEqual(['tops', 'bottoms', 'shoes'])

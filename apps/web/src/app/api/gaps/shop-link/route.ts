@@ -68,11 +68,13 @@ export async function GET(req: Request) {
     .eq('occasion', occasion)
     .eq('category', category)
     .order('day', { ascending: false })
-    .limit(1)
+    .limit(10)
   if (error) return unavailablePage()
-  const row = rows?.[0]
-  const items = row && Array.isArray(row.items) ? (row.items as StoredItem[]) : []
-  const item = items.find((i) => typeof i === 'object' && i !== null && i.title === t && typeof i.shop === 'string')
+  // The same gap can have several rows (a budget, department or price change): use the newest one that holds the item.
+  const isTheItem = (i: StoredItem | null) => typeof i === 'object' && i !== null && i.title === t && typeof i.shop === 'string'
+  const row = (rows ?? []).find((r) => Array.isArray(r.items) && (r.items as StoredItem[]).some(isTheItem))
+  const items = row ? (row.items as StoredItem[]) : []
+  const item = items.find(isTheItem)
   if (!row || !item) return notFoundPage(null)
   const shop = item.shop as string
   const storedLink = typeof item.link === 'string' ? item.link : null

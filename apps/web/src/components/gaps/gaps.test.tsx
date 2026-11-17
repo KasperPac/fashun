@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import type { OccasionTag } from '@fashun/shared'
+import type { OccasionTag, WardrobeItem } from '@fashun/shared'
 import type { GapSuggestion } from '@/lib/gap-search'
 import type { GapItem } from '@/lib/wardrobe-gaps'
 
@@ -8,7 +8,7 @@ vi.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams()
 
 import FillTheGapsCard from './FillTheGapsCard'
 import { SheetBody, type SheetState } from './GapSuggestionsSheet'
-import { gapRows, type GapStatus } from '@/lib/gap-card'
+import { gapRows, toGapItems, type GapStatus } from '@/lib/gap-card'
 
 const item = (category: string, tag: OccasionTag, ownership = 'owned'): GapItem =>
   ({ category, occasionTags: [tag], ownership } as unknown as GapItem)
@@ -202,5 +202,18 @@ describe('Shop link button', () => {
     expect(a).toContain('aria-label="See Loafers 1 at Kmart (opens in a new tab)"')
     expect(a).toContain('href="/api/gaps/shop-link?occasion=work&amp;category=shoes&amp;t=Loafers+1"')
     expect(html).not.toContain('<button')
+  })
+})
+
+describe('gap rows from the /api/wardrobe shape', () => {
+  const api = (category: WardrobeItem['category'], id: string): WardrobeItem =>
+    ({ id, userId: 'u', ownership: 'owned', category, name: id, colours: [], styleTags: [], occasionTags: ['casual'], imageUrl: '' })
+  const wardrobeB = [api('tops', 't1'), api('tops', 't2'), api('bottoms', 'b1'), api('bottoms', 'b2'), api('shoes', 's1'), api('shoes', 's2')]
+  it('items tagged Casual only leave gaps for Formal (occasion tags are read)', () => {
+    expect(gapRows(toGapItems(wardrobeB), 'formal', 'womens').map((r) => r.label))
+      .toEqual(['Formal shirts or tops', 'Formal trousers or skirts', 'Formal shoes'])
+  })
+  it('and none for Casual', () => {
+    expect(gapRows(toGapItems(wardrobeB), 'casual', 'womens')).toEqual([])
   })
 })

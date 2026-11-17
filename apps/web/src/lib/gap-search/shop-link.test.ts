@@ -26,6 +26,32 @@ describe('linkBelongsToShop', () => {
   })
 })
 
+describe('linkBelongsToShop look-alikes', () => {
+  it.each([
+    ['https://www.target.com/p', 'Target'],
+    ['https://kmart.com/p', 'Kmart'],
+    ['https://kmart.xyz/p', 'Kmart'],
+    ['https://kmart.shop/p', 'Kmart'],
+    ['https://kmart.co.uk/p', 'Kmart'],
+    ['https://myer.net/p', 'Myer'],
+    ['https://uniqlo.co/p', 'Uniqlo'],
+    ['https://notkmart.com.au/p', 'Kmart'],
+    ['https://kmart.com.au.evil.com/p', 'Kmart'],
+    ['https://user:pw@kmart.com.au/p', 'Kmart'],
+  ])('refuses %s for %s', (link, shop) => {
+    expect(linkBelongsToShop(link, shop)).toBe(false)
+  })
+  it.each([
+    ['Kmart', 'kmart.com.au'], ['Target', 'target.com.au'], ['Big W', 'bigw.com.au'], ['Uniqlo', 'uniqlo.com'],
+    ['Cotton On', 'cottonon.com'], ['H&M', 'hm.com'], ['Country Road', 'countryroad.com.au'], ['Myer', 'myer.com.au'],
+    ['David Jones', 'davidjones.com'], ['THE ICONIC', 'theiconic.com.au'], ['Rodd & Gunn', 'roddandgunn.com'],
+    ['R.M. Williams', 'rmwilliams.com.au'], ['M.J. Bale', 'mjbale.com'],
+  ])('accepts %s on %s and its subdomains', (shop, host) => {
+    expect(linkBelongsToShop(`https://${host}/p`, shop)).toBe(true)
+    expect(linkBelongsToShop(`https://www.${host}/p`, shop)).toBe(true)
+  })
+})
+
 describe('searchShopLink', () => {
   const answer = (organic: unknown) => vi.fn(async () => new Response(JSON.stringify({ organic_results: organic })))
   it('makes one search and returns the first result on the shop\'s own site', async () => {
