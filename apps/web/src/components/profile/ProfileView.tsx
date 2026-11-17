@@ -28,6 +28,9 @@ import {
   type TraitKey,
 } from '@/lib/profile-edit'
 import { Kicker, ScreenBlock } from '@/components/ui/Onboarding'
+import { loadPhotoState, loadSpendLine, type PhotoState } from '@/lib/try-on-photo-client'
+import TryOnPhotoSection from '@/components/tryon/TryOnPhotoSection'
+import TryOnSpendRow from '@/components/tryon/TryOnSpendRow'
 
 export interface ProfileData {
   season: ColourSeason | null
@@ -68,19 +71,34 @@ export async function loadProfile(): Promise<ProfileData | null> {
   }
 }
 
-function useProfile() {
+interface TryOnProfile {
+  photo: PhotoState
+  /** The owner's "US$3.15 of US$7.50", null for everyone else. */
+  spend: string | null
+}
+
+const NO_TRY_ON: TryOnProfile = { photo: { kind: 'off' }, spend: null }
+
+/** Loads alongside the profile, never fails it: any problem shows only in the try-on section. */
+async function loadTryOn(): Promise<TryOnProfile> {
+  const call = (input: RequestInfo | URL, init?: RequestInit) => fetch(input, init)
+  const [photo, spend] = await Promise.all([loadPhotoState({ fetch: call }), loadSpendLine({ fetch: call })])
+  return { photo, spend }
+}
+
+function useProfile(withTryOn: boolean) {
   const [state, setState] = useState<
-    { status: 'loading' } | { status: 'error' } | { status: 'ready'; profile: ProfileData | null }
+    { status: 'loading' } | { status: 'error' } | { status: 'ready'; profile: ProfileData | null; tryOn: TryOnProfile }
   >({ status: 'loading' })
   const [attempt, setAttempt] = useState(0)
   useEffect(() => {
     let cancelled = false
-    loadProfile().then(
-      (profile) => { if (!cancelled) setState({ status: 'ready', profile }) },
+    Promise.all([loadProfile(), withTryOn ? loadTryOn() : Promise.resolve(NO_TRY_ON)]).then(
+      ([profile, tryOn]) => { if (!cancelled) setState({ status: 'ready', profile, tryOn }) },
       () => { if (!cancelled) setState({ status: 'error' }) },
     )
     return () => { cancelled = true }
-  }, [attempt])
+  }, [attempt, withTryOn])
   const load = useCallback(() => {
     setState({ status: 'loading' })
     setAttempt((a) => a + 1)
@@ -167,7 +185,7 @@ export default function ProfileView({
   selfieHref?: string
 }) {
   const router = useRouter()
-  const { state, load } = useProfile()
+  const { state, load } = useProfile(headline === 'tab')
   const [edits, setEdits] = useState<Partial<ProfileData>>({})
   const [editing, setEditing] = useState<Editing>(null)
   const [draftStyles, setDraftStyles] = useState<StylePref[]>([])
@@ -274,6 +292,8 @@ export default function ProfileView({
   const shown: Record<TraitKey, string | null> = {
     skin: current.skinTone, undertone: current.undertone, hair: current.hair, eyes: current.eyes,
   }
+  const tryOn = state.tryOn
+  const showTryOn = tryOn.photo.kind !== 'off' || tryOn.spend !== null
   const heroWord = !season ? 'Your colours' : headline === 'reveal' ? seasonHeadline(season) : SEASON_NAMES[season]
 
   return (
@@ -301,7 +321,7 @@ export default function ProfileView({
         </div>
       )}
 
-      <div className="mx-auto flex max-w-[1120px] flex-col gap-8 px-6 py-8 lg:grid lg:grid-cols-2 lg:grid-rows-[auto_1fr] lg:gap-x-12 lg:gap-y-8 lg:px-10">
+      <div className={`mx-auto flex max-w-[1120px] flex-col gap-8 px-6 py-8 lg:grid lg:grid-cols-2 ${showTryOn ? 'lg:grid-rows-[auto_auto_1fr]' : 'lg:grid-rows-[auto_1fr]'} lg:gap-x-12 lg:gap-y-8 lg:px-10`}>
         <Reveal index={1} className="lg:col-start-1 lg:row-start-1">
           <section aria-labelledby="about-you">
             <h2 id="about-you" className="mb-1 font-display text-[22px] font-extrabold uppercase">About you</h2>
@@ -324,7 +344,7 @@ export default function ProfileView({
             </ul>
           </section>
         </Reveal>
-        <div key={season ?? 'none'} className="flex animate-fade-in flex-col gap-8 lg:col-start-2 lg:row-span-2 lg:row-start-1">
+        <div key={season ?? 'none'} className={`flex animate-fade-in flex-col gap-8 lg:col-start-2 lg:row-start-1 ${showTryOn ? 'lg:row-span-3' : 'lg:row-span-2'}`}>
           {season ? (
             <>
               <Reveal index={2}><ColourGrid title="Wear these" hexes={current.best} /></Reveal>
@@ -351,6 +371,12 @@ export default function ProfileView({
             <Button variant="secondary" compact fullWidth={false} onClick={() => open('styles')}>Change</Button>
           </section>
         </Reveal>
+        {showTryOn && (
+          <Reveal index={5} className="lg:col-start-1 lg:row-start-3">
+            <TryOnPhotoSection initial={tryOn.photo} />
+            {tryOn.spend !== null && <TryOnSpendRow value={tryOn.spend} />}
+          </Reveal>
+        )}
         <div className="flex max-w-[480px] flex-col gap-3 lg:col-span-2">
           {headline === 'tab' && (
             <Button variant="secondary" onClick={() => setRetakeOpen(true)}>Retake selfie</Button>
