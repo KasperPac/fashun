@@ -25,7 +25,6 @@ CREATE TABLE IF NOT EXISTS public.gap_suggestions (
 -- policies: only the server (service role) stores suggestions.
 ALTER TABLE public.gap_suggestions ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS gap_suggestions_select_own ON public.gap_suggestions;
 CREATE POLICY gap_suggestions_select_own ON public.gap_suggestions
   FOR SELECT USING (user_id = auth.uid());
 
