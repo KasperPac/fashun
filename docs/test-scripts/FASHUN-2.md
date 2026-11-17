@@ -56,10 +56,10 @@ Written by QA (KAS-227) from the FASHUN-2 outcome, the 22 acceptance checks and 
 |---|---|---|---|
 | P5 | O1, top and bottom | 1 | 2 |
 | P10 | O1 "Try again" | 1 | 2 |
-| P12 | O1 "Try again" with the connection dropped | 1 | 2 |
+| P12a, P12b | O1 "Try again" with the connection dropped, two ways | 2 | 4 |
 | P13a | O1 under a test cap with room for one outfit | 1 | 2 |
 | P17 | O5 (B, top and bottom) | 1 | 2 |
-| **Planned** | | **5** | **10 (US$0.75)** |
+| **Planned** | | **6** | **12 (US$0.90)** |
 | Re-runs if a step has to be repeated | | | up to 10 more |
 | **Hard stop** | | | **20 FASHN images (US$1.50)** |
 
@@ -197,12 +197,13 @@ Each later step that needs a different setting says exactly what the operator ch
 | P9 | 9 | A | Sign out, sign in, open O1 | The same picture at once, with the AI label. Spend and count unchanged. | `preview` |
 | P10 | 10 | A, O1 | Tap "Try again" | Before it starts, a line says it uses some of this month's try-ons. Going ahead gives a new picture within 90 seconds, and spend goes up US$0.15. | `preview` (2 FASHN images) |
 | P11 | 11 | **Operator:** set the FASHN key on the preview to a made-up value (never a real key), redeploy. A, O1 (has a saved picture) and O2 (no picture) | Tap "Try again" on O1, then "See it on me" on O2 | Each shows the failure message word for word **within 90 seconds**. O1 still shows its saved picture; O2 still shows its items. FASHN refused at the first step, so spend, images and count are unchanged. Operator: the logs show one reason line each, with no personal data. **Operator afterwards:** put the real key back, redeploy. | `preview` (0 FASHN images) |
-| P12 | 11 | A, O1 | Tap "Try again", and drop the connection (browser offline) right after | When back online: the finished picture or the failure message, never a blank screen. Images went up by at most 2 (one picture's worth, never two). If it ended in the failure message, the count is unchanged and any image FASHN charged shows in images and spend. | `preview` (2 FASHN images) |
+| P12a | 11 | A, O1 | Tap "Try again", go offline 3 s later; the server's answer still reaches the phone; come back online after the picture is done | When back online: the finished picture shows, with no reload (never an empty frame or a broken image). Images up by 2, count +1. | `preview` (2 FASHN images) |
+| P12b | 11 | A, O1 | Tap "Try again"; the connection drops 3 s later and the server's answer never reaches the phone; come back online after the server has finished | While offline: "Connection lost", "Your picture may still be on its way…" and a free "Check for my picture" button; no paid button; **never "Nothing was charged"** (a picture may have been made). Back online: the finished picture shows by itself or after "Check for my picture", with no second request to make a picture. Images up by 2 (never 4), count +1. "Nothing was charged" stays only for a failure the server reports (P11). | `preview` (2 FASHN images) |
 | P13a | 13 | **Operator:** set the cap on the preview to **(images shown in P12's panel + 2) × US$0.075**, worked out from the image count, not the rounded spend; redeploy. A, O1 | "Try again" on O1 | It works: one new picture. Spend now equals the cap exactly. | `preview` (2 FASHN images) |
 | P13b | 12 | Same cap, A, O1, O2 | Open each | "See it on me" (O2) and "Try again" (O1) are replaced by the paused message, "Try-on is paused until 1 December. Your saved try-ons still show." The saved picture on O1 still opens. Count unchanged. | `preview` |
 | P13c | 13 | **Operator:** set the cap to **(current images + 1) × US$0.075**, redeploy. A, O1 and O2 (each needs 2 images) | Ask for a picture on O1, then on O2 | Neither starts (paused or "would pass the cap" message). Spend, images and count unchanged. Spend never shows more than the cap. | `preview` |
 | P14 | 14, 15 | **Operator:** keep P13b's used-up cap and add the Engineer's test-date setting (named in the build report), value **2026-12-01T00:05:00+11:00** (5 minutes past midnight on 1 December in Sydney), on the preview only, redeploy. A | Open O1, then a new outfit, then the spend panel | "See it on me" is back with no reset by anyone. Panel: December at US$0.00 and count 0; November listed as a previous month with its spend. **Don't tap** (a picture now would be counted in December). **Operator afterwards:** remove the test date, put the cap back to US$7.50, redeploy. | `preview` |
-| P15 | 15 | A (owner on the preview) | Open the spend panel | Spend, cap US$7.50, count, images and previous months show. **Images = baseline images + the FASHN images QA's run caused in P5 to P13a** (8 planned; P12 may add fewer). **Spend = images × US$0.075, rounded half up to the cent.** QA records the images and count so Kasper can compare with FASHN's usage page. | `preview` |
+| P15 | 15 | A (owner on the preview) | Open the spend panel | Spend, cap US$7.50, count, images and previous months show. **Images = baseline images + the FASHN images QA's run caused in P5 to P13a** (10 planned). **Spend = images × US$0.075, rounded half up to the cent.** QA records the images and count so Kasper can compare with FASHN's usage page. | `preview` |
 | P16 | 16 | B; then signed out | Look for the panel in every screen, then open its address | No panel. "Not found". | `preview` |
 | P17 | 18 | B, `fashun-test-body-b.jpg`, O5 | B agrees and adds the photo, makes O5's picture | B's picture shows B's person in the test top and jeans. B never sees A's photo or pictures anywhere. | `preview` (2 FASHN images) |
 | P18 | 18 | A's photo and picture addresses (copied from A's screens), B's the same way | As B open A's; as A open B's; signed out open both | Not found or the sign-in page every time. No image comes back. | `preview` |
@@ -247,4 +248,4 @@ Kasper decided 1 to 3 on the Decisions card (answered 16 Nov 2026, 22:28 UTC); t
 7. **FASHUN-1 check 14: settled.** Kasper agreed check 21 as written: FASHUN-1 check 14 is replaced by FASHUN-2 checks 19 and 20. I4, P22. Check 19 is QA's wording: H1, H2, P19.
 
 ## Count
-50 `automated`, 28 `preview` (27 real-use steps P0 to P24, plus I3 on the PR), 6 `live-safe` (84 steps; was 81 before KAS-235: B4 and P6 removed, B5b, D7, E8, F4 and I4 added). Check 6 is not in this release and has no steps. Every other check, 1 to 5 and 7 to 22, has at least two steps (fewest: checks 5, 7, 8, 9, 10, 14, 16, 17 and 19 with 3; check 22 with 2).
+50 `automated`, 29 `preview` (28 real-use steps P0 to P24, plus I3 on the PR), 6 `live-safe` (85 steps; P12 split into P12a and P12b after KAS-274; was 81 before KAS-235: B4 and P6 removed, B5b, D7, E8, F4 and I4 added). Check 6 is not in this release and has no steps. Every other check, 1 to 5 and 7 to 22, has at least two steps (fewest: checks 5, 7, 8, 9, 10, 14, 16, 17 and 19 with 3; check 22 with 2).

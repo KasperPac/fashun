@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { isValidElement, type ReactElement, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
+import TryOnFrame from './TryOnFrame'
 import { TryOnPanelView, type TryOnPanelViewProps } from './TryOnPanel'
 import { planPanel, type PanelPiece } from '@/lib/try-on-panel'
 import { TRY_ON_LABEL } from '@/lib/try-on'
@@ -138,5 +139,29 @@ describe('On you panel', () => {
     expect(out).not.toContain('See it on me')
     expect(out).toContain('src="https://signed/new.jpg"')
     expect(html(props({ phase: 'lost', notYet: true }))).toContain('No new picture yet.')
+  })
+
+  it('picture image failed to load: no broken image, a clear state and a free check, and no paid button', () => {
+    const out = html({ ...props({ picture: NEW }), imageBroken: true })
+    expect(out).not.toContain('src="https://signed/new.jpg"')
+    expect(out).toContain('Loading your picture')
+    expect(out).toContain('Check for my picture')
+    expect(out).not.toContain('See it on me')
+    expect(out).not.toContain('Nothing was charged')
+  })
+
+  it('picture image that loads shows no waiting state, and its load error is reported', () => {
+    expect(html(props({ picture: NEW }))).not.toContain('Loading your picture')
+    const onImageError = vi.fn()
+    const tree = TryOnFrame({ variant: 'picture', src: NEW.url, alt: 'x', onImageError }) as ReactElement<{ children?: ReactNode }>
+    const find = (n: ReactNode): ReactElement<{ onError?: () => void }> | null => {
+      if (!isValidElement(n)) return null
+      const el = n as ReactElement<{ onError?: () => void; children?: ReactNode }>
+      if (el.type === 'img') return el
+      for (const c of [el.props.children].flat()) { const f = find(c); if (f) return f }
+      return null
+    }
+    find(tree)?.props.onError?.()
+    expect(onImageError).toHaveBeenCalledTimes(1)
   })
 })

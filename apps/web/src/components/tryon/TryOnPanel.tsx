@@ -11,7 +11,7 @@ import {
   type BesidePiece, type PanelPiece, type PanelPlan,
 } from '@/lib/try-on-panel'
 import {
-  LOAD_FAILED, checkPicture, createRunner, loadPanel, progressLines,
+  LOAD_FAILED, checkPicture, createRunner, loadPanel, progressLines, reloadPicture as fetchPicture, whenOnline,
   type PanelApi, type PanelState, type Picture,
 } from '@/lib/try-on-panel-client'
 import TryOnFrame from './TryOnFrame'
@@ -50,13 +50,16 @@ export interface TryOnPanelViewProps {
   onCheck?: () => void
   /** True after a check that found nothing new. */
   notYet?: boolean
+  /** True when the picture's address failed to load; shows a waiting state and a free check. */
+  imageBroken?: boolean
+  onImageError?: () => void
   /** Called with the label line, which takes focus when a picture arrives. */
   onLabel?: (el: HTMLParagraphElement | null) => void
   announce?: string
 }
 
 /** Everything the "On you" panel shows once its state has loaded (states 3b to 3i). */
-export function TryOnPanelView({ outfitName, plan, state, picture, phase, elapsedMs, onStart, onTryAgain, onCheck, notYet, onLabel, announce }: TryOnPanelViewProps) {
+export function TryOnPanelView({ outfitName, plan, state, picture, phase, elapsedMs, onStart, onTryAgain, onCheck, notYet, imageBroken, onImageError, onLabel, announce }: TryOnPanelViewProps) {
   const beside = plan.kind === 'ready' ? plan.beside : []
   const line = besideLine(beside)
   const paused = state.paused ? pausedTitle(state.resumeOn) ?? 'Try-on is paused' : null
@@ -79,7 +82,7 @@ export function TryOnPanelView({ outfitName, plan, state, picture, phase, elapse
       {working ? (
         <TryOnFrame variant="progress" src={picture?.url ?? state.photoUrl} />
       ) : picture ? (
-        <TryOnFrame variant="picture" src={picture.url} alt={`You wearing ${outfitName}`} />
+        <TryOnFrame variant="picture" src={picture.url} alt={`You wearing ${outfitName}`} broken={imageBroken} onImageError={onImageError} />
       ) : null}
 
       {progress && (
@@ -104,6 +107,10 @@ export function TryOnPanelView({ outfitName, plan, state, picture, phase, elapse
         <div role="alert">
           <Notice title={FAILED_TITLE} focusTitle>{FAILED_BODY}</Notice>
         </div>
+      )}
+
+      {!working && picture && imageBroken && phase !== 'lost' && (
+        <Button variant="secondary" onClick={onCheck}>Check for my picture</Button>
       )}
 
       {phase === 'lost' && (
@@ -159,6 +166,7 @@ export default function TryOnPanel({
   const [announce, setAnnounce] = useState('')
   const [arrived, setArrived] = useState(false)
   const [notYet, setNotYet] = useState(false)
+  const [imageBroken, setImageBroken] = useState(false)
   const [runner] = useState(() => createRunner(api))
 
   useEffect(() => {
@@ -167,7 +175,7 @@ export default function TryOnPanel({
       if (cancelled) return
       setState(s)
       onAvailable?.(s.kind !== 'off')
-      if (s.kind === 'ready') setPicture(s.picture)
+      if (s.kind === 'ready') { setPicture(s.picture); setImageBroken(false) }
     })
     return () => { cancelled = true }
   }, [api, outfitId, images, attempt, onAvailable])
@@ -193,6 +201,7 @@ export default function TryOnPanel({
     void started.then((r) => {
       if (r.kind === 'picture') {
         setPicture(r.picture)
+        setImageBroken(false)
         setPhase('idle')
         setArrived(true)
         setAnnounce('Your try-on is ready.')
@@ -210,6 +219,7 @@ export default function TryOnPanel({
     void checkPicture(api, outfitId, picture?.madeAt ?? null).then((r) => {
       if (r.kind === 'picture') {
         setPicture(r.picture)
+        setImageBroken(false)
         setPhase('idle')
         setNotYet(false)
         setArrived(true)
@@ -220,11 +230,25 @@ export default function TryOnPanel({
     })
   }, [api, outfitId, picture])
 
+  // The picture's address failed to load: look again (free GET, never a new try-on) and load it again.
+  const reloadPicture = useCallback(() => {
+    void fetchPicture(api, outfitId).then((p) => {
+      if (p) {
+        setPicture({ ...p })
+        setImageBroken(false)
+      }
+    })
+  }, [api, outfitId])
+
   useEffect(() => {
     if (phase !== 'lost') return
-    window.addEventListener('online', check)
-    return () => window.removeEventListener('online', check)
+    return whenOnline(check)
   }, [phase, check])
+
+  useEffect(() => {
+    if (!imageBroken) return
+    return whenOnline(reloadPicture)
+  }, [imageBroken, reloadPicture])
 
   if (state === null) {
     return (
@@ -251,7 +275,9 @@ export default function TryOnPanel({
           elapsedMs={elapsed}
           onStart={() => run(false)}
           onTryAgain={() => setConfirm(true)}
-          onCheck={check}
+          onCheck={phase !== 'lost' && imageBroken ? reloadPicture : check}
+          imageBroken={imageBroken}
+          onImageError={() => setImageBroken(true)}
           notYet={notYet}
           onLabel={focusLabel}
           announce={announce}

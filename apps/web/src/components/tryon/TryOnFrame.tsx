@@ -16,6 +16,8 @@ export default function TryOnFrame({
   variant,
   src,
   alt = '',
+  broken = false,
+  onImageError,
   children,
 }: {
   variant: TryOnFrameVariant
@@ -23,15 +25,22 @@ export default function TryOnFrame({
   src?: string | null
   /** Description of a finished picture. */
   alt?: string
+  /** The picture's address failed to load: show a plain waiting state instead of a broken image. */
+  broken?: boolean
+  /** Called when the browser can't load the picture. */
+  onImageError?: () => void
   children?: ReactNode
 }) {
   if (variant === 'progress' || variant === 'picture') {
     const frame = 'relative aspect-[3/4] w-full border-[1.5px] border-ink bg-tile'
     return (
       <div className={frame}>
-        {src && (
+        {src && broken && variant === 'picture' && (
+          <span role="status" className="absolute inset-0 flex items-center justify-center px-4 text-center text-[15px] font-semibold">Loading your picture…</span>
+        )}
+        {src && !(broken && variant === 'picture') && (
           // eslint-disable-next-line @next/next/no-img-element -- short-lived signed address, as the other photo screens
-          <img src={src} alt={variant === 'picture' ? alt : ''} className={`h-full w-full object-cover ${variant === 'progress' ? 'opacity-50' : ''}`} />
+          <img src={src} alt={variant === 'picture' ? alt : ''} onError={variant === 'picture' ? onImageError : undefined} className={`h-full w-full object-cover ${variant === 'progress' ? 'opacity-50' : ''}`} />
         )}
         {variant === 'progress' && (
           <span aria-hidden="true" className="absolute inset-0 flex items-center justify-center bg-ink/20">

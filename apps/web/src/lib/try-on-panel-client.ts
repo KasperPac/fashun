@@ -109,6 +109,18 @@ export async function checkPicture(api: PanelApi, outfitId: string, previousMade
   }
 }
 
+/** The saved picture again with a fresh address (free GET, never a new try-on), for when its image failed to load. Null if it can't be had right now. */
+export async function reloadPicture(api: PanelApi, outfitId: string): Promise<Picture | null> {
+  const found = await checkPicture(api, outfitId, null)
+  return found.kind === 'picture' ? found.picture : null
+}
+
+/** Runs `handler` each time the phone comes back online. Returns the function that stops listening. */
+export function whenOnline(handler: () => void, target: Pick<EventTarget, 'addEventListener' | 'removeEventListener'> = window): () => void {
+  target.addEventListener('online', handler)
+  return () => target.removeEventListener('online', handler)
+}
+
 async function recover(api: PanelApi, outfitId: string, previousMadeAt: string | null): Promise<RunResult> {
   const found = await checkPicture(api, outfitId, previousMadeAt)
   return found.kind === 'picture' ? found : { kind: 'lost' }

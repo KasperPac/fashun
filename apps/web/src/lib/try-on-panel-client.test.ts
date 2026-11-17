@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { PICTURE_TIMEOUT_MS, checkPicture, createRunner, loadPanel, makePicture, progressLines, type PanelApi } from './try-on-panel-client'
+import { PICTURE_TIMEOUT_MS, checkPicture, createRunner, loadPanel, makePicture, progressLines, reloadPicture, whenOnline, type PanelApi } from './try-on-panel-client'
 
 const json = (body: unknown, status = 200) => ({ ok: status < 200 || status >= 300 ? false : true, status, json: async () => body }) as Response
 const PICTURE = { image_url: 'https://signed/new.jpg', made_at: '2026-11-17T02:00:00Z' }
@@ -89,6 +89,28 @@ describe('checkPicture', () => {
     expect(await checkPicture({ fetch: async () => json({ image_url: null }) }, 'o1', null)).toEqual({ kind: 'none' })
     expect(await checkPicture({ fetch: async () => { throw new TypeError('offline') } }, 'o1', null)).toEqual({ kind: 'unreachable' })
     expect(await checkPicture({ fetch: async () => json({}, 500) }, 'o1', null)).toEqual({ kind: 'unreachable' })
+  })
+})
+
+describe('reloadPicture and whenOnline', () => {
+  it('picture image failed to load: reloads the saved picture with a free GET and never a POST', async () => {
+    const fetchMock = vi.fn(async (...args: [string, RequestInit?]) => { void args; return json(PICTURE) })
+    expect(await reloadPicture({ fetch: fetchMock }, 'o1')).toEqual({ url: PICTURE.image_url, madeAt: PICTURE.made_at })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock.mock.calls[0][1]).toBeUndefined()
+    expect(await reloadPicture({ fetch: async () => { throw new TypeError('offline') } }, 'o1')).toBeNull()
+    expect(await reloadPicture({ fetch: async () => json({ image_url: null }) }, 'o1')).toBeNull()
+  })
+
+  it('reloads on online, and stops listening when told to', () => {
+    const target = new EventTarget()
+    const handler = vi.fn()
+    const stop = whenOnline(handler, target)
+    target.dispatchEvent(new Event('online'))
+    expect(handler).toHaveBeenCalledTimes(1)
+    stop()
+    target.dispatchEvent(new Event('online'))
+    expect(handler).toHaveBeenCalledTimes(1)
   })
 })
 
