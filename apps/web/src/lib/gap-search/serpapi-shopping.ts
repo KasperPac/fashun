@@ -50,6 +50,7 @@ export function parseShoppingResults(data: unknown): RawProduct[] {
       imageUrl: str(item.thumbnail),
       link: str(item.link) ?? str(item.product_link),
       productId: str(item.product_id),
+      ...(gapSearchFixturesEnabled() && str(item.fixture_colour) ? { fixtureColour: str(item.fixture_colour) as string } : {}),
     })
   }
   return out

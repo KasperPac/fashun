@@ -60,7 +60,7 @@ vi.mock('@/lib/supabase/server', () => ({
 }))
 
 const mockSearch = vi.hoisted(() => vi.fn())
-vi.mock('@/lib/gap-search', async (orig) => ({ ...(await orig<typeof import('@/lib/gap-search')>()), findGapCandidates: mockSearch }))
+vi.mock('@/lib/gap-search', async (orig) => ({ ...(await orig<typeof import('@/lib/gap-search')>()), findGapSuggestions: mockSearch }))
 
 const mockCreate = vi.hoisted(() => vi.fn())
 vi.mock('@anthropic-ai/sdk', () => ({ default: class { messages = { create: mockCreate } } }))

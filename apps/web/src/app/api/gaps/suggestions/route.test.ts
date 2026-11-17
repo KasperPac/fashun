@@ -51,12 +51,16 @@ vi.mock('@/lib/supabase/server', () => ({
 }))
 
 const search = vi.hoisted(() => vi.fn())
-vi.mock('@/lib/gap-search', async (orig) => ({ ...(await orig<typeof import('@/lib/gap-search')>()), findGapCandidates: search }))
+vi.mock('@/lib/gap-search', async (orig) => ({ ...(await orig<typeof import('@/lib/gap-search')>()), findGapSuggestions: search }))
 
-import { ProductSourceError, type GapCandidate } from '@/lib/gap-search'
+import { ProductSourceError, type GapSuggestion } from '@/lib/gap-search'
 import { GET } from './route'
 
-const ITEM: GapCandidate = { title: 'Black loafers', shop: 'Kmart', price: 30, imageUrl: null, link: 'https://kmart.com.au/p/1', productId: '1' }
+const ITEM: GapSuggestion = {
+  title: 'Black loafers', shop: 'Kmart', price: 30, imageUrl: 'https://img.example/1.jpg', link: 'https://kmart.com.au/p/1', productId: '1',
+  colour: '#FFB347', colourName: 'Apricot', reason: 'Apricot, one of your Spring colours.',
+}
+const PALETTE = { season: 'spring', best: ['#FFB347', '#FF7F50'], avoid: ['#000000'] }
 const get = (q = 'occasion=work&category=shoes') => GET(new Request(`http://localhost/api/gaps/suggestions?${q}`))
 
 beforeEach(() => {
@@ -72,7 +76,7 @@ beforeEach(() => {
   db.failRead = false
   db.tables = {
     users: [
-      { id: A, budget_tier: 'budget', department: 'womens', budgets: { shoes: [10, 60] } },
+      { id: A, budget_tier: 'budget', department: 'womens', budgets: { shoes: [10, 60] }, colour_season: 'spring', best_colours: ['#FFB347', '#FF7F50'], avoid_colours: ['#000000'] },
       { id: B, budget_tier: null, department: 'both' },
     ],
     gap_suggestions: [],
@@ -87,7 +91,7 @@ describe('GET /api/gaps/suggestions', () => {
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({ status: 'ok', items: [ITEM], stored: false })
     expect(search).toHaveBeenCalledTimes(1)
-    expect(search).toHaveBeenCalledWith({ occasion: 'work', category: 'shoes', tier: 'budget', department: 'womens', priceRange: [10, 60] })
+    expect(search).toHaveBeenCalledWith({ occasion: 'work', category: 'shoes', tier: 'budget', department: 'womens', priceRange: [10, 60], palette: PALETTE })
     expect(db.usage['2026-11']).toBe(1)
   })
 
@@ -274,5 +278,59 @@ describe('GET /api/gaps/suggestions', () => {
     expect((await get('occasion=work&category=bags')).status).toBe(400)
     expect((await get('')).status).toBe(400)
     expect(search).not.toHaveBeenCalled()
+  })
+  describe('with the real colour step (stand-in source and photo tagger)', () => {
+    const raw = (n: number) => ({ title: `Women's loafers ${n}`, shop: 'Kmart', price: 20 + n, imageUrl: `https://img.example/${n}.jpg`, link: `https://kmart.com.au/p/${n}`, productId: String(n) })
+    const source = { search: vi.fn() }
+    const tagger = vi.fn()
+    beforeEach(async () => {
+      const real = await vi.importActual<typeof import('@/lib/gap-search')>('@/lib/gap-search')
+      source.search.mockReset().mockResolvedValue([raw(1), raw(2), raw(3)])
+      tagger.mockReset().mockImplementation(async (url: string) => (url.endsWith('/1.jpg') ? '#FFB347' : url.endsWith('/2.jpg') ? '#000000' : null))
+      search.mockImplementation((input) => real.findGapSuggestions(input, { source, tagger }))
+    })
+
+    it('stores items with their colour and reason, and reopening makes no search and no AI call', async () => {
+      const first = await (await get()).json()
+      expect(first.items).toHaveLength(1)
+      expect(first.items[0]).toMatchObject({ colour: '#FFB347', colourName: 'Apricot', reason: 'Apricot, one of your Spring colours.' })
+      expect(source.search).toHaveBeenCalledTimes(1)
+      expect(tagger).toHaveBeenCalledTimes(3)
+      source.search.mockClear()
+      tagger.mockClear()
+      const again = await (await get()).json()
+      expect(again).toEqual({ status: 'ok', items: first.items, stored: true })
+      expect(source.search).not.toHaveBeenCalled()
+      expect(tagger).not.toHaveBeenCalled()
+    })
+
+    it('switch off makes no search and no AI call', async () => {
+      vi.stubEnv('ENABLE_GAP_SUGGESTIONS', 'false')
+      expect((await get()).status).toBe(503)
+      expect(source.search).not.toHaveBeenCalled()
+      expect(tagger).not.toHaveBeenCalled()
+    })
+
+    it('the monthly limit makes no AI call', async () => {
+      vi.stubEnv('GAP_SEARCH_MONTHLY_CAP', '0')
+      expect((await (await get()).json()).status).toBe('paused')
+      expect(tagger).not.toHaveBeenCalled()
+    })
+
+    it('a tagging failure for the whole batch shows not available and stores nothing', async () => {
+      tagger.mockRejectedValue(new Error('down'))
+      const res = await get()
+      expect(res.status).toBe(503)
+      expect((await res.json()).status).toBe('unavailable')
+      expect(db.tables.gap_suggestions).toHaveLength(0)
+    })
+
+    it('a user with no palette gets not available, with no search and no AI call', async () => {
+      ;(db.tables.users[0] as Row).best_colours = []
+      expect((await get()).status).toBe(503)
+      expect(source.search).not.toHaveBeenCalled()
+      expect(tagger).not.toHaveBeenCalled()
+      expect(db.usage).toEqual({})
+    })
   })
 })

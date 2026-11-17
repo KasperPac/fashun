@@ -22,6 +22,8 @@ export interface RawProduct {
   /** Where the source sends the user for this item. */
   link: string | null
   productId: string | null
+  /** Fixture mode only: the colour reading to use instead of the AI ("#RRGGBB", or "unsure"). */
+  fixtureColour?: string
 }
 
 /** An item that passed every filter. */
@@ -33,6 +35,7 @@ export interface GapCandidate {
   imageUrl: string | null
   link: string | null
   productId: string | null
+  fixtureColour?: string
 }
 
 export class ProductSourceError extends Error {

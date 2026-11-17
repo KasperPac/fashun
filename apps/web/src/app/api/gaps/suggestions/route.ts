@@ -3,7 +3,8 @@ import { z } from 'zod'
 import { isBudgetTier, isDepartment, DEFAULT_DEPARTMENT, OCCASIONS } from '@fashun/shared'
 import { createServerClient, createServiceClient } from '@/lib/supabase/server'
 import { gapSuggestionsEnabled } from '@/lib/paid-extras'
-import { findGapCandidates, gapSearchFixturesEnabled, ProductSourceError, type GapCandidate } from '@/lib/gap-search'
+import { ColourTaggingError, findGapSuggestions, gapSearchFixturesEnabled, ProductSourceError, type GapPalette, type GapSuggestion } from '@/lib/gap-search'
+import { SEASON_NAMES } from '@/lib/profile-view'
 import { parseBudgets } from '@/lib/budget-view'
 import { firstOfNextMonth, tryOnNow } from '@/lib/try-on'
 import {
@@ -20,7 +21,7 @@ const QuerySchema = z.object({
 })
 
 /** One fixed reason per failure. Never the error text, which could hold a search address or key. */
-function logFailure(reason: 'cache_read_failed' | 'count_failed' | 'source_failed' | 'source_timeout' | 'store_failed') {
+function logFailure(reason: 'cache_read_failed' | 'count_failed' | 'source_failed' | 'source_timeout' | 'tagging_failed' | 'no_palette' | 'store_failed') {
   console.error(`gap suggestions failed: ${reason}`)
 }
 
@@ -54,7 +55,7 @@ export async function GET(req: Request) {
 
   const { data: profile } = await supabase
     .from('users')
-    .select('budget_tier,department,budgets')
+    .select('budget_tier,department,budgets,colour_season,best_colours,avoid_colours')
     .eq('id', user.id)
     .maybeSingle()
   if (!isBudgetTier(profile?.budget_tier)) {
@@ -85,12 +86,23 @@ export async function GET(req: Request) {
     return unavailable()
   }
   if (stored) {
-    return NextResponse.json({ status: 'ok', items: stored.items as unknown as GapCandidate[], stored: true })
+    return NextResponse.json({ status: 'ok', items: stored.items as unknown as GapSuggestion[], stored: true })
   }
 
   if (!process.env.SERPAPI_API_KEY && !gapSearchFixturesEnabled()) return unavailable()
 
   // One search per opening, taken from the month's count before it is made.
+  // The colour step needs the user's palette: no palette, no search and no cost.
+  const season = profile.colour_season
+  const colourList = (v: unknown): string[] => (Array.isArray(v) ? v.filter((c): c is string => typeof c === 'string') : [])
+  const palette: GapPalette | null = season && season in SEASON_NAMES && colourList(profile.best_colours).length > 0
+    ? { season: season as GapPalette['season'], best: colourList(profile.best_colours), avoid: colourList(profile.avoid_colours) }
+    : null
+  if (!palette) {
+    logFailure('no_palette')
+    return unavailable()
+  }
+
   const month = gapSearchMonth(now)
   const service = await createServiceClient()
   let count: number | null
@@ -109,15 +121,19 @@ export async function GET(req: Request) {
     })
   }
 
-  let items: GapCandidate[]
+  let items: GapSuggestion[]
   try {
     items = await withTimeout(
-      findGapCandidates({ occasion, category, tier, department, priceRange }),
+      findGapSuggestions({ occasion, category, tier, department, priceRange, palette }),
       GAP_SEARCH_TIMEOUT_MS,
       () => new ProductSourceError('Product search timed out'),
     )
   } catch (err) {
-    logFailure(err instanceof ProductSourceError && err.message === 'Product search timed out' ? 'source_timeout' : 'source_failed')
+    logFailure(
+      err instanceof ColourTaggingError ? 'tagging_failed'
+        : err instanceof ProductSourceError && err.message === 'Product search timed out' ? 'source_timeout'
+        : 'source_failed',
+    )
     return unavailable()
   }
 

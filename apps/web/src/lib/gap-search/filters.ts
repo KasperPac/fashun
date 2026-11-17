@@ -66,13 +66,13 @@ export function inRange(price: number | null, range: readonly [number, number]):
 /**
  * Keeps items from the tier's shops, priced inside the range (ends included),
  * for the department and suited to the occasion. Drops duplicates (same link or
- * same shop and title), keeps the source's order and returns at most 6.
+ * same shop and title), keeps the source's order and returns at most `limit` (6).
  */
-export function filterProducts(products: RawProduct[], query: GapSearchQuery, tier: BudgetTier): GapCandidate[] {
+export function filterProducts(products: RawProduct[], query: GapSearchQuery, tier: BudgetTier, limit = MAX_CANDIDATES): GapCandidate[] {
   const seen = new Set<string>()
   const out: GapCandidate[] = []
   for (const p of products) {
-    if (out.length >= MAX_CANDIDATES) break
+    if (out.length >= limit) break
     if (!isShopInTier(p.shop, tier)) continue
     if (!inRange(p.price, query.priceRange)) continue
     if (!matchesDepartment(p.title, query.department)) continue
@@ -80,7 +80,10 @@ export function filterProducts(products: RawProduct[], query: GapSearchQuery, ti
     const key = p.link ?? `${p.shop}|${p.title}`.toLowerCase()
     if (seen.has(key)) continue
     seen.add(key)
-    out.push({ title: p.title, shop: p.shop, price: p.price, imageUrl: p.imageUrl, link: p.link, productId: p.productId })
+    out.push({
+      title: p.title, shop: p.shop, price: p.price, imageUrl: p.imageUrl, link: p.link, productId: p.productId,
+      ...(p.fixtureColour ? { fixtureColour: p.fixtureColour } : {}),
+    })
   }
   return out
 }
