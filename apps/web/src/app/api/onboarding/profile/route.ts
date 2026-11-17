@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
-import { getProfileColours, HAIR_COLOURS, EYE_COLOURS, STYLE_PREFS } from '@fashun/shared'
+import { getProfileColours, HAIR_COLOURS, EYE_COLOURS, STYLE_PREFS, BUDGET_TIERS, DEPARTMENTS } from '@fashun/shared'
 import { z } from 'zod'
 
 const StylePrefsSchema = z.array(z.enum(STYLE_PREFS)).min(1, 'Select at least one style')
@@ -24,6 +24,8 @@ const HexSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Colours must be 6-digit
 const BodySchema = z.object({
   style_prefs: StylePrefsSchema.optional(),
   budgets: BudgetsSchema.optional(),
+  budget_tier: z.enum(BUDGET_TIERS, { errorMap: () => ({ message: 'Choose one of the budget tiers' }) }).optional(),
+  department: z.enum(DEPARTMENTS, { errorMap: () => ({ message: "Choose Men's, Women's or Both" }) }).optional(),
   skin_undertone: z.enum(['warm', 'cool', 'neutral']).optional(),
   skin_depth: z.enum(['light', 'medium', 'deep']).optional(),
   hair_colour: z.enum(HAIR_COLOURS).optional(),

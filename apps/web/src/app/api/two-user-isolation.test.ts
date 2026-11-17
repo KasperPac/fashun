@@ -72,8 +72,8 @@ beforeEach(() => {
   db.current = 'B'
   db.tables = {
     users: [
-      { id: A, colour_season: 'autumn', best_colours: ['#111111'], hair_colour: 'black' },
-      { id: B, colour_season: 'winter', best_colours: ['#222222'], hair_colour: 'blonde' },
+      { id: A, colour_season: 'autumn', best_colours: ['#111111'], hair_colour: 'black', budget_tier: 'premium', department: 'womens', budgets: { shoes: [200, 700] } },
+      { id: B, colour_season: 'winter', best_colours: ['#222222'], hair_colour: 'blonde', budget_tier: null, department: 'both' },
     ],
     wardrobe_items: [
       { id: A_ITEM, user_id: A, ownership: 'owned', category: 'tops', name: 'A secret shirt', colours: ['#B7410E'], style_tags: [], occasion_tags: ['casual'], image_url: `${A}/a1.jpg`, created_at: '1' },
@@ -119,6 +119,23 @@ describe('user B cannot reach user A through any route', () => {
     expect(res.status).toBe(200)
     expect(db.tables.users.find((u) => u.id === A)?.hair_colour).toBe('black')
     expect(db.tables.users.find((u) => u.id === B)?.hair_colour).toBe('brown')
+  })
+
+  it('budget: B changing tier, department and ranges only changes B', async () => {
+    const budgets = { tops: [5, 40], bottoms: [10, 50], shoes: [15, 60], outerwear: [20, 80], bags: [10, 40], accessories: [5, 25] }
+    const res = await profile.PATCH(req('PATCH', { budget_tier: 'budget', department: 'mens', budgets }))
+    expect(res.status).toBe(200)
+    const a = db.tables.users.find((u) => u.id === A)
+    const b = db.tables.users.find((u) => u.id === B)
+    expect(a).toMatchObject({ budget_tier: 'premium', department: 'womens', budgets: { shoes: [200, 700] } })
+    expect(b).toMatchObject({ budget_tier: 'budget', department: 'mens', budgets })
+  })
+
+  it('budget: a user id in the body cannot reach A\'s tier', async () => {
+    const res = await profile.PATCH(req('PATCH', { id: A, user_id: A, budget_tier: 'mid' }))
+    expect(res.status).toBe(200)
+    expect(db.tables.users.find((u) => u.id === A)?.budget_tier).toBe('premium')
+    expect(db.tables.users.find((u) => u.id === B)?.budget_tier).toBe('mid')
   })
 
   it('outfits list: none of A', async () => {

@@ -1,8 +1,8 @@
 'use client'
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
-import type { ColourSeason, StylePref } from '@fashun/shared'
-import { SEASON_DESCRIPTIONS, getProfileColours } from '@fashun/shared'
+import type { BudgetTier, ColourSeason, Department, StylePref } from '@fashun/shared'
+import { DEFAULT_DEPARTMENT, SEASON_DESCRIPTIONS, getProfileColours, isBudgetTier, isDepartment } from '@fashun/shared'
 import { supabase } from '@/lib/supabase/client'
 import { colourName } from '@/lib/colour-names'
 import {
@@ -31,6 +31,7 @@ import { Kicker, ScreenBlock } from '@/components/ui/Onboarding'
 import { loadPhotoState, loadSpendLine, type PhotoState } from '@/lib/try-on-photo-client'
 import TryOnPhotoSection from '@/components/tryon/TryOnPhotoSection'
 import TryOnSpendRow from '@/components/tryon/TryOnSpendRow'
+import ShoppingBudgetRow from './ShoppingBudgetRow'
 
 export interface ProfileData {
   season: ColourSeason | null
@@ -41,6 +42,8 @@ export interface ProfileData {
   best: string[]
   avoid: string[]
   styles: StylePref[]
+  budgetTier: BudgetTier | null
+  department: Department
 }
 
 const SEASONS: ColourSeason[] = ['spring', 'summer', 'autumn', 'winter']
@@ -52,7 +55,7 @@ export async function loadProfile(): Promise<ProfileData | null> {
   if (!auth.user) throw new Error('Not signed in')
   const { data, error } = await supabase
     .from('users')
-    .select('colour_season, skin_depth, skin_undertone, hair_colour, eye_colour, best_colours, avoid_colours, suggested_styles')
+    .select('colour_season, skin_depth, skin_undertone, hair_colour, eye_colour, best_colours, avoid_colours, suggested_styles, budget_tier, department')
     .eq('id', auth.user.id)
     .maybeSingle()
   if (error) throw error
@@ -68,6 +71,8 @@ export async function loadProfile(): Promise<ProfileData | null> {
     best: data.best_colours ?? [],
     avoid: data.avoid_colours ?? [],
     styles: (data.suggested_styles ?? []) as StylePref[],
+    budgetTier: isBudgetTier(data.budget_tier) ? data.budget_tier : null,
+    department: isDepartment(data.department) ? data.department : DEFAULT_DEPARTMENT,
   }
 }
 
@@ -237,7 +242,7 @@ export default function ProfileView({
   }
 
   const current: ProfileData = profile ?? {
-    season: null, skinTone: null, undertone: null, hair: null, eyes: null, best: [], avoid: [], styles: [],
+    season: null, skinTone: null, undertone: null, hair: null, eyes: null, best: [], avoid: [], styles: [], budgetTier: null, department: DEFAULT_DEPARTMENT,
   }
   const season = current.season
 
@@ -294,6 +299,9 @@ export default function ProfileView({
   }
   const tryOn = state.tryOn
   const showTryOn = tryOn.photo.kind !== 'off' || tryOn.spend !== null
+  const showShopping = headline === 'tab'
+  const rows = 2 + (showShopping ? 1 : 0) + (showTryOn ? 1 : 0)
+  const tryOnRow = showShopping ? 4 : 3
   const heroWord = !season ? 'Your colours' : headline === 'reveal' ? seasonHeadline(season) : SEASON_NAMES[season]
 
   return (
@@ -321,7 +329,7 @@ export default function ProfileView({
         </div>
       )}
 
-      <div className={`mx-auto flex max-w-[1120px] flex-col gap-8 px-6 py-8 lg:grid lg:grid-cols-2 ${showTryOn ? 'lg:grid-rows-[auto_auto_1fr]' : 'lg:grid-rows-[auto_1fr]'} lg:gap-x-12 lg:gap-y-8 lg:px-10`}>
+      <div className={`mx-auto flex max-w-[1120px] flex-col gap-8 px-6 py-8 lg:grid lg:grid-cols-2 ${rows === 4 ? 'lg:grid-rows-[auto_auto_auto_1fr]' : rows === 3 ? 'lg:grid-rows-[auto_auto_1fr]' : 'lg:grid-rows-[auto_1fr]'} lg:gap-x-12 lg:gap-y-8 lg:px-10`}>
         <Reveal index={1} className="lg:col-start-1 lg:row-start-1">
           <section aria-labelledby="about-you">
             <h2 id="about-you" className="mb-1 font-display text-[22px] font-extrabold uppercase">About you</h2>
@@ -344,7 +352,7 @@ export default function ProfileView({
             </ul>
           </section>
         </Reveal>
-        <div key={season ?? 'none'} className={`flex animate-fade-in flex-col gap-8 lg:col-start-2 lg:row-start-1 ${showTryOn ? 'lg:row-span-3' : 'lg:row-span-2'}`}>
+        <div key={season ?? 'none'} className={`flex animate-fade-in flex-col gap-8 lg:col-start-2 lg:row-start-1 ${rows === 4 ? 'lg:row-span-4' : rows === 3 ? 'lg:row-span-3' : 'lg:row-span-2'}`}>
           {season ? (
             <>
               <Reveal index={2}><ColourGrid title="Wear these" hexes={current.best} /></Reveal>
@@ -371,8 +379,13 @@ export default function ProfileView({
             <Button variant="secondary" compact fullWidth={false} onClick={() => open('styles')}>Change</Button>
           </section>
         </Reveal>
-        {showTryOn && (
+        {showShopping && (
           <Reveal index={5} className="lg:col-start-1 lg:row-start-3">
+            <ShoppingBudgetRow tier={current.budgetTier} department={current.department} />
+          </Reveal>
+        )}
+        {showTryOn && (
+          <Reveal index={6} className={`lg:col-start-1 ${tryOnRow === 4 ? 'lg:row-start-4' : 'lg:row-start-3'}`}>
             <TryOnPhotoSection initial={tryOn.photo} />
             {tryOn.spend !== null && <TryOnSpendRow value={tryOn.spend} />}
           </Reveal>

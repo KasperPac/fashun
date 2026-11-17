@@ -204,9 +204,11 @@ export type Database = {
         Row: {
           avoid_colours: string[]
           best_colours: string[]
+          budget_tier: string | null
           budgets: Json | null
           colour_season: string | null
           created_at: string | null
+          department: string
           email: string
           eye_colour: string | null
           hair_colour: string | null
@@ -222,9 +224,11 @@ export type Database = {
         Insert: {
           avoid_colours?: string[] | null
           best_colours?: string[] | null
+          budget_tier?: string | null
           budgets?: Json | null
           colour_season?: string | null
           created_at?: string | null
+          department?: string
           email: string
           eye_colour?: string | null
           hair_colour?: string | null
@@ -240,9 +244,11 @@ export type Database = {
         Update: {
           avoid_colours?: string[] | null
           best_colours?: string[] | null
+          budget_tier?: string | null
           budgets?: Json | null
           colour_season?: string | null
           created_at?: string | null
+          department?: string
           email?: string
           eye_colour?: string | null
           hair_colour?: string | null

@@ -104,4 +104,49 @@ describe('PATCH /api/onboarding/profile', () => {
     mockUpdate.mockResolvedValue({ error: { message: 'boom' } })
     expect((await patch({ hair_colour: 'black' })).status).toBe(500)
   })
+
+  const ranges = {
+    tops: [5, 40], bottoms: [10, 50], shoes: [15, 60], outerwear: [20, 80], bags: [10, 40], accessories: [5, 25],
+  }
+
+  it('picking a tier saves it', async () => {
+    const res = await patch({ budget_tier: 'mid', budgets: ranges })
+    expect(res.status).toBe(200)
+    expect(mockUpdateArgs).toHaveBeenCalledWith({ budget_tier: 'mid', budgets: ranges })
+  })
+
+  it('a moved slider range is saved after picking a tier, without touching the tier', async () => {
+    await patch({ budget_tier: 'budget', budgets: ranges })
+    mockUpdateArgs.mockClear()
+    const moved = { ...ranges, shoes: [15, 120] }
+    expect((await patch({ budgets: moved })).status).toBe(200)
+    expect(mockUpdateArgs).toHaveBeenCalledWith({ budgets: moved })
+  })
+
+  it('rejects an unknown tier', async () => {
+    for (const bad of ['luxury', '', 3, null]) {
+      expect((await patch({ budget_tier: bad })).status).toBe(400)
+    }
+    expect(mockUpdateArgs).not.toHaveBeenCalled()
+  })
+
+  it('rejects a negative budget', async () => {
+    expect((await patch({ budgets: { ...ranges, tops: [-5, 40] } })).status).toBe(400)
+    expect(mockUpdateArgs).not.toHaveBeenCalled()
+  })
+
+  it('department choice is saved', async () => {
+    for (const department of ['mens', 'womens', 'both']) {
+      mockUpdateArgs.mockClear()
+      expect((await patch({ department })).status).toBe(200)
+      expect(mockUpdateArgs).toHaveBeenCalledWith({ department })
+    }
+  })
+
+  it('rejects an unknown department', async () => {
+    for (const bad of ['kids', '', 1, null]) {
+      expect((await patch({ department: bad })).status).toBe(400)
+    }
+    expect(mockUpdateArgs).not.toHaveBeenCalled()
+  })
 })

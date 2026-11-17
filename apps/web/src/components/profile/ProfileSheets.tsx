@@ -13,7 +13,7 @@ import {
   type TraitConfig,
 } from '@/lib/profile-edit'
 
-function SaveError({ message }: { message: string | null }) {
+export function SaveError({ message }: { message: string | null }) {
   if (!message) return null
   return (
     <p role="alert" className="mt-3 text-[13px] font-semibold text-danger">
@@ -23,7 +23,7 @@ function SaveError({ message }: { message: string | null }) {
   )
 }
 
-function OptionRow({
+export function OptionRow({
   selected,
   disabled,
   onClick,
