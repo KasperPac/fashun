@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { isBudgetTier, isDepartment, DEFAULT_DEPARTMENT, OCCASIONS } from '@fashun/shared'
 import { createServerClient, createServiceClient } from '@/lib/supabase/server'
 import { gapSuggestionsEnabled } from '@/lib/paid-extras'
-import { ColourTaggingError, findGapSuggestions, gapSearchFixturesEnabled, ProductSourceError, type GapPalette, type GapSuggestion } from '@/lib/gap-search'
+import { ColourTaggingError, findGapSuggestions, type EmptyCounts, gapSearchFixturesEnabled, ProductSourceError, type GapPalette, type GapSuggestion } from '@/lib/gap-search'
 import { SEASON_NAMES } from '@/lib/profile-view'
 import { parseBudgets } from '@/lib/budget-view'
 import { firstOfNextMonth, tryOnNow } from '@/lib/try-on'
@@ -122,9 +122,10 @@ export async function GET(req: Request) {
   }
 
   let items: GapSuggestion[]
+  let emptyCounts: EmptyCounts | null = null
   try {
     items = await withTimeout(
-      findGapSuggestions({ occasion, category, tier, department, priceRange, palette }),
+      findGapSuggestions({ occasion, category, tier, department, priceRange, palette }, { onEmpty: (c) => { emptyCounts = c } }),
       GAP_SEARCH_TIMEOUT_MS,
       () => new ProductSourceError('Product search timed out'),
     )
@@ -148,5 +149,11 @@ export async function GET(req: Request) {
   )
   if (storeError) logFailure('store_failed')
 
+  // Diagnosis for an empty live search: counts only, so QA can see which filter dropped the results.
+  if (emptyCounts) {
+    const c: EmptyCounts = emptyCounts
+    console.warn(`gap-suggestions empty raw=${c.raw} not_tier_shop=${c.notTierShop} out_of_price=${c.outOfPrice} wrong_department_or_occasion=${c.wrongDepartmentOrOccasion} duplicate=${c.duplicate} colour_dropped=${c.colourDropped}`)
+    return NextResponse.json({ status: 'ok', items, stored: false, diagnosis: c })
+  }
   return NextResponse.json({ status: 'ok', items, stored: false })
 }

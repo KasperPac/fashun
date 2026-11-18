@@ -91,13 +91,24 @@ describe('GET /api/gaps/suggestions', () => {
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({ status: 'ok', items: [ITEM], stored: false })
     expect(search).toHaveBeenCalledTimes(1)
-    expect(search).toHaveBeenCalledWith({ occasion: 'work', category: 'shoes', tier: 'budget', department: 'womens', priceRange: [10, 60], palette: PALETTE })
+    expect(search).toHaveBeenCalledWith({ occasion: 'work', category: 'shoes', tier: 'budget', department: 'womens', priceRange: [10, 60], palette: PALETTE }, expect.anything())
     expect(db.usage['2026-11']).toBe(1)
+  })
+
+  it('an empty live search logs and returns the counts dropped at each filter, nothing else', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const counts = { raw: 20, notTierShop: 12, outOfPrice: 3, wrongDepartmentOrOccasion: 2, duplicate: 0, passed: 3, colourDropped: 3 }
+    search.mockImplementation(async (_i: unknown, deps: { onEmpty: (c: typeof counts) => void }) => { deps.onEmpty(counts); return [] })
+    const body = await (await get()).json()
+    expect(body).toEqual({ status: 'ok', items: [], stored: false, diagnosis: counts })
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(warn.mock.calls[0][0]).toBe('gap-suggestions empty raw=20 not_tier_shop=12 out_of_price=3 wrong_department_or_occasion=2 duplicate=0 colour_dropped=3')
+    warn.mockRestore()
   })
 
   it('tier, department and range in the request are ignored', async () => {
     await get('occasion=work&category=shoes&tier=premium&department=mens&min=1&max=9999')
-    expect(search).toHaveBeenCalledWith(expect.objectContaining({ tier: 'budget', department: 'womens', priceRange: [10, 60] }))
+    expect(search).toHaveBeenCalledWith(expect.objectContaining({ tier: 'budget', department: 'womens', priceRange: [10, 60] }), expect.anything())
   })
 
   it('reopening a gap the same day makes no search', async () => {

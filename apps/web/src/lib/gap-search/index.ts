@@ -1,5 +1,5 @@
 import type { BudgetTier, Department } from '@fashun/shared'
-import { filterProducts, MAX_CANDIDATES } from './filters'
+import { countFilterDrops, filterProducts, MAX_CANDIDATES, type FilterDrops } from './filters'
 import { gapSearchFixturesEnabled, serpapiShopping } from './serpapi-shopping'
 import { tagPhotoColour } from './colour-tag'
 import { ColourTaggingError, MAX_TAGGED, matchBestColour, reasonLine, type ColourTagger, type GapPalette } from './colour'
@@ -9,6 +9,7 @@ import type { GapCandidate, GapSearchCategory, GapSearchQuery, ProductSource } f
 export type { GapCandidate, GapSearchCategory, GapSearchQuery, ProductSource, RawProduct } from './product-source'
 export { ProductSourceError } from './product-source'
 export { MAX_CANDIDATES } from './filters'
+export type { FilterDrops } from './filters'
 export { gapSearchFixturesEnabled } from './serpapi-shopping'
 export { ColourTaggingError, matchBestColour, reasonLine, MAX_TAGGED, type ColourTagger, type GapPalette } from './colour'
 
@@ -45,6 +46,8 @@ export interface GapSuggestion {
   imageUrl: string | null
   link: string | null
   productId: string | null
+  /** Google's page token for the item, kept so the shop link can list its stores with one call. */
+  immersiveToken?: string
   /** The user's best colour the item's photo matched, "#RRGGBB". */
   colour: string
   colourName: string
@@ -59,6 +62,14 @@ export interface GapSuggestionInput extends GapSearchInput {
 export interface GapSuggestionDeps {
   source?: ProductSource
   tagger?: ColourTagger
+  /** Diagnosis only: called when the answer is empty, with the counts dropped at each step. */
+  onEmpty?: (counts: EmptyCounts) => void
+}
+
+/** Why a live search ended empty: raw results, then what each filter dropped. */
+export interface EmptyCounts extends FilterDrops {
+  /** Passed the filters but dropped at the colour step (no photo, unsure, pattern, avoid or neither-list colour). */
+  colourDropped: number
 }
 
 /**
@@ -69,7 +80,7 @@ export interface GapSuggestionDeps {
  */
 export async function findGapSuggestions(
   input: GapSuggestionInput,
-  { source = serpapiShopping, tagger = tagPhotoColour }: GapSuggestionDeps = {},
+  { source = serpapiShopping, tagger = tagPhotoColour, onEmpty }: GapSuggestionDeps = {},
 ): Promise<GapSuggestion[]> {
   const query: GapSearchQuery = {
     occasion: input.occasion,
@@ -104,8 +115,13 @@ export async function findGapSuggestions(
     if (!colour) return
     out.push({
       title: c.title, shop: c.shop, price: c.price, imageUrl: c.imageUrl, link: c.link, productId: c.productId,
+      ...(c.immersiveToken ? { immersiveToken: c.immersiveToken } : {}),
       colour, colourName: colourName(colour), reason: reasonLine(colour, input.palette.season),
     })
   })
+  if (out.length === 0 && onEmpty) {
+    const drops = countFilterDrops(products, query, input.tier)
+    onEmpty({ ...drops, colourDropped: drops.passed })
+  }
   return out
 }

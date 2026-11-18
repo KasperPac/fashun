@@ -22,6 +22,8 @@ export interface RawProduct {
   /** Where the source sends the user for this item. */
   link: string | null
   productId: string | null
+  /** Google's own page token for the item (immersive_product_page_token): lists its stores with direct links. */
+  immersiveToken?: string | null
   /** Fixture mode only: the colour reading to use instead of the AI ("#RRGGBB", or "unsure"). */
   fixtureColour?: string
 }
@@ -35,6 +37,7 @@ export interface GapCandidate {
   imageUrl: string | null
   link: string | null
   productId: string | null
+  immersiveToken?: string | null
   fixtureColour?: string
 }
 

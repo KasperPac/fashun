@@ -82,8 +82,35 @@ export function filterProducts(products: RawProduct[], query: GapSearchQuery, ti
     seen.add(key)
     out.push({
       title: p.title, shop: p.shop, price: p.price, imageUrl: p.imageUrl, link: p.link, productId: p.productId,
+      ...(p.immersiveToken ? { immersiveToken: p.immersiveToken } : {}),
       ...(p.fixtureColour ? { fixtureColour: p.fixtureColour } : {}),
     })
   }
   return out
+}
+
+/** How many raw results each filter dropped, in filter order (an item is counted at the first filter that drops it). */
+export interface FilterDrops {
+  raw: number
+  notTierShop: number
+  outOfPrice: number
+  wrongDepartmentOrOccasion: number
+  duplicate: number
+  passed: number
+}
+
+/** Diagnosis only: the counts behind an empty answer. Applies the same filters as filterProducts. */
+export function countFilterDrops(products: RawProduct[], query: GapSearchQuery, tier: BudgetTier): FilterDrops {
+  const drops: FilterDrops = { raw: products.length, notTierShop: 0, outOfPrice: 0, wrongDepartmentOrOccasion: 0, duplicate: 0, passed: 0 }
+  const seen = new Set<string>()
+  for (const p of products) {
+    if (!isShopInTier(p.shop, tier)) { drops.notTierShop++; continue }
+    if (!inRange(p.price, query.priceRange)) { drops.outOfPrice++; continue }
+    if (!matchesDepartment(p.title, query.department) || !suitsOccasion(p.title, query.category, query.occasion)) { drops.wrongDepartmentOrOccasion++; continue }
+    const key = p.link ?? `${p.shop}|${p.title}`.toLowerCase()
+    if (seen.has(key)) { drops.duplicate++; continue }
+    seen.add(key)
+    drops.passed++
+  }
+  return drops
 }

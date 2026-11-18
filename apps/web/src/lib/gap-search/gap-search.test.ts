@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { BUDGET_TIER_DEFINITIONS, tierRanges, type BudgetTier, type Department } from '@fashun/shared'
-import { findGapCandidates, MAX_CANDIDATES, ProductSourceError, type GapSearchInput, type ProductSource, type RawProduct } from './index'
-import { itemDepartment } from './filters'
+import { findGapCandidates, findGapSuggestions, MAX_CANDIDATES, ProductSourceError, type GapSearchInput, type ProductSource, type RawProduct } from './index'
+import { countFilterDrops, itemDepartment } from './filters'
 import { buildSearchText } from './query'
 import { isShopInTier, normaliseShopName } from './shop-names'
 import { parseShoppingResults, serpapiShopping } from './serpapi-shopping'
@@ -238,7 +238,7 @@ describe('the live source', () => {
     expect(url.searchParams.get('q')).toBe("men's formal shoes")
     expect(url.searchParams.get('min_price')).toBe('20')
     expect(url.searchParams.get('max_price')).toBe('80')
-    expect(found).toEqual([{ title: "Men's Shirt", shop: 'Kmart', price: 20, imageUrl: 'https://x.test/t.jpg', link: 'https://www.kmart.com.au/p/1', productId: null }])
+    expect(found).toEqual([{ title: "Men's Shirt", shop: 'Kmart', price: 20, imageUrl: 'https://x.test/t.jpg', link: 'https://www.kmart.com.au/p/1', productId: null, immersiveToken: null }])
   })
   it('throws a ProductSourceError without a key, on HTTP failure and on an unreadable answer', async () => {
     vi.stubEnv('GAP_SEARCH_FIXTURES', '')
@@ -277,5 +277,64 @@ describe('the adapter is the only place that knows about SerpApi', () => {
     walk(root)
     const offenders = files.filter((f) => !f.includes(`${path.sep}gap-search${path.sep}`) && /serpapi-shopping|google-shopping-au/.test(readFileSync(f, 'utf8')))
     expect(offenders).toEqual([])
+  })
+})
+
+describe('the shop link fields of a Shopping result', () => {
+  const base = { title: 'Tee', source: 'BIG W', extracted_price: 10 }
+  it('keeps immersive_product_page_token, and the page_token from serpapi_immersive_product_api when there is no token', () => {
+    const [a, b, c, d] = parseShoppingResults({ shopping_results: [
+      { ...base, immersive_product_page_token: 'TOK1', serpapi_immersive_product_api: 'https://serpapi.com/search.json?engine=google_immersive_product&page_token=OTHER' },
+      { ...base, serpapi_immersive_product_api: 'https://serpapi.com/search.json?engine=google_immersive_product&page_token=TOK2&api_key=leak' },
+      { ...base, serpapi_immersive_product_api: 'not a url' },
+      { ...base, link: 'https://www.bigw.com.au/p/1', product_link: 'https://www.google.com.au/shopping/product/1' },
+    ] })
+    expect(a.immersiveToken).toBe('TOK1')
+    expect(b.immersiveToken).toBe('TOK2')
+    expect(c.immersiveToken).toBeNull()
+    expect(d.immersiveToken).toBeNull()
+    expect(d.link).toBe('https://www.bigw.com.au/p/1')
+  })
+  it('the saved results carry the real shape (a token on every item), and a candidate keeps it', async () => {
+    const [first] = await findGapCandidates(input({ category: 'tops' }))
+    expect(first.immersiveToken).toMatch(/^FIXTURETOKEN/)
+  })
+})
+
+describe('diagnosis of an empty answer', () => {
+  it('counts what each filter dropped, in filter order', () => {
+    const q = { occasion: 'work', category: 'tops', department: 'mens', priceRange: [10, 50] } as const
+    const products: RawProduct[] = [
+      raw('Men Shirt', 'Kmart', 20), raw('Men Shirt B', 'Kmart', 20),
+      raw('Men Shirt', 'Rodd & Gunn', 20),
+      raw('Men Shirt', 'Kmart', 500),
+      raw("Women's Shirt", 'Kmart', 20),
+      raw('Men Hoodie', 'Kmart', 20),
+    ]
+    const dup = { ...products[0] }
+    expect(countFilterDrops([...products, dup], q, 'budget')).toEqual({
+      raw: 7, notTierShop: 1, outOfPrice: 1, wrongDepartmentOrOccasion: 2, duplicate: 1, passed: 2,
+    })
+  })
+  it('onEmpty is called with the counts when every item is dropped, and not when there are items', async () => {
+    const onEmpty = vi.fn()
+    const items = await findGapSuggestions(
+      { ...input({ category: 'tops' }), palette: { season: 'winter', best: ['#FFB347'], avoid: [] } },
+      { source: sourceOf([raw('Men Shirt', 'Rodd & Gunn', 20), raw('Men Shirt', 'Kmart', 900)]), onEmpty },
+    )
+    expect(items).toEqual([])
+    expect(onEmpty).toHaveBeenCalledWith({ raw: 2, notTierShop: 1, outOfPrice: 1, wrongDepartmentOrOccasion: 0, duplicate: 0, passed: 0, colourDropped: 0 })
+    onEmpty.mockClear()
+    await findGapSuggestions({ ...input({ category: 'tops' }), palette: { season: 'winter', best: ['#FFB347'], avoid: [] } }, { onEmpty })
+    expect(onEmpty).not.toHaveBeenCalled()
+  })
+  it('passed items that all fail the colour step are counted as colourDropped', async () => {
+    const onEmpty = vi.fn()
+    const items = await findGapSuggestions(
+      { ...input({ category: 'tops' }), palette: { season: 'winter', best: ['#FFB347'], avoid: [] } },
+      { source: sourceOf([raw('Men Shirt', 'Kmart', 20)]), onEmpty },
+    )
+    expect(items).toEqual([])
+    expect(onEmpty).toHaveBeenCalledWith(expect.objectContaining({ raw: 1, passed: 1, colourDropped: 1 }))
   })
 })

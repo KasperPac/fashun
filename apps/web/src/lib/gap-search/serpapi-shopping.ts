@@ -30,6 +30,19 @@ function parsePrice(item: Record<string, unknown>): number | null {
   return null
 }
 
+/** The item's immersive page token: its own field, or the page_token inside serpapi_immersive_product_api. */
+function immersiveToken(item: Record<string, unknown>): string | null {
+  const direct = str(item.immersive_product_page_token)
+  if (direct) return direct
+  const api = str(item.serpapi_immersive_product_api)
+  if (!api) return null
+  try {
+    return str(new URL(api).searchParams.get('page_token'))
+  } catch {
+    return null
+  }
+}
+
 const str = (v: unknown): string | null => (typeof v === 'string' && v.trim() !== '' ? v : null)
 
 /** Maps the documented Google Shopping response (`shopping_results`) to raw products. */
@@ -50,6 +63,7 @@ export function parseShoppingResults(data: unknown): RawProduct[] {
       imageUrl: str(item.thumbnail),
       link: str(item.link) ?? str(item.product_link),
       productId: str(item.product_id),
+      immersiveToken: immersiveToken(item),
       ...(gapSearchFixturesEnabled() && str(item.fixture_colour) ? { fixtureColour: str(item.fixture_colour) as string } : {}),
     })
   }

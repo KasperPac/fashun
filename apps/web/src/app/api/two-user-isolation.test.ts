@@ -201,7 +201,7 @@ describe('user B cannot reach user A through any route', () => {
     const mine = await (await gapSuggestions.GET(req('GET', undefined, 'http://localhost/api/gaps/suggestions?occasion=work&category=shoes'))).json()
     expect(mine).toMatchObject({ status: 'ok', items: [bItem], stored: false })
     expect(JSON.stringify(mine)).not.toContain('secret')
-    expect(mockSearch).toHaveBeenCalledWith(expect.objectContaining({ tier: 'budget', department: 'both' }))
+    expect(mockSearch).toHaveBeenCalledWith(expect.objectContaining({ tier: 'budget', department: 'both' }), expect.anything())
     expect(db.tables.gap_suggestions.filter((r) => r.user_id === B)).toHaveLength(1)
 
     // A's tier and budget are unchanged by anything B did; B's stored row is B's own.

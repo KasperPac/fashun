@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { linkBelongsToShop, searchShopLink } from './shop-link'
+import { linkBelongsToShop, resolveShopLink, shopHasHost } from './shop-link'
 
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals() })
 
@@ -52,33 +52,78 @@ describe('linkBelongsToShop look-alikes', () => {
   })
 })
 
-describe('searchShopLink', () => {
-  const answer = (organic: unknown) => vi.fn(async () => new Response(JSON.stringify({ organic_results: organic })))
-  it('makes one search and returns the first result on the shop\'s own site', async () => {
+const call = (f: ReturnType<typeof vi.fn>, n = 0) => new URL((f.mock.calls[n] as unknown as [string])[0])
+const json = (body: unknown, status = 200) => vi.fn(async () => new Response(JSON.stringify(body), { status }))
+const stores = (...links: string[]) => ({ product_results: { stores: links.map((link) => ({ name: 's', link })) } })
+
+describe('resolveShopLink with a Google page token', () => {
+  it('makes one google_immersive_product call and picks the first store on the shop\'s own site', async () => {
     vi.stubEnv('SERPAPI_API_KEY', 'test-key')
-    const f = answer([{ link: 'https://www.google.com/x' }, { link: 'https://other.com/x' }, { link: 'https://www.kmart.com.au/product/1' }])
+    const f = json(stores('https://www.google.com/x', 'https://www.bigw.com.au/product/1', 'https://www.bigw.com.au/product/2'))
     vi.stubGlobal('fetch', f)
-    expect(await searchShopLink({ title: 'Loafers', shop: 'Kmart' })).toBe('https://www.kmart.com.au/product/1')
+    const r = await resolveShopLink({ title: 'Tee', shop: 'BIG W', token: 'TOK' })
+    expect(r).toMatchObject({ link: 'https://www.bigw.com.au/product/1', reason: null, path: 'token', candidates: 3 })
     expect(f).toHaveBeenCalledTimes(1)
+    const u = call(f)
+    expect(u.searchParams.get('engine')).toBe('google_immersive_product')
+    expect(u.searchParams.get('page_token')).toBe('TOK')
   })
-  it('limits the search to the shop\'s own site, and uses the shop that Google Shopping named', async () => {
+  it('refuses a look-alike store and reports no_store_on_shop_host with hosts only', async () => {
     vi.stubEnv('SERPAPI_API_KEY', 'test-key')
-    const f = answer([{ link: 'https://www.kmart.com.au/product/1' }])
-    vi.stubGlobal('fetch', f)
-    await searchShopLink({ title: "Women's Target Elasticated Back Sneakerinas Nella", shop: 'Kmart' })
-    const url = new URL((f.mock.calls[0] as unknown as [string])[0])
-    expect(url.searchParams.get('q')).toBe("Women's Target Elasticated Back Sneakerinas Nella site:kmart.com.au")
+    vi.stubGlobal('fetch', json(stores('https://bigw.com/secret/path?x=1', 'https://bigw.com.au.evil.com/p', 'http://bigw.com.au/p')))
+    const r = await resolveShopLink({ title: 'Tee', shop: 'BIG W', token: 'TOK' })
+    expect(r.link).toBeNull()
+    expect(r.reason).toBe('no_store_on_shop_host')
+    expect(r.candidates).toBe(3)
+    expect(r.hosts).toEqual(['bigw.com', 'bigw.com.au.evil.com', 'bigw.com.au'])
+    expect(JSON.stringify(r)).not.toMatch(/secret|test-key/)
   })
-  it('makes no search for a shop that is not an example shop', async () => {
+  it('reports at most 5 distinct hosts', async () => {
     vi.stubEnv('SERPAPI_API_KEY', 'test-key')
-    const f = answer([{ link: 'https://evil.com/x' }])
+    vi.stubGlobal('fetch', json(stores(...Array.from({ length: 8 }, (_, i) => `https://shop${i}.example/p`), 'https://shop0.example/q')))
+    const r = await resolveShopLink({ title: 'Tee', shop: 'Kmart', token: 'TOK' })
+    expect(r.hosts).toHaveLength(5)
+    expect(r.candidates).toBe(9)
+  })
+  it('reports no_results when the answer lists no stores', async () => {
+    vi.stubEnv('SERPAPI_API_KEY', 'test-key')
+    vi.stubGlobal('fetch', json({ product_results: {} }))
+    expect(await resolveShopLink({ title: 'Tee', shop: 'Kmart', token: 'TOK' })).toMatchObject({ link: null, reason: 'no_results', candidates: 0, hosts: [] })
+  })
+  it('reports http_<status>, timeout and unreadable', async () => {
+    vi.stubEnv('SERPAPI_API_KEY', 'test-key')
+    vi.stubGlobal('fetch', json({ error: 'x' }, 429))
+    expect((await resolveShopLink({ title: 'Tee', shop: 'Kmart', token: 'T' })).reason).toBe('http_429')
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new DOMException('t', 'TimeoutError') }))
+    expect((await resolveShopLink({ title: 'Tee', shop: 'Kmart', token: 'T' })).reason).toBe('timeout')
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('<html>', { status: 200 })))
+    expect((await resolveShopLink({ title: 'Tee', shop: 'Kmart', token: 'T' })).reason).toBe('unreadable')
+  })
+})
+
+describe('resolveShopLink without a token', () => {
+  it('makes one search limited to the shop\'s own site and returns the first result on it', async () => {
+    vi.stubEnv('SERPAPI_API_KEY', 'test-key')
+    const f = json({ organic_results: [{ link: 'https://www.google.com/x' }, { link: 'https://www.kmart.com.au/product/1' }] })
     vi.stubGlobal('fetch', f)
-    expect(await searchShopLink({ title: 'Loafers', shop: 'Unknown Shop' })).toBeNull()
+    const r = await resolveShopLink({ title: "Women's Loafers", shop: 'Kmart' })
+    expect(r).toMatchObject({ link: 'https://www.kmart.com.au/product/1', path: 'site' })
+    expect(f).toHaveBeenCalledTimes(1)
+    expect(call(f).searchParams.get('q')).toBe("Women's Loafers site:kmart.com.au")
+    expect(call(f).searchParams.get('engine')).toBe('google')
+  })
+  it('reports no_token when the site search finds nothing on the shop\'s site', async () => {
+    vi.stubEnv('SERPAPI_API_KEY', 'test-key')
+    vi.stubGlobal('fetch', json({ organic_results: [{ link: 'https://www.google.com/x' }] }))
+    expect(await resolveShopLink({ title: 'Tee', shop: 'Kmart' })).toMatchObject({ link: null, reason: 'no_token', path: 'site', hosts: ['www.google.com'] })
+  })
+  it('makes no call for a shop that is not an example shop', async () => {
+    vi.stubEnv('SERPAPI_API_KEY', 'test-key')
+    const f = json({ organic_results: [{ link: 'https://evil.com/x' }] })
+    vi.stubGlobal('fetch', f)
+    expect((await resolveShopLink({ title: 'Tee', shop: 'Unknown Shop', token: 'T' })).reason).toBe('no_store_on_shop_host')
     expect(f).not.toHaveBeenCalled()
-  })
-  it('returns null when no result is on the shop\'s site', async () => {
-    vi.stubEnv('SERPAPI_API_KEY', 'test-key')
-    vi.stubGlobal('fetch', answer([{ link: 'https://www.google.com/x' }]))
-    expect(await searchShopLink({ title: 'Loafers', shop: 'Kmart' })).toBeNull()
+    expect(shopHasHost('Unknown Shop')).toBe(false)
+    expect(shopHasHost('Kmart')).toBe(true)
   })
 })

@@ -46,7 +46,9 @@ vi.mock('@/lib/supabase/server', () => ({
 }))
 
 const lookup = vi.hoisted(() => vi.fn())
-vi.mock('@/lib/gap-search/shop-link', async (orig) => ({ ...(await orig<typeof import('@/lib/gap-search/shop-link')>()), searchShopLink: lookup }))
+vi.mock('@/lib/gap-search/shop-link', async (orig) => ({ ...(await orig<typeof import('@/lib/gap-search/shop-link')>()), resolveShopLink: lookup }))
+const ok = (link: string) => ({ link, reason: null, candidates: 1, hosts: ['www.kmart.com.au'], path: 'site' })
+const fail = (reason: string, over: Record<string, unknown> = {}) => ({ link: null, reason, candidates: 2, hosts: ['www.google.com', 'bigw.com'], path: 'token', ...over })
 
 import { GET } from './route'
 
@@ -63,7 +65,7 @@ beforeEach(() => {
   db.user = A
   db.usage = {}
   db.tables = { gap_suggestions: [{ id: 'r1', user_id: A, occasion: 'work', category: 'shoes', day: '2026-11-18', items: [{ ...GOOGLE_ITEM }] }] }
-  lookup.mockResolvedValue('https://www.kmart.com.au/product/black-loafers')
+  lookup.mockResolvedValue(ok('https://www.kmart.com.au/product/black-loafers'))
 })
 afterEach(() => { vi.unstubAllEnvs() })
 
@@ -73,7 +75,7 @@ describe('GET /api/gaps/shop-link', () => {
     expect(res.status).toBe(302)
     expect(res.headers.get('location')).toBe('https://www.kmart.com.au/product/black-loafers')
     expect(lookup).toHaveBeenCalledTimes(1)
-    expect(lookup).toHaveBeenCalledWith({ title: 'Black loafers', shop: 'Kmart' })
+    expect(lookup).toHaveBeenCalledWith({ title: 'Black loafers', shop: 'Kmart', token: null })
     expect(db.usage['2026-11']).toBe(1)
     expect((db.tables.gap_suggestions[0].items as Row[])[0].link).toBe('https://www.kmart.com.au/product/black-loafers')
   })
@@ -106,7 +108,7 @@ describe('GET /api/gaps/shop-link', () => {
   })
 
   it('a Google or other-host link is never opened as the shop', async () => {
-    lookup.mockResolvedValue('https://www.google.com/search?q=x')
+    lookup.mockResolvedValue(ok('https://www.google.com/search?q=x'))
     const res = await get()
     expect(res.status).toBe(404)
     expect(res.headers.get('location')).toBeNull()
@@ -115,7 +117,7 @@ describe('GET /api/gaps/shop-link', () => {
   })
 
   it('UI-20 no link found shows Couldn\'t open the shop with the matching message', async () => {
-    lookup.mockResolvedValue(null)
+    lookup.mockResolvedValue(fail('no_results'))
     const res = await get()
     const html = await res.text()
     expect(html).toContain('Fashun')
@@ -124,7 +126,7 @@ describe('GET /api/gaps/shop-link', () => {
     expect(html).not.toContain('<button')
   })
 
-  it('a failing search shows the same page and stores nothing', async () => {
+  it('a lookup that overruns its time shows the same page with reason timeout and stores nothing', async () => {
     lookup.mockRejectedValue(new Error('x'))
     const res = await get()
     expect(await res.text()).toContain('It may have sold out')
@@ -170,5 +172,67 @@ describe('GET /api/gaps/shop-link', () => {
   it('an unknown gap is not found', async () => {
     const res = await GET(new Request('http://localhost/api/gaps/shop-link?occasion=x&category=shoes&t=a'))
     expect(res.status).toBe(404)
+  })
+
+  it('a stored shop-host link is opened with no search and nothing reserved, even when the item has a token', async () => {
+    db.tables.gap_suggestions[0].items = [{ ...GOOGLE_ITEM, link: 'https://www.bigw.com.au/p/1', shop: 'BIG W', immersiveToken: 'TOK' }]
+    const res = await get()
+    expect(res.status).toBe(302)
+    expect(res.headers.get('location')).toBe('https://www.bigw.com.au/p/1')
+    expect(lookup).not.toHaveBeenCalled()
+    expect(db.usage['2026-11']).toBeUndefined()
+  })
+
+  it('an item with a token is looked up with its token: one call, one reservation, link stored', async () => {
+    db.tables.gap_suggestions[0].items = [{ ...GOOGLE_ITEM, immersiveToken: 'TOK' }]
+    const res = await get()
+    expect(res.status).toBe(302)
+    expect(lookup).toHaveBeenCalledTimes(1)
+    expect(lookup).toHaveBeenCalledWith({ title: 'Black loafers', shop: 'Kmart', token: 'TOK' })
+    expect(db.usage['2026-11']).toBe(1)
+    expect((db.tables.gap_suggestions[0].items as Row[])[0]).toMatchObject({ immersiveToken: 'TOK', link: 'https://www.kmart.com.au/product/black-loafers' })
+  })
+
+  it('a shop with no known website reserves nothing and makes no call', async () => {
+    db.tables.gap_suggestions[0].items = [{ ...GOOGLE_ITEM, shop: 'Unknown Shop' }]
+    const res = await get()
+    expect(res.status).toBe(404)
+    expect(await res.text()).toContain('data-reason="no_store_on_shop_host"')
+    expect(lookup).not.toHaveBeenCalled()
+    expect(db.usage['2026-11']).toBeUndefined()
+  })
+
+  it.each(['no_token', 'no_results', 'no_store_on_shop_host', 'http_429', 'unreadable', 'timeout'])(
+    'reason %s is on the failure page and in one log line, with hosts only',
+    async (reason) => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      lookup.mockResolvedValue(fail(reason))
+      const html = await (await get()).text()
+      expect(html).toContain(`data-reason="${reason}"`)
+      expect(html).toContain('data-hosts="www.google.com,bigw.com"')
+      expect(html).toContain('data-candidates="2"')
+      expect(html).not.toMatch(/test-key|Black loafers|api_key|\/product/)
+      expect(warn).toHaveBeenCalledTimes(1)
+      expect(warn.mock.calls[0][0]).toBe(`gap-shop-link reason=${reason} path=token candidates=2 hosts=www.google.com,bigw.com`)
+      warn.mockRestore()
+    },
+  )
+
+  it('a lookup that never answers in time gives reason timeout', async () => {
+    lookup.mockRejectedValue(new Error('slow'))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    expect(await (await get()).text()).toContain('data-reason="timeout"')
+    warn.mockRestore()
+  })
+
+  it('never more than one search per tap, and the monthly cap is respected', async () => {
+    vi.stubEnv('GAP_SEARCH_MONTHLY_CAP', '1')
+    db.tables.gap_suggestions[0].items = [{ ...GOOGLE_ITEM, immersiveToken: 'TOK' }]
+    lookup.mockResolvedValue(fail('no_results'))
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    await get()
+    await get()
+    expect(lookup).toHaveBeenCalledTimes(1)
+    expect(db.usage['2026-11']).toBe(1)
   })
 })
