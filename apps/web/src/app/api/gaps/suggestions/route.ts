@@ -26,7 +26,7 @@ function logFailure(reason: 'cache_read_failed' | 'count_failed' | 'source_faile
 }
 
 function unavailable() {
-  return NextResponse.json({ status: 'unavailable', message: GAP_UNAVAILABLE_MESSAGE }, { status: 503 })
+  return NextResponse.json({ status: 'unavailable', message: GAP_UNAVAILABLE_MESSAGE }, { status: 200 })
 }
 
 /** "2026-12-01" -> "1 December" */
@@ -38,7 +38,7 @@ function dayAndMonth(isoDate: string): string {
 /**
  * GET ?occasion=&category= : up to 6 suggested items for one gap.
  * The tier, department and price range come from the signed-in user's own saved settings, never from the request.
- * status: ok (items, maybe none) | no_tier | paused (until the 1st of next month) | unavailable (HTTP 503).
+ * status: ok (items, maybe none) | no_tier | paused (until the 1st of next month) | unavailable (HTTP 200, like /api/gaps/status).
  */
 export async function GET(req: Request) {
   const supabase = await createServerClient()

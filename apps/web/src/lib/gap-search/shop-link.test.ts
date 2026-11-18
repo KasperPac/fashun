@@ -61,6 +61,21 @@ describe('searchShopLink', () => {
     expect(await searchShopLink({ title: 'Loafers', shop: 'Kmart' })).toBe('https://www.kmart.com.au/product/1')
     expect(f).toHaveBeenCalledTimes(1)
   })
+  it('limits the search to the shop\'s own site, and uses the shop that Google Shopping named', async () => {
+    vi.stubEnv('SERPAPI_API_KEY', 'test-key')
+    const f = answer([{ link: 'https://www.kmart.com.au/product/1' }])
+    vi.stubGlobal('fetch', f)
+    await searchShopLink({ title: "Women's Target Elasticated Back Sneakerinas Nella", shop: 'Kmart' })
+    const url = new URL((f.mock.calls[0] as unknown as [string])[0])
+    expect(url.searchParams.get('q')).toBe("Women's Target Elasticated Back Sneakerinas Nella site:kmart.com.au")
+  })
+  it('makes no search for a shop that is not an example shop', async () => {
+    vi.stubEnv('SERPAPI_API_KEY', 'test-key')
+    const f = answer([{ link: 'https://evil.com/x' }])
+    vi.stubGlobal('fetch', f)
+    expect(await searchShopLink({ title: 'Loafers', shop: 'Unknown Shop' })).toBeNull()
+    expect(f).not.toHaveBeenCalled()
+  })
   it('returns null when no result is on the shop\'s site', async () => {
     vi.stubEnv('SERPAPI_API_KEY', 'test-key')
     vi.stubGlobal('fetch', answer([{ link: 'https://www.google.com/x' }]))

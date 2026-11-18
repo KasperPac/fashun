@@ -138,7 +138,7 @@ describe('GET /api/gaps/suggestions', () => {
   it('search failure shows Suggestions aren\'t available', async () => {
     search.mockRejectedValueOnce(new ProductSourceError('Product search failed (HTTP 500)'))
     const res = await get()
-    expect(res.status).toBe(503)
+    expect(res.status).toBe(200)
     expect(await res.json()).toEqual({ status: 'unavailable', message: "Suggestions aren't available right now" })
     expect(db.tables.gap_suggestions).toHaveLength(0)
     expect((await (await get()).json()).status).toBe('ok')
@@ -151,7 +151,7 @@ describe('GET /api/gaps/suggestions', () => {
     const pending = get()
     await vi.advanceTimersByTimeAsync(12_000)
     const res = await pending
-    expect(res.status).toBe(503)
+    expect(res.status).toBe(200)
     expect((await res.json()).status).toBe('unavailable')
     expect(db.tables.gap_suggestions).toHaveLength(0)
   })
@@ -159,7 +159,7 @@ describe('GET /api/gaps/suggestions', () => {
   it('a missing key shows Suggestions aren\'t available', async () => {
     vi.stubEnv('SERPAPI_API_KEY', '')
     const res = await get()
-    expect(res.status).toBe(503)
+    expect(res.status).toBe(200)
     expect((await res.json()).status).toBe('unavailable')
     expect(search).not.toHaveBeenCalled()
     expect(db.usage['2026-11']).toBeUndefined()
@@ -173,10 +173,10 @@ describe('GET /api/gaps/suggestions', () => {
 
   it('a count or storage read that fails shows not available and makes no search', async () => {
     db.failRpc = true
-    expect((await get()).status).toBe(503)
+    expect((await get()).status).toBe(200)
     db.failRpc = false
     db.failRead = true
-    expect((await get()).status).toBe(503)
+    expect((await get()).status).toBe(200)
     expect(search).not.toHaveBeenCalled()
   })
 
@@ -186,7 +186,7 @@ describe('GET /api/gaps/suggestions', () => {
     // Even a gap stored earlier is not shown while the switch is off.
     db.tables.gap_suggestions = [{ user_id: A, occasion: 'work', category: 'shoes', tier: 'budget', department: 'womens', price_min: 10, price_max: 60, day: '2026-11-18', items: [ITEM] }]
     const res = await get()
-    expect(res.status).toBe(503)
+    expect(res.status).toBe(200)
     expect(await res.json()).toEqual({ status: 'unavailable', message: "Suggestions aren't available right now" })
     expect(search).not.toHaveBeenCalled()
     expect(db.usage).toEqual({})
@@ -306,7 +306,7 @@ describe('GET /api/gaps/suggestions', () => {
 
     it('switch off makes no search and no AI call', async () => {
       vi.stubEnv('ENABLE_GAP_SUGGESTIONS', 'false')
-      expect((await get()).status).toBe(503)
+      expect((await get()).status).toBe(200)
       expect(source.search).not.toHaveBeenCalled()
       expect(tagger).not.toHaveBeenCalled()
     })
@@ -320,14 +320,14 @@ describe('GET /api/gaps/suggestions', () => {
     it('a tagging failure for the whole batch shows not available and stores nothing', async () => {
       tagger.mockRejectedValue(new Error('down'))
       const res = await get()
-      expect(res.status).toBe(503)
+      expect(res.status).toBe(200)
       expect((await res.json()).status).toBe('unavailable')
       expect(db.tables.gap_suggestions).toHaveLength(0)
     })
 
     it('a user with no palette gets not available, with no search and no AI call', async () => {
       ;(db.tables.users[0] as Row).best_colours = []
-      expect((await get()).status).toBe(503)
+      expect((await get()).status).toBe(200)
       expect(source.search).not.toHaveBeenCalled()
       expect(tagger).not.toHaveBeenCalled()
       expect(db.usage).toEqual({})

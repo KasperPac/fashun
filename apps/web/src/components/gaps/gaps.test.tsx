@@ -207,7 +207,7 @@ describe('Shop link button', () => {
 
 describe('gap rows from the /api/wardrobe shape', () => {
   const api = (category: WardrobeItem['category'], id: string): WardrobeItem =>
-    ({ id, userId: 'u', ownership: 'owned', category, name: id, colours: [], styleTags: [], occasionTags: ['casual'], imageUrl: '' })
+    ({ id, userId: 'u', ownership: 'owned', category, name: id, colours: [], styleTags: [], occasionTags: ['casual'], imageUrl: '', createdAt: '2026-11-01T00:00:00Z' })
   const wardrobeB = [api('tops', 't1'), api('tops', 't2'), api('bottoms', 'b1'), api('bottoms', 'b2'), api('shoes', 's1'), api('shoes', 's2')]
   it('items tagged Casual only leave gaps for Formal (occasion tags are read)', () => {
     expect(gapRows(toGapItems(wardrobeB), 'formal', 'womens').map((r) => r.label))

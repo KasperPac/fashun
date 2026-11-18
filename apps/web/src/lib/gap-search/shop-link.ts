@@ -43,12 +43,22 @@ export function linkBelongsToShop(link: string | null | undefined, shop: string)
   return hosts.some((h) => host === h || host.endsWith(`.${h}`))
 }
 
-/** The first web result on the shop's own site, from one Google search. Null when there is none. */
+/** The shop's own web address (first host) for a shop name, or null for a shop that isn't an example shop. */
+function shopHost(shop: string): string | null {
+  return SHOP_HOSTS[normaliseShopName(shop)]?.[0] ?? null
+}
+
+/**
+ * The first web result on the shop's own site, from one Google search limited to that site (site:host),
+ * so the shop's page is found even when Google ranks other sellers first. Null when there is none.
+ */
 export async function searchShopLink(item: { title: string; shop: string }): Promise<string | null> {
   const key = process.env.SERPAPI_API_KEY
   if (!key) throw new ProductSourceError('SERPAPI_API_KEY is not set')
+  const host = shopHost(item.shop)
+  if (!host) return null
   const params = new URLSearchParams({
-    engine: 'google', q: `${item.title} ${item.shop}`, gl: 'au', hl: 'en',
+    engine: 'google', q: `${item.title} site:${host}`, gl: 'au', hl: 'en',
     location: 'Australia', google_domain: 'google.com.au', num: '10', api_key: key,
   })
   let res: Response

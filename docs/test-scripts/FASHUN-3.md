@@ -54,21 +54,22 @@ The preview runs on the live database. A tier, department or slider QA sets on t
 | Piece | Category | Occasions | Owned / Wishlist |
 |---|---|---|---|
 | QA Top 1 | tops | Casual | Owned |
-| QA Top 2 | tops | Work | Owned |
-| QA Top 3 | tops | Work | Owned |
+| QA Top 2 | tops | Formal | Owned |
+| QA Top 3 | tops | Formal | Owned |
 | QA Bottom 1 | bottoms | Casual, Work | Owned |
 | QA Bottom 2 | bottoms | Casual, Work | Owned |
-| QA Shoes 1 | shoes | Casual | Owned |
-| QA Shoes 2 | shoes | Casual | Owned |
 | QA Shoes 3 | shoes | Work | **Wishlist** |
 
-- **Casual:** 1 top, 2 bottoms, 2 shoes → gap "another Casual top".
-- **Work:** 2 tops, 2 bottoms, 0 owned shoes (QA Shoes 3 is wishlist) → gap "Work shoes".
-- **Smart casual, Formal:** nothing → gaps for tops, bottoms and shoes, including "Formal shoes".
+Gaps use the same rule as Style me (design spec section 6): an item tagged only Casual is kept out of Formal, an item tagged only Formal is kept out of Casual, and every other item counts for every occasion. So any owned pair of shoes counts as Work shoes; wardrobe A therefore owns no shoes. (Revision 2, 17 Nov 2026: QA Shoes 1 and 2 removed, QA Top 2 and 3 tagged Formal.)
+- **Casual:** 1 top (Top 2 and 3 are Formal only), 2 bottoms, 0 shoes → "another Casual top" and "No Casual shoes yet".
+- **Work:** 3 tops, 2 bottoms, 0 owned shoes (QA Shoes 3 is wishlist) → only "No Work shoes yet".
+- **Formal:** 2 tops (Top 1 is Casual only), 2 bottoms, 0 shoes → "No Formal shoes yet".
+- **Smart casual:** 3 tops, 2 bottoms, 0 shoes → "No Smart casual shoes yet".
 
 **Wardrobe B:** QA Top 4 and 5, QA Bottom 3 and 4, QA Shoes 4 and 5, all Owned and tagged Casual only.
 - **Casual:** 2 of each → **no card** for Casual.
-- **Work:** nothing → gap "Work tops" (used for C8 and C9).
+- **Work:** 2 of each count (Casual-only items count for Work) → no card.
+- **Formal:** nothing counts → "Formal tops", "Formal bottoms", "Formal shoes". "Formal tops" is used for R17, R18, R24 and L-R6.
 
 **Saved search results (fixtures):** the Engineer records them once on the free plan, unedited, and lists them in the completion report. The real-use run needs at least these:
 
@@ -77,7 +78,7 @@ The preview runs on the live database. A tier, department or slider QA sets on t
 | Work shoes | women's | Budget, Premium |
 | another Casual top | women's | Budget, Premium |
 | Formal shoes | women's | Budget, Premium |
-| Work tops | men's | Budget, Mid |
+| Formal tops | men's | Budget, Mid |
 | Work shoes | men's and both | Budget (for C9) |
 
 Recorded results may not happen to contain the traps the checks are about: an out-of-tier shop, a price outside the range, an avoid colour, sneakers on Formal shoes, a hoodie on Work tops, an item for the other department. The `automated` steps cover those with made-up rows added to a copy of the saved results.
@@ -93,7 +94,7 @@ Recorded results may not happen to contain the traps the checks are about: an ou
 | L-R3 | A taps "See it at the shop" once | 1 |
 | L-R4 | A, Premium, opens Work shoes | 1 |
 | L-R5 | A taps "See it at the shop" once | 1 |
-| L-R6 | B, Mid, men's, opens Work tops | 1 |
+| L-R6 | B, Mid, men's, opens Formal tops | 1 |
 | L-R7 | Monthly limit lowered, A opens a gap not opened today | 0 (must be refused) |
 | **Planned** | | **5** |
 | Re-runs if a step has to be repeated | | up to 5 more |
@@ -137,8 +138,8 @@ Every opened gap also has its item photos colour-tagged by the AI (the pitch est
 | R7 | 5, 7 | A, Budget, wardrobe A (QA Shoes 3 is Wishlist, tagged Work), fixtures | Choose Work | A card names "Work shoes". Screenshot. | `real-use` (no search: the card shows before it is opened) |
 | R8 | 6 | A, wardrobe A | Choose Casual | A card offers "another Casual top". Screenshot. | `real-use` (no search) |
 | R9 | 6 | B, wardrobe B, tier Mid (set here, men's) | Choose Casual | No card for Casual. Screenshot. | `real-use` (no search) |
-| R10 | 6 | A: add a second Owned Casual top ("QA Top 6") | Choose Casual again | The Casual card is gone. Then delete QA Top 6 and check the card is back. Screenshot of both. | `real-use` (no search) |
-| R11 | 7 | A: in the item sheet, switch QA Shoes 3 from Wishlist to Owned | Choose Work | No "Work shoes" card. Switch it back to Wishlist: the card is back. Screenshot of both. | `real-use` (no search) |
+| R10 | 6 | A: add a second Owned Casual top ("QA Top 6") | Choose Casual again | The Casual card no longer offers "another Casual top" (it still shows "No Casual shoes yet"). Then delete QA Top 6 and check "another Casual top" is back. Screenshot of both. | `real-use` (no search) |
+| R11 | 7 | A: in the item sheet, switch QA Shoes 3 from Wishlist to Owned | Choose Work | The card no longer says "No Work shoes yet"; it offers "another pair of Work shoes". Switch it back to Wishlist: "No Work shoes yet" is back. Screenshot of both. | `real-use` (no search) |
 
 ## C. Suggestions (checks 8–16)
 
@@ -159,8 +160,8 @@ Every opened gap also has its item photos colour-tagged by the AI (the pitch est
 | R14 | 10, 11 | A, Budget: Work shoes, another Casual top, Formal shoes | Open each gap. Note every item's shop and price against the Shoes and Tops ranges from the budget screen | Every price is inside its range. No Rodd & Gunn, R.M. Williams or M.J. Bale item. Every shop is in Budget's list. Screenshot per gap. | `real-use` (fixtures) |
 | R15 | 10, 11 | A, Premium: the same three gaps | As R14 | Every price is inside its range. No Kmart, Target or Big W item. Every shop is in Premium's list. Screenshot per gap. | `real-use` (fixtures) |
 | R16 | 12 | Every item seen in R12–R15 | Compare each item's reason and photo against A's best and avoid colours (from R0) | The reason names a best colour. No item's photo is clearly an avoid colour. If a photo is clearly a different colour family from the reason, it's a fail (see Questions). | `real-use` (fixtures) |
-| R17 | 13 | A: Formal shoes from R14 and R15; B, Mid, men's: open Work tops | Look at every item | No sneakers or thongs on Formal shoes. No hoodie on Work tops. Screenshot. | `real-use` (fixtures) |
-| R18 | 14 | B (men's): Work tops from R17. A: change to men's, open Work shoes; then back to women's | Look at every item | B and A on men's see no women's item; A on women's sees no men's item. Screenshot. | `real-use` (fixtures) |
+| R17 | 13 | A: Formal shoes from R14 and R15; B, Mid, men's: open Formal tops | Look at every item | No sneakers or thongs on Formal shoes. No hoodie on Formal tops. Screenshot. | `real-use` (fixtures) |
+| R18 | 14 | B (men's): Formal tops from R17. A: change to men's, open Work shoes; then back to women's | Look at every item | B and A on men's see no women's item; A on women's sees no men's item. Screenshot. | `real-use` (fixtures) |
 | R19 | 15 | A, Premium: set the Shoes range to its lowest (for example $0 – $10) | Open Work shoes | Plain words saying nothing matched, suggesting widening the budget or the tier. No error, the rest of the screen works. Then put the Shoes range back. Screenshot. | `real-use` (fixtures) |
 | R20 | 16 | A, any item from R12 | Tap "See it at the shop" | A new tab opens. Its address is on the website of the shop named on the item (for example `kmart.com.au` for Kmart), not Google. QA records the address. QA's sandbox can't reach shop sites, so whether the shop's page then loads is "not verified" here and checked in L-R3. Screenshot of the item and the new tab's address. | `real-use` (fixtures) |
 
@@ -179,7 +180,7 @@ Every opened gap also has its item photos colour-tagged by the AI (the pitch est
 | R21 | 17 | Preview with the search key set to a made-up one (ops lane), A, a gap not opened today | Open it | "Suggestions aren't available right now". Then open Wardrobe, Style me (make one outfit) and Saved outfits: each works. Put the key back. Screenshot. | `real-use` (made-up key: no search is charged) |
 | R22 | 17, 21 | Preview with `ENABLE_GAP_SUGGESTIONS` removed (ops lane), A | Open the Work shoes card, then Wardrobe, Style me and Saved outfits | "Suggestions aren't available right now". The rest works. The logs for the step show no search and no colour tagging call. Switch back on. Screenshot. | `real-use` (fixtures) |
 | R23 | 17 | A, a gap not opened today | Tap it, then cut the browser's connection before the items arrive. Reconnect and tap again | A plain message, not "Suggestions aren't available" for a dropped connection unless the design uses that for both, and no endless spinner. After reconnecting, the items load. Screenshot. | `real-use` (fixtures) |
-| R24 | 19 | A on Premium, women's, with stored Work shoes. B on Mid, men's | Sign in as B. Open the budget screen and Work tops; look for anything of A's | B sees Mid, men's, B's own ranges and B's own items, nothing of A's. Then as A: A's settings are unchanged by anything B did. Screenshot of both. | `real-use` (fixtures) |
+| R24 | 19 | A on Premium, women's, with stored Work shoes. B on Mid, men's | Sign in as B. Open the budget screen and Formal tops; look for anything of A's | B sees Mid, men's, B's own ranges and B's own items, nothing of A's. Then as A: A's settings are unchanged by anything B did. Screenshot of both. | `real-use` (fixtures) |
 | R25 | 20 | A after R12–R19 | Open Wardrobe (Owned and Wishlist) and choose Work | Same piece count as before the suggestions. No suggested item in Owned or Wishlist. The Work shoes card still shows. Screenshot. | `real-use` (no search) |
 
 ## E. Every page and call, bad input, clean-up
@@ -204,7 +205,7 @@ Every opened gap also has its item photos colour-tagged by the AI (the pitch est
 | L-R3 | 16 | An item from L-R1 | Tap "See it at the shop" | A new tab on the named shop's own site, on that item. QA records the address. Whether the page loads is "not verified" if the shop is outside QA's network. | `real-use` (live search, 1) |
 | L-R4 | 10, 11 | A, Premium | Open Work shoes | As L-R1, against Premium's shops and ranges. No Kmart, Target or Big W. Screenshot. | `real-use` (live search, 1) |
 | L-R5 | 16 | An item from L-R4 | Tap "See it at the shop" | As L-R3. | `real-use` (live search, 1) |
-| L-R6 | 13, 14 | B, Mid, men's, Work tops | Open it | No women's item, no hoodie, every shop in Mid's list. Screenshot. | `real-use` (live search, 1) |
+| L-R6 | 13, 14 | B, Mid, men's, Formal tops | Open it | No women's item, no hoodie, every shop in Mid's list. Screenshot. | `real-use` (live search, 1) |
 | L-R7 | 18 | Preview `GAP_SEARCH_MONTHLY_CAP` set (ops lane) to this month's count so far | As A, open a gap not opened today (for example Smart casual tops); then tap "See it at the shop" on a stored item | "Suggestions are paused until 1 December" (in November). The logs show no search for either. Put the cap back. Screenshot. | `real-use` (live search, 0) |
 
 ### Live readiness (before Kasper reviews the PR)
