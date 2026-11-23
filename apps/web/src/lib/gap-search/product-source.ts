@@ -1,4 +1,4 @@
-import type { Department } from '@fashun/shared'
+import type { BudgetTier, Department } from '@fashun/shared'
 
 /** The categories a gap can ask for. */
 export type GapSearchCategory = 'tops' | 'bottoms' | 'shoes'
@@ -7,6 +7,8 @@ export interface GapSearchQuery {
   occasion: 'casual' | 'smart-casual' | 'work' | 'formal'
   category: GapSearchCategory
   department: Department
+  /** The budget tier: its example shops go into the one search. */
+  tier: BudgetTier
   /** The user's slider range for the category, in A$ (min, max), ends included. */
   priceRange: readonly [number, number]
 }

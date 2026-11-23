@@ -32,6 +32,7 @@ export async function findGapCandidates(input: GapSearchInput, source: ProductSo
     occasion: input.occasion,
     category: input.category,
     department: input.department,
+    tier: input.tier,
     priceRange: input.priceRange,
   }
   const products = await source.search(query)
@@ -86,6 +87,7 @@ export async function findGapSuggestions(
     occasion: input.occasion,
     category: input.category,
     department: input.department,
+    tier: input.tier,
     priceRange: input.priceRange,
   }
   const products = await source.search(query)

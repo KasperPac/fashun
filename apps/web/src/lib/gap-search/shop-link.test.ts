@@ -112,10 +112,10 @@ describe('resolveShopLink without a token', () => {
     expect(call(f).searchParams.get('q')).toBe("Women's Loafers site:kmart.com.au")
     expect(call(f).searchParams.get('engine')).toBe('google')
   })
-  it('reports no_token when the site search finds nothing on the shop\'s site', async () => {
+  it('reports no_results when the site search finds nothing on the shop\'s site', async () => {
     vi.stubEnv('SERPAPI_API_KEY', 'test-key')
     vi.stubGlobal('fetch', json({ organic_results: [{ link: 'https://www.google.com/x' }] }))
-    expect(await resolveShopLink({ title: 'Tee', shop: 'Kmart' })).toMatchObject({ link: null, reason: 'no_token', path: 'site', hosts: ['www.google.com'] })
+    expect(await resolveShopLink({ title: 'Tee', shop: 'Kmart' })).toMatchObject({ link: null, reason: 'no_results', path: 'site', hosts: ['www.google.com'] })
   })
   it('makes no call for a shop that is not an example shop', async () => {
     vi.stubEnv('SERPAPI_API_KEY', 'test-key')

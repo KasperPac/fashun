@@ -92,7 +92,8 @@ export function sheetIntro(tier: BudgetTier, range: readonly [number, number], s
 }
 
 export function lookingLine(label: string, tier: BudgetTier): string {
-  return `Looking for ${label} at ${andList(tierShops(tier))}…`
+  const text = label.replace(/^(Another|More)\b/, (w) => w.toLowerCase())
+  return `Looking for ${text} at ${andList(tierShops(tier))}…`
 }
 
 /** The "nothing matched" body. */

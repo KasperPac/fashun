@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
+vi.mock('next/navigation', () => ({ notFound: () => { throw new Error('NEXT_NOT_FOUND') } }))
+
 type Row = Record<string, unknown>
 const db = vi.hoisted(() => ({
   user: 'A' as string | null,
@@ -162,7 +164,7 @@ describe('GET /api/gaps/shop-link', () => {
 
   it('signed-out gets the standard not-found, and another user\'s item is not found', async () => {
     db.user = null
-    expect((await get()).status).toBe(404)
+    await expect(get()).rejects.toThrow('NEXT_NOT_FOUND')
     db.user = B
     const res = await get()
     expect(res.headers.get('location')).toBeNull()

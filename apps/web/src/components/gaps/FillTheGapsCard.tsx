@@ -76,7 +76,7 @@ export default function FillTheGapsCard({
             </li>
           ))}
         </ul>
-        {ready && !online && <p role="status" className="mt-2 text-[15px] font-semibold">{GAP_OFFLINE_LINE}</p>}
+        {!online && status?.status !== 'no_tier' && <p role="status" className="mt-2 text-[15px] font-semibold">{GAP_OFFLINE_LINE}</p>}
         {status?.status === 'no_tier' && (
           <div className="mt-3">
             <ButtonLink href={budgetHref(occasion)} variant="secondary" compact>Pick a budget</ButtonLink>

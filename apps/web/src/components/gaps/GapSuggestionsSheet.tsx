@@ -78,7 +78,7 @@ function ItemCard({ item, occasion, row, season }: { item: GapSuggestion; occasi
         href={shopLinkHref(occasion, row.category, item.title)}
         target="_blank"
         rel="noopener noreferrer"
-        aria-label={`See ${item.title} at ${item.shop} (opens in a new tab)`}
+        aria-label={`See it at the shop: ${item.title} at ${item.shop} (opens in a new tab)`}
         className={`${buttonClasses({ variant: 'secondary', compact: true })} mt-3`}
       >
         See it at the shop

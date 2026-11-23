@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { notFound } from 'next/navigation'
 import { z } from 'zod'
 import { OCCASIONS } from '@fashun/shared'
 import { createServerClient, createServiceClient } from '@/lib/supabase/server'
@@ -63,7 +64,7 @@ const toShop = (link: string) => {
 export async function GET(req: Request) {
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return new NextResponse(null, { status: 404 })
+  if (!user) notFound()
 
   if (!gapSuggestionsEnabled()) return unavailablePage()
 

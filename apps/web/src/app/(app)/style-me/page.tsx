@@ -169,7 +169,7 @@ function StyleMeContent() {
   const [openGap, setOpenGap] = useState<GapRow | null>(null)
   const gapsShown = phase.name === 'results' || phase.name === 'not-enough'
   useEffect(() => {
-    if (!gapsShown) return
+    if (!gapsShown || !online) return
     let cancelled = false
     // The status call never searches. Any failure reads as "not available".
     fetch('/api/gaps/status')
@@ -177,7 +177,7 @@ function StyleMeContent() {
       .catch((): GapStatus => ({ status: 'unavailable' }))
       .then((next) => { if (!cancelled) setGapStatus(next) })
     return () => { cancelled = true }
-  }, [gapsShown])
+  }, [gapsShown, online])
 
   const items = setup.status === 'ready' ? setup.items : []
   const season = setup.status === 'ready' ? setup.season : null

@@ -86,6 +86,15 @@ describe('Fill the gaps card', () => {
     expect(html).not.toContain('<button')
   })
 
+  it('m4 offline shows the offline line in every state except no_tier', () => {
+    const line = "You&#x27;re offline. Connect to the internet to see suggestions."
+    for (const status of [{ status: 'unavailable' }, { status: 'paused', resume_on: '2026-12-01' }, null] as (GapStatus | null)[]) {
+      expect(card(WORK_NO_SHOES, 'work', status, false)).toContain(line)
+    }
+    expect(card(WORK_NO_SHOES, 'work', { status: 'no_tier' }, false)).not.toContain(line)
+    expect(card(WORK_NO_SHOES, 'work', READY, true)).not.toContain(line)
+  })
+
   it('rows are enabled buttons when ready, and disabled while the status loads', () => {
     expect(card(WORK_NO_SHOES, 'work', READY)).not.toContain('disabled=""')
     expect(card(WORK_NO_SHOES, 'work', null)).toContain('disabled=""')
@@ -121,6 +130,15 @@ describe('Suggestions sheet', () => {
     expect(html).toContain('From Kmart, Target and Big W, within A$15–A$60, in your Winter colours.')
     expect(html).not.toContain('Still looking')
     expect(sheet({ name: 'loading', slow: true })).toContain('Still looking. This can take up to 15 seconds.')
+  })
+
+  it('m3 the looking line lower-cases Another and More', () => {
+    const only = gapRows([item('tops', 'casual')], 'casual', 'womens').find((r) => r.kind === 'only-one')
+    const html = renderToStaticMarkup(
+      <SheetBody state={{ name: 'loading', slow: false }} row={only!} occasion="casual" tier="budget" range={[15, 60]} season="winter" onClose={() => {}} onRetry={() => {}} />,
+    )
+    expect(html).toContain('Looking for another Casual top at Kmart')
+    expect(html).not.toContain('Looking for Another')
   })
 
   it('UI-14 each item shows photo through the app, shop, name, price and reason', () => {
@@ -199,7 +217,7 @@ describe('Shop link button', () => {
     const a = html.match(/<a[^>]*>See it at the shop/)?.[0] ?? ''
     expect(a).toContain('target="_blank"')
     expect(a).toContain('rel="noopener noreferrer"')
-    expect(a).toContain('aria-label="See Loafers 1 at Kmart (opens in a new tab)"')
+    expect(a).toContain('aria-label="See it at the shop: Loafers 1 at Kmart (opens in a new tab)"')
     expect(a).toContain('href="/api/gaps/shop-link?occasion=work&amp;category=shoes&amp;t=Loafers+1"')
     expect(html).not.toContain('<button')
   })

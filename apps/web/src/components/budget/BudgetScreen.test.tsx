@@ -45,6 +45,13 @@ describe('Shopping budget screen', () => {
     expect(html).toContain('A$40 – A$150')
   })
 
+  it('m1 the chosen tier has a second cue: its sub-lines are dark and semibold, the others stay grey', () => {
+    const html = render({ tier: 'mid', department: 'womens', budgets: tierRanges('mid') })
+    const tiers = html.slice(html.indexOf('id="where-you-shop"'), html.indexOf('id="i-shop"'))
+    expect(tiers.match(/font-semibold text-ink"/g)).toHaveLength(2)
+    expect(tiers.match(/font-normal text-ink-2"/g)).toHaveLength(6)
+  })
+
   it('shows a moved slider value and only Tops, Bottoms and Shoes', () => {
     const html = render({ tier: 'budget', department: 'both', budgets: { ...tierRanges('budget'), shoes: [15, 120] } })
     expect(html).toContain('A$15 – A$120')

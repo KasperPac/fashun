@@ -203,8 +203,8 @@ export function BudgetEditor({ initial, flushRef }: { initial: BudgetState; flus
           {BUDGET_TIERS.map((code) => (
             <OptionRow key={code} role="radio" selected={tier === code} disabled={locked || tierBusy} onClick={() => pickTier(code)}>
               <span className="font-display text-[22px] font-extrabold uppercase">{BUDGET_TIER_DEFINITIONS[code].name}</span>
-              <span className="text-[13px] font-normal text-ink-2">{shopsList(code)}</span>
-              <span className="text-[13px] font-normal text-ink-2">{topsRangeLine(code)}</span>
+              <span className={`text-[13px] ${tier === code ? 'font-semibold text-ink' : 'font-normal text-ink-2'}`}>{shopsList(code)}</span>
+              <span className={`text-[13px] ${tier === code ? 'font-semibold text-ink' : 'font-normal text-ink-2'}`}>{topsRangeLine(code)}</span>
             </OptionRow>
           ))}
         </ul>

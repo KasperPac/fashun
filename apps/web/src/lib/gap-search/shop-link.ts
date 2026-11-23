@@ -133,8 +133,8 @@ export async function resolveShopLink(item: { title: string; shop: string; token
     const organic = (answer.data as { organic_results?: unknown } | null)?.organic_results
     links = Array.isArray(organic) ? organic.map((r) => (r as { link?: unknown } | null)?.link) : null
   }
-  if (!links || links.length === 0) return fail(item.token ? 'no_results' : 'no_token')
+  if (!links || links.length === 0) return fail('no_results')
   const found = links.find((l): l is string => typeof l === 'string' && linkBelongsToShop(l, item.shop))
   if (found) return { link: found, reason: null, candidates: links.length, hosts: hostsOf(links), path }
-  return fail(item.token ? 'no_store_on_shop_host' : 'no_token', links)
+  return fail(item.token ? 'no_store_on_shop_host' : 'no_results', links)
 }
