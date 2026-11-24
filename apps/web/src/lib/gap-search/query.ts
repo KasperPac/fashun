@@ -1,4 +1,4 @@
-import { BUDGET_TIER_DEFINITIONS, type Department } from '@fashun/shared'
+import type { Department } from '@fashun/shared'
 import type { GapSearchCategory, GapSearchQuery } from './product-source'
 
 const OCCASION_WORDS: Record<GapSearchQuery['occasion'], string> = {
@@ -18,9 +18,13 @@ export function buildItemWords(q: Pick<GapSearchQuery, 'occasion' | 'category' |
 }
 
 /**
- * The one search text for a gap: the item words plus the tier's shops, so Google answers from them:
- * "men's formal shoes (Rodd & Gunn OR R.M. Williams OR M.J. Bale)".
+ * The one search text for a gap: the department and category only, "men's shoes" or "tops".
+ * No shop names, price or occasion words: Google Shopping treats extra words as required, so they
+ * left live searches nearly empty. The tier, price, department and occasion filters run after the search.
  */
-export function buildSearchText(q: Pick<GapSearchQuery, 'occasion' | 'category' | 'department' | 'tier'>): string {
-  return `${buildItemWords(q)} (${BUDGET_TIER_DEFINITIONS[q.tier].shops.join(' OR ')})`
+export function buildSearchText(q: Pick<GapSearchQuery, 'category' | 'department'>): string {
+  return [DEPARTMENT_WORDS[q.department], CATEGORY_WORDS[q.category]].filter(Boolean).join(' ')
 }
+
+/** Results asked for in the one call (Google Shopping's page size, up to 100). */
+export const SEARCH_RESULTS_WANTED = 100

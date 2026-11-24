@@ -106,6 +106,21 @@ describe('GET /api/gaps/suggestions', () => {
     warn.mockRestore()
   })
 
+  it('every search logs one line: parameters, raw count, shops and filter counts, with no key', async () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => {})
+    const counts = { raw: 4, notTierShop: 3, outOfPrice: 0, wrongDepartmentOrOccasion: 0, duplicate: 0, passed: 1, colourDropped: 1, titleColourDropped: 0, suggested: 0 }
+    search.mockImplementation(async (_i: unknown, deps: { onSearch: (l: unknown) => void }) => {
+      deps.onSearch({ params: { engine: 'google_shopping', q: 'shoes', num: '100' }, counts, shops: ['Kmart', 'Zara'] })
+      return [ITEM]
+    })
+    await get()
+    expect(info).toHaveBeenCalledTimes(1)
+    const line = String(info.mock.calls[0][0])
+    expect(line).toBe('gap-suggestions search params={"engine":"google_shopping","q":"shoes","num":"100"} raw=4 shops=["Kmart","Zara"] not_tier_shop=3 out_of_price=0 wrong_department_or_occasion=0 duplicate=0 passed=1 colour_dropped=1 title_colour_dropped=0 suggested=0')
+    expect(line).not.toMatch(/api_key|user/i)
+    info.mockRestore()
+  })
+
   it('tier, department and range in the request are ignored', async () => {
     await get('occasion=work&category=shoes&tier=premium&department=mens&min=1&max=9999')
     expect(search).toHaveBeenCalledWith(expect.objectContaining({ tier: 'budget', department: 'womens', priceRange: [10, 60] }), expect.anything())

@@ -227,7 +227,7 @@ describe('saved results (fixture mode)', () => {
 })
 
 describe('the live source', () => {
-  it('asks Google Shopping Australia with the price range and no fixture setting', async () => {
+  it('asks Google Shopping Australia for 100 results, with no shop names or price in the query', async () => {
     vi.stubEnv('GAP_SEARCH_FIXTURES', '')
     vi.stubEnv('SERPAPI_API_KEY', 'test-key-not-real')
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ shopping_results: [{ title: "Men's Shirt", source: 'Kmart', extracted_price: 20, thumbnail: 'https://x.test/t.jpg', link: 'https://www.kmart.com.au/p/1' }] })))
@@ -237,9 +237,10 @@ describe('the live source', () => {
     expect(url.searchParams.get('engine')).toBe('google_shopping')
     expect(url.searchParams.get('gl')).toBe('au')
     expect(url.searchParams.get('location')).toBe('Australia')
-    expect(url.searchParams.get('q')).toBe("men's formal shoes (Kmart OR Target OR Big W)")
-    expect(url.searchParams.get('min_price')).toBe('20')
-    expect(url.searchParams.get('max_price')).toBe('80')
+    expect(url.searchParams.get('q')).toBe("men's shoes")
+    expect(url.searchParams.get('num')).toBe('100')
+    expect(url.searchParams.has('min_price')).toBe(false)
+    expect(url.searchParams.has('max_price')).toBe(false)
     expect(found).toEqual([{ title: "Men's Shirt", shop: 'Kmart', price: 20, imageUrl: 'https://x.test/t.jpg', link: 'https://www.kmart.com.au/p/1', productId: null, immersiveToken: null }])
   })
   it('throws a ProductSourceError without a key, on HTTP failure and on an unreadable answer', async () => {
@@ -259,23 +260,48 @@ describe('the live source', () => {
     const [p] = parseShoppingResults({ shopping_results: [{ title: 'A', source: 'Kmart', price: 'A$1,200.50' }, { title: 'B' }] })
     expect(p.price).toBe(1200.5)
   })
-  it('builds the search words', () => {
-    expect(buildSearchText({ occasion: 'smart-casual', category: 'bottoms', department: 'womens', tier: 'mid' })).toBe("women's smart casual pants (Country Road OR Myer OR David Jones OR THE ICONIC)")
-    expect(buildSearchText({ occasion: 'work', category: 'tops', department: 'both', tier: 'budget' })).toBe('work tops (Kmart OR Target OR Big W)')
+  it('builds the search words from the department and category only', () => {
+    expect(buildSearchText({ category: 'bottoms', department: 'womens' })).toBe("women's pants")
+    expect(buildSearchText({ category: 'tops', department: 'both' })).toBe('tops')
   })
-  it.each([
-    ['budget', 'work shoes (Kmart OR Target OR Big W)'],
-    ['high-street', 'work shoes (Uniqlo OR Cotton On OR H&M)'],
-    ['mid', 'work shoes (Country Road OR Myer OR David Jones OR THE ICONIC)'],
-    ['premium', 'work shoes (Rodd & Gunn OR R.M. Williams OR M.J. Bale)'],
-  ] as const)('the one search for the %s tier names that tier\'s shops', async (tier, words) => {
+  it.each(['budget', 'high-street', 'mid', 'premium'] as const)('the one search for the %s tier is one call with no shop names', async (tier) => {
     vi.stubEnv('GAP_SEARCH_FIXTURES', '')
     vi.stubEnv('SERPAPI_API_KEY', 'test-key-not-real')
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ shopping_results: [] })))
     vi.stubGlobal('fetch', fetchMock)
     await findGapCandidates({ occasion: 'work', category: 'shoes', tier, department: 'both', priceRange: [20, 700] }, serpapiShopping)
     expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(new URL((fetchMock.mock.calls[0] as unknown as [string])[0]).searchParams.get('q')).toBe(words)
+    expect(new URL((fetchMock.mock.calls[0] as unknown as [string])[0]).searchParams.get('q')).toBe('shoes')
+  })
+  it('one gap opening makes one call, and every filter still applies to the wider answer', async () => {
+    vi.stubEnv('GAP_SEARCH_FIXTURES', '')
+    vi.stubEnv('SERPAPI_API_KEY', 'test-key-not-real')
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ shopping_results: [
+      { title: 'Work Shoe', source: 'Kmart', extracted_price: 30 },
+      { title: 'Work Shoe', source: 'Rodd & Gunn', extracted_price: 30 },
+      { title: 'Work Shoe 2', source: 'Kmart', extracted_price: 900 },
+    ] })))
+    vi.stubGlobal('fetch', fetchMock)
+    const found = await findGapCandidates({ occasion: 'work', category: 'shoes', tier: 'budget', department: 'both', priceRange: [15, 60] }, serpapiShopping)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(found.map((c) => c.shop)).toEqual(['Kmart'])
+  })
+  it('onSearch gets the parameters without the key, the raw count, the shops and the counts after each filter', async () => {
+    vi.stubEnv('GAP_SEARCH_FIXTURES', '')
+    vi.stubEnv('SERPAPI_API_KEY', 'test-key-not-real')
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ shopping_results: [
+      { title: 'Work Shoe', source: 'Kmart', extracted_price: 30 },
+      { title: 'Work Shoe', source: 'Rodd & Gunn', extracted_price: 30 },
+    ] }))))
+    const onSearch = vi.fn()
+    await findGapSuggestions({ ...input({ category: 'shoes' }), palette: { season: 'winter', best: ['#FFB347'], avoid: [] } }, { onSearch })
+    expect(onSearch).toHaveBeenCalledTimes(1)
+    const log = onSearch.mock.calls[0][0]
+    expect(log.shops).toEqual(['Kmart', 'Rodd & Gunn'])
+    expect(log.counts).toMatchObject({ raw: 2, notTierShop: 1, passed: 1, suggested: 0 })
+    expect(log.params).toMatchObject({ q: 'shoes', num: '100', gl: 'au' })
+    expect(JSON.stringify(log)).not.toContain('test-key-not-real')
+    expect(log.params).not.toHaveProperty('api_key')
   })
   it.each(['mid', 'premium'] as const)('saved results give %s items only from that tier\'s shops', async (tier) => {
     vi.stubEnv('GAP_SEARCH_FIXTURES', '1')

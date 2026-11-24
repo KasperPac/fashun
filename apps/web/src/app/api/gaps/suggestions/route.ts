@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { isBudgetTier, isDepartment, DEFAULT_DEPARTMENT, OCCASIONS } from '@fashun/shared'
 import { createServerClient, createServiceClient } from '@/lib/supabase/server'
 import { gapSuggestionsEnabled } from '@/lib/paid-extras'
-import { ColourTaggingError, findGapSuggestions, type EmptyCounts, gapSearchFixturesEnabled, ProductSourceError, type GapPalette, type GapSuggestion } from '@/lib/gap-search'
+import { ColourTaggingError, findGapSuggestions, type EmptyCounts, type SearchLog, gapSearchFixturesEnabled, ProductSourceError, type GapPalette, type GapSuggestion } from '@/lib/gap-search'
 import { SEASON_NAMES } from '@/lib/profile-view'
 import { parseBudgets } from '@/lib/budget-view'
 import { firstOfNextMonth, tryOnNow } from '@/lib/try-on'
@@ -23,6 +23,12 @@ const QuerySchema = z.object({
 /** One fixed reason per failure. Never the error text, which could hold a search address or key. */
 function logFailure(reason: 'cache_read_failed' | 'count_failed' | 'source_failed' | 'source_timeout' | 'tagging_failed' | 'no_palette' | 'store_failed') {
   console.error(`gap suggestions failed: ${reason}`)
+}
+
+/** One line per search: what was sent (no key), raw count, shops returned, the count left after each filter. No personal details. */
+function logSearch(l: SearchLog) {
+  const c = l.counts
+  console.info(`gap-suggestions search params=${JSON.stringify(l.params)} raw=${c.raw} shops=${JSON.stringify(l.shops)} not_tier_shop=${c.notTierShop} out_of_price=${c.outOfPrice} wrong_department_or_occasion=${c.wrongDepartmentOrOccasion} duplicate=${c.duplicate} passed=${c.passed} colour_dropped=${c.colourDropped} title_colour_dropped=${c.titleColourDropped} suggested=${c.suggested}`)
 }
 
 function unavailable() {
@@ -125,7 +131,7 @@ export async function GET(req: Request) {
   let emptyCounts: EmptyCounts | null = null
   try {
     items = await withTimeout(
-      findGapSuggestions({ occasion, category, tier, department, priceRange, palette }, { onEmpty: (c) => { emptyCounts = c } }),
+      findGapSuggestions({ occasion, category, tier, department, priceRange, palette }, { onEmpty: (c) => { emptyCounts = c }, onSearch: logSearch }),
       GAP_SEARCH_TIMEOUT_MS,
       () => new ProductSourceError('Product search timed out'),
     )

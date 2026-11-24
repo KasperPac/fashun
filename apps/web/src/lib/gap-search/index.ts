@@ -1,6 +1,6 @@
 import type { BudgetTier, Department } from '@fashun/shared'
 import { countFilterDrops, filterProducts, MAX_CANDIDATES, type FilterDrops } from './filters'
-import { gapSearchFixturesEnabled, serpapiShopping } from './serpapi-shopping'
+import { gapSearchFixturesEnabled, searchParams, serpapiShopping } from './serpapi-shopping'
 import { tagPhotoColour } from './colour-tag'
 import { ColourTaggingError, MAX_TAGGED, TITLE_MATCH_DISTANCE, matchBestColour, reasonLine, type ColourTagger, type GapPalette } from './colour'
 import { titleColour } from './title-colour'
@@ -66,6 +66,16 @@ export interface GapSuggestionDeps {
   tagger?: ColourTagger
   /** Diagnosis only: called when the answer is empty, with the counts dropped at each step. */
   onEmpty?: (counts: EmptyCounts) => void
+  /** Called once per search, empty or not, with what was sent and what each step kept. */
+  onSearch?: (log: SearchLog) => void
+}
+
+/** One search, explained: the parameters sent (no key), the shops that came back and the count left after each filter. */
+export interface SearchLog {
+  params: Record<string, string>
+  counts: EmptyCounts & { suggested: number }
+  /** Distinct shop names in the raw answer, at most 30. */
+  shops: string[]
 }
 
 /** Why a live search ended empty: raw results, then what each filter dropped. */
@@ -84,7 +94,7 @@ export interface EmptyCounts extends FilterDrops {
  */
 export async function findGapSuggestions(
   input: GapSuggestionInput,
-  { source = serpapiShopping, tagger = tagPhotoColour, onEmpty }: GapSuggestionDeps = {},
+  { source = serpapiShopping, tagger = tagPhotoColour, onEmpty, onSearch }: GapSuggestionDeps = {},
 ): Promise<GapSuggestion[]> {
   const query: GapSearchQuery = {
     occasion: input.occasion,
@@ -130,10 +140,15 @@ export async function findGapSuggestions(
       colour, colourName: colourName(colour), reason: reasonLine(colour, input.palette.season),
     })
   })
-  if (out.length === 0 && onEmpty) {
+  if ((out.length === 0 && onEmpty) || onSearch) {
     const drops = countFilterDrops(products, query, input.tier)
     const titleColourDropped = passed.filter((c) => titleColour(c.title)).length
-    onEmpty({ ...drops, colourDropped: drops.passed, titleColourDropped })
+    if (out.length === 0) onEmpty?.({ ...drops, colourDropped: drops.passed, titleColourDropped })
+    onSearch?.({
+      params: searchParams(query),
+      counts: { ...drops, colourDropped: Math.max(0, Math.min(drops.passed, toTag.length) - out.length), titleColourDropped, suggested: out.length },
+      shops: [...new Set(products.map((p) => p.shop))].slice(0, 30),
+    })
   }
   return out
 }
