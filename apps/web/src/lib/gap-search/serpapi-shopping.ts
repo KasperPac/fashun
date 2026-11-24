@@ -1,4 +1,4 @@
-import { buildSearchText } from './query'
+import { buildSearchText, SEARCH_RESULTS_WANTED } from './query'
 import {
   ProductSourceError,
   type GapSearchCategory,
@@ -6,6 +6,7 @@ import {
   type ProductSource,
   type RawProduct,
 } from './product-source'
+import { normaliseShopName } from './shop-names'
 import tops from './fixtures/google-shopping-au-tops.json'
 import bottoms from './fixtures/google-shopping-au-bottoms.json'
 import shoes from './fixtures/google-shopping-au-shoes.json'
@@ -70,23 +71,31 @@ export function parseShoppingResults(data: unknown): RawProduct[] {
   return out
 }
 
+/** Everything sent to SerpApi for a gap except the key (also what the search log line shows). */
+export function searchParams(query: GapSearchQuery): Record<string, string> {
+  return {
+    engine: 'google_shopping',
+    q: buildSearchText(query),
+    gl: 'au',
+    hl: 'en',
+    location: 'Australia',
+    google_domain: 'google.com.au',
+    num: String(SEARCH_RESULTS_WANTED),
+  }
+}
+
 /** SerpApi Google Shopping, Australia. The only place that knows about SerpApi. */
 export const serpapiShopping: ProductSource = {
   async search(query: GapSearchQuery): Promise<RawProduct[]> {
-    if (gapSearchFixturesEnabled()) return parseShoppingResults(FIXTURES[query.category])
+    if (gapSearchFixturesEnabled()) {
+      // Saved results hold every shop's answer for the category; one shop's search gets that shop's items.
+      const all = parseShoppingResults(FIXTURES[query.category])
+      const wanted = query.shop ? normaliseShopName(query.shop) : null
+      return wanted ? all.filter((p) => normaliseShopName(p.shop) === wanted) : all
+    }
     const key = process.env.SERPAPI_API_KEY
     if (!key) throw new ProductSourceError('SERPAPI_API_KEY is not set')
-    const params = new URLSearchParams({
-      engine: 'google_shopping',
-      q: buildSearchText(query),
-      gl: 'au',
-      hl: 'en',
-      location: 'Australia',
-      google_domain: 'google.com.au',
-      min_price: String(query.priceRange[0]),
-      max_price: String(query.priceRange[1]),
-      api_key: key,
-    })
+    const params = new URLSearchParams({ ...searchParams(query), api_key: key })
     let res: Response
     try {
       res = await fetch(`${ENDPOINT}?${params.toString()}`, { signal: AbortSignal.timeout(SEARCH_TIMEOUT_MS) })

@@ -86,13 +86,13 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllEnvs(); vi.useRealTimers() })
 
 describe('GET /api/gaps/suggestions', () => {
-  it('first opening searches once with the user\'s own tier, department and range', async () => {
+  it('first opening makes one search per tier shop with the user\'s own tier, department and range', async () => {
     const res = await get()
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({ status: 'ok', items: [ITEM], stored: false })
     expect(search).toHaveBeenCalledTimes(1)
-    expect(search).toHaveBeenCalledWith({ occasion: 'work', category: 'shoes', tier: 'budget', department: 'womens', priceRange: [10, 60], palette: PALETTE }, expect.anything())
-    expect(db.usage['2026-11']).toBe(1)
+    expect(search).toHaveBeenCalledWith({ occasion: 'work', category: 'shoes', tier: 'budget', department: 'womens', priceRange: [10, 60], shops: ['Kmart', 'Target', 'Big W'], palette: PALETTE }, expect.anything())
+    expect(db.usage['2026-11']).toBe(3)
   })
 
   it('an empty live search logs and returns the counts dropped at each filter, nothing else', async () => {
@@ -106,6 +106,23 @@ describe('GET /api/gaps/suggestions', () => {
     warn.mockRestore()
   })
 
+  it('every shop search logs one line: parameters, raw count, shops and filter counts, with no key', async () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => {})
+    const counts = { raw: 4, notTierShop: 3, outOfPrice: 0, wrongDepartmentOrOccasion: 0, duplicate: 0, passed: 1 }
+    search.mockImplementation(async (_i: unknown, deps: { onSearch: (l: unknown) => void }) => {
+      deps.onSearch({ shop: 'Kmart', ok: true, params: { engine: 'google_shopping', q: 'Kmart shoes', num: '100' }, counts, shops: ['Kmart', 'Zara'] })
+      deps.onSearch({ shop: 'Target', ok: false, params: { engine: 'google_shopping', q: 'Target shoes', num: '100' }, counts: { ...counts, raw: 0, notTierShop: 0, passed: 0 }, shops: [] })
+      return [ITEM]
+    })
+    await get()
+    expect(info).toHaveBeenCalledTimes(2)
+    const line = String(info.mock.calls[0][0])
+    expect(line).toBe('gap-suggestions search ok=true params={"engine":"google_shopping","q":"Kmart shoes","num":"100"} raw=4 shops=["Kmart","Zara"] not_tier_shop=3 out_of_price=0 wrong_department_or_occasion=0 duplicate=0 passed=1')
+    expect(String(info.mock.calls[1][0])).toContain('ok=false')
+    expect(line).not.toMatch(/api_key|user/i)
+    info.mockRestore()
+  })
+
   it('tier, department and range in the request are ignored', async () => {
     await get('occasion=work&category=shoes&tier=premium&department=mens&min=1&max=9999')
     expect(search).toHaveBeenCalledWith(expect.objectContaining({ tier: 'budget', department: 'womens', priceRange: [10, 60] }), expect.anything())
@@ -117,7 +134,7 @@ describe('GET /api/gaps/suggestions', () => {
     const res = await get()
     expect(await res.json()).toEqual({ status: 'ok', items: [ITEM], stored: true })
     expect(search).not.toHaveBeenCalled()
-    expect(db.usage['2026-11']).toBe(1)
+    expect(db.usage['2026-11']).toBe(3)
   })
 
   it('stored suggestions refresh after a day', async () => {
@@ -126,7 +143,7 @@ describe('GET /api/gaps/suggestions', () => {
     const res = await get()
     expect((await res.json()).stored).toBe(false)
     expect(search).toHaveBeenCalledTimes(2)
-    expect(db.usage['2026-11']).toBe(2)
+    expect(db.usage['2026-11']).toBe(6)
   })
 
   it('an empty answer is stored too, so the next opening makes no search', async () => {
@@ -221,27 +238,51 @@ describe('GET /api/gaps/suggestions', () => {
   })
 
   it('monthly search limit pauses suggestions and makes no search', async () => {
-    vi.stubEnv('GAP_SEARCH_MONTHLY_CAP', '2')
+    vi.stubEnv('GAP_SEARCH_MONTHLY_CAP', '6')
     await get('occasion=work&category=shoes')
     await get('occasion=work&category=tops')
     search.mockClear()
     const res = await get('occasion=formal&category=shoes')
     expect(await res.json()).toEqual({ status: 'paused', message: 'Suggestions are paused until 1 December', resume_on: '2026-12-01' })
     expect(search).not.toHaveBeenCalled()
-    expect(db.usage['2026-11']).toBe(2)
+    expect(db.usage['2026-11']).toBe(6)
     // A gap stored today still shows its items, with no search.
     expect(await (await get('occasion=work&category=shoes')).json()).toEqual({ status: 'ok', items: [ITEM], stored: true })
     expect(search).not.toHaveBeenCalled()
   })
 
   it('monthly search limit never goes past the cap when openings arrive together', async () => {
-    vi.stubEnv('GAP_SEARCH_MONTHLY_CAP', '3')
+    vi.stubEnv('GAP_SEARCH_MONTHLY_CAP', '7')
     const gaps = ['work', 'casual', 'formal', 'smart-casual', 'work'].map((o, i) => `occasion=${o}&category=${i === 4 ? 'tops' : 'shoes'}`)
     const results = await Promise.all(gaps.map((q) => get(q).then((r) => r.json())))
-    expect(results.filter((r) => r.status === 'ok')).toHaveLength(3)
-    expect(results.filter((r) => r.status === 'paused')).toHaveLength(2)
-    expect(search).toHaveBeenCalledTimes(3)
-    expect(db.usage['2026-11']).toBe(3)
+    expect(db.usage['2026-11']).toBe(7)
+    // Every search taken from the count is one shop searched, and no more.
+    const searched = search.mock.calls.reduce((n, c) => n + (c[0] as { shops: string[] }).shops.length, 0)
+    expect(searched).toBe(7)
+    expect(results.filter((r) => r.status === 'paused').length + results.filter((r) => r.status === 'ok').length).toBe(5)
+  })
+
+  it('a Mid opening makes 4 shop searches and uses 4 of the month\'s count', async () => {
+    ;(db.tables.users[0] as Row).budget_tier = 'mid'
+    await get()
+    expect(search).toHaveBeenCalledTimes(1)
+    expect((search.mock.calls[0][0] as { shops: string[] }).shops).toEqual(['Country Road', 'Myer', 'David Jones', 'THE ICONIC'])
+    expect(db.usage['2026-11']).toBe(4)
+  })
+
+  it('with 2 searches left a Mid opening searches 2 shops; with none left it makes none and says paused', async () => {
+    ;(db.tables.users[0] as Row).budget_tier = 'mid'
+    vi.stubEnv('GAP_SEARCH_MONTHLY_CAP', '10')
+    db.usage['2026-11'] = 8
+    const res = await (await get()).json()
+    expect(res).toEqual({ status: 'ok', items: [ITEM], stored: false })
+    expect((search.mock.calls[0][0] as { shops: string[] }).shops).toEqual(['Country Road', 'Myer'])
+    expect(db.usage['2026-11']).toBe(10)
+    search.mockClear()
+    const paused = await (await get('occasion=formal&category=shoes')).json()
+    expect(paused.status).toBe('paused')
+    expect(search).not.toHaveBeenCalled()
+    expect(db.usage['2026-11']).toBe(10)
   })
 
   it('a fixture answer counts against the limit like a live one', async () => {
@@ -305,7 +346,7 @@ describe('GET /api/gaps/suggestions', () => {
       const first = await (await get()).json()
       expect(first.items).toHaveLength(1)
       expect(first.items[0]).toMatchObject({ colour: '#FFB347', colourName: 'Apricot', reason: 'Apricot, one of your Spring colours.' })
-      expect(source.search).toHaveBeenCalledTimes(1)
+      expect(source.search).toHaveBeenCalledTimes(3)
       expect(tagger).toHaveBeenCalledTimes(3)
       source.search.mockClear()
       tagger.mockClear()
@@ -313,6 +354,17 @@ describe('GET /api/gaps/suggestions', () => {
       expect(again).toEqual({ status: 'ok', items: first.items, stored: true })
       expect(source.search).not.toHaveBeenCalled()
       expect(tagger).not.toHaveBeenCalled()
+    })
+
+    it('one shop failing still shows the other shops\' items', async () => {
+      source.search.mockImplementation(async (q: { shop: string }) => {
+        if (q.shop === 'Target') throw new ProductSourceError('Product search failed (HTTP 500)')
+        return [raw(1)]
+      })
+      const body = await (await get()).json()
+      expect(body.status).toBe('ok')
+      expect(body.items).toHaveLength(1)
+      expect(source.search).toHaveBeenCalledTimes(3)
     })
 
     it('switch off makes no search and no AI call', async () => {
