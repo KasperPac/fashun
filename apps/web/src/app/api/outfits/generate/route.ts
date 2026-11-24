@@ -9,6 +9,7 @@ import {
   type BuiltOutfit, type OwnedItem,
 } from '@/lib/outfit-builder'
 import { isOffPalettePiece } from '@/lib/palette-rule'
+import { colourName } from '@/lib/colour-names'
 import { signWardrobeImage } from '@/lib/wardrobe-image'
 import { logClaudeError, logClaudeFailure } from '@/lib/claude-log'
 
@@ -45,7 +46,7 @@ function buildOccasionPrompt(
   const label = seasonLabel(season)
   const system = `You are a personal colour and style consultant. You only use clothes the user already owns, and you only refer to them by the ids you are given. Return only valid JSON, no explanation, no markdown.`
   const lines = items
-    .map(i => `- [id:${i.id}] ${i.name} | ${i.category} | ${(i.colours ?? []).join(', ') || 'unknown colour'} | ${(i.occasion_tags ?? []).join(', ') || 'untagged'}${isOffPalettePiece(i.colours ?? [], season, avoidColours) ? ' | OFF-PALETTE' : ''}`)
+    .map(i => `- [id:${i.id}] ${i.name} | ${i.category} | ${(i.colours ?? []).filter((c) => /^#[0-9a-fA-F]{6}$/.test(c)).map(colourName).join(', ') || 'unknown colour'} | ${(i.occasion_tags ?? []).join(', ') || 'untagged'}${isOffPalettePiece(i.colours ?? [], season, avoidColours) ? ' | OFF-PALETTE' : ''}`)
     .join('\n')
   const user = `The user's colour season is ${label}. ${label} suits: ${ctx.suits}. Usually avoided: ${ctx.avoid}.
 Their best colours: ${bestColours.join(', ') || 'none saved'}. Colours to avoid: ${avoidColours.join(', ') || 'none saved'}.
@@ -173,7 +174,7 @@ function buildWardrobeSection(items: DbItem[]): string {
     .map(([cat, catItems]) => {
       const label = CATEGORY_LABELS[cat] ?? cat
       const lines = catItems
-        .map(i => `  - ${i.name} [id:${i.id}] | ${(i.colours ?? []).join(', ') || 'unknown colour'}`)
+        .map(i => `  - ${i.name} [id:${i.id}] | ${(i.colours ?? []).filter((c) => /^#[0-9a-fA-F]{6}$/.test(c)).map(colourName).join(', ') || 'unknown colour'}`)
         .join('\n')
       return `${label}:\n${lines}`
     })

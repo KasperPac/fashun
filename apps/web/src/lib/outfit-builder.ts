@@ -117,7 +117,7 @@ export function presentCategories(eligible: OwnedItem[]): Array<(typeof REQUIRED
 
 export const REASON_MAX_LENGTH = 140
 
-const HEX_IN_TEXT = /#[0-9a-fA-F]{6}/
+const HEX_IN_TEXT = /#[0-9a-fA-F]{3,8}/
 const NEUTRAL_REASON = 'The pieces balance each other for a relaxed, well-put-together look.'
 
 function escapeRegExp(s: string): string {
@@ -142,11 +142,15 @@ export function finaliseReason(reason: string, season: ColourSeason, colourHexes
   const inNames = [...new Set(valid.filter((h) => isInPaletteColour(h, season, avoid)).map((h) => colourName(h)))]
   const offNames = [...new Set(valid.filter((h) => !isInPaletteColour(h, season, avoid)).map((h) => colourName(h)))].filter((n) => !inNames.includes(n))
   const claimsPalette = new RegExp(`(?<!outside )your (${label} palette|best ${label} colours)`, 'i').test(text)
-  const saysOutside = new RegExp(`outside your ${label} palette`, 'i').test(text)
-  const mentionsOff = offNames.some((n) => new RegExp(`\\b${escapeRegExp(n)}\\b`, 'i').test(text))
+  const outsideAt = text.search(new RegExp(`outside your ${label} palette`, 'i'))
+  const names = (list: string[], part: string) => list.some((n) => new RegExp(`\\b${escapeRegExp(n)}\\b`, 'i').test(part))
+  const hasOffPiece = valid.some((h) => !isInPaletteColour(h, season, avoid))
   const wellFormed = text !== '' && !/[.!?]\s+\S/.test(text) && text.length <= REASON_MAX_LENGTH && !HEX_IN_TEXT.test(text)
-  const honestOffPalette = saysOutside && !claimsPalette && offNames.length > 0
-  const trueClaim = claimsPalette && !saysOutside && !mentionsOff
+  // Honest form: what comes before "outside your ... palette" names an off-palette colour and no in-palette one.
+  const before = outsideAt >= 0 ? text.slice(0, outsideAt) : ''
+  const honestOffPalette = outsideAt >= 0 && !claimsPalette && offNames.length > 0 && names(offNames, before) && !names(inNames, before)
+  // A palette claim is only safe when no piece of the outfit is off-palette: the model's own colour words cannot be trusted to match ours.
+  const trueClaim = claimsPalette && outsideAt < 0 && !hasOffPiece
   if (wellFormed && (honestOffPalette || trueClaim)) return text
   if (inNames.length >= 2) return `${inNames[0]} and ${inNames[1]} are both in your ${label} palette.`
   if (inNames.length === 1) return `${inNames[0]} is one of your best ${label} colours.`

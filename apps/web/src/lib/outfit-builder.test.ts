@@ -194,6 +194,48 @@ describe('finaliseReason', () => {
     const out = finaliseReason('Blue and camel are both in your Autumn palette, and boots finish it.', 'autumn', [rust, blue, camel])
     expect(out).not.toMatch(/blue/i)
   })
+  describe('false palette claims (KAS-628 round 1)', () => {
+    const camelHex = '#CD853F'
+    const tanHex = '#C19A6B'
+    const stripe = [blue, white, camelHex, tanHex]
+    it.each([
+      'Navy and camel are both in your Autumn palette, and tan boots finish it.',
+      'The navy stripe and camel are both in your Autumn palette, and tan boots finish it.',
+      'The striped shirt and camel chinos are both in your Autumn palette, and tan boots finish it.',
+    ])('replaces "%s" for an outfit with an off-palette shirt', (r) => {
+      const out = finaliseReason(r, 'autumn', stripe)
+      expect(out).not.toBe(r)
+      expect(out).not.toMatch(/navy|blue|white|striped/i)
+    })
+    it.each([
+      ['#000000', 'Black and camel are both in your Autumn palette, and the tee keeps it easy.'],
+      ['#00008B', 'Navy and camel are both in your Autumn palette, and the tee keeps it easy.'],
+    ])('replaces a claim when the shoes %s are off-palette', (shoes, r) => {
+      const out = finaliseReason(r, 'autumn', [rust, camelHex, shoes])
+      expect(out).not.toBe(r)
+      expect(out).not.toMatch(/black|navy/i)
+    })
+    it('does not accept an honest form that does not name the off-palette colour', () => {
+      const r = 'Camel sits outside your Autumn palette, but blue warms it up.'
+      expect(finaliseReason(r, 'autumn', stripe)).not.toBe(r)
+      const r2 = 'The striped shirt sits outside your Autumn palette, but camel warms it up.'
+      expect(finaliseReason(r2, 'autumn', stripe)).not.toBe(r2)
+    })
+    it('does not accept a 3-digit hex code', () => {
+      const r = '#FFF sits outside your Autumn palette, but camel warms it up.'
+      expect(finaliseReason(r, 'autumn', stripe)).not.toBe(r)
+    })
+  })
+  it.each(['spring', 'summer', 'autumn', 'winter'] as const)('every fallback form in %s is one short sentence with no hex', (season) => {
+    const longest = ['#00008B', '#191970', '#C8A951', '#E6B89C', '#FFFACD']
+    for (const hexes of [longest, longest.slice(0, 1), [], ['#00008B', '#191970']]) {
+      const out = finaliseReason('', season, hexes)
+      expect(out.length).toBeLessThanOrEqual(140)
+      expect(out).not.toMatch(/#[0-9a-f]{3}/i)
+      expect(out).not.toMatch(/[.!?]\s+\S/)
+      expect(out.endsWith('.')).toBe(true)
+    }
+  })
   it('replaces a reason with a hex code or two sentences or over 140 characters', () => {
     const honest = 'The blue stripe sits outside your Autumn palette, but camel warms it up.'
     expect(finaliseReason('#2E5C9E sits outside your Autumn palette, but camel warms it up.', 'autumn', [blue, camel])).not.toContain('#')
