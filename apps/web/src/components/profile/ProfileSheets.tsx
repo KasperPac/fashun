@@ -40,7 +40,7 @@ export function OptionRow({
   children: ReactNode
 }) {
   return (
-    <li>
+    <li role="none">
       <button
         type="button"
         role={role}

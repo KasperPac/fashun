@@ -26,6 +26,9 @@ export const MAX_TAGGED = 12
 /** How far a reading may be from a palette colour (distance in RGB) and still count as that colour. */
 const MATCH_DISTANCE = 90
 
+/** A colour word in a title must be this close to the best colour it matches, so the reason line never names a different colour from the title's. */
+export const TITLE_MATCH_DISTANCE = 40
+
 const HEX = /^#[0-9A-F]{6}$/i
 
 export function isHex(value: unknown): value is string {
@@ -42,7 +45,7 @@ function distance(a: string, b: string): number {
  * colour among the best and avoid lists; it must be close enough, and that colour must be a best
  * one. A reading nearest an avoid colour, or near neither list, is not kept.
  */
-export function matchBestColour(reading: string, palette: Pick<GapPalette, 'best' | 'avoid'>): string | null {
+export function matchBestColour(reading: string, palette: Pick<GapPalette, 'best' | 'avoid'>, maxDistance = MATCH_DISTANCE): string | null {
   if (!isHex(reading)) return null
   let nearest: { hex: string; best: boolean; d: number } | null = null
   const consider = (hex: string, best: boolean) => {
@@ -54,7 +57,7 @@ export function matchBestColour(reading: string, palette: Pick<GapPalette, 'best
   for (const hex of palette.best) consider(hex, true)
   for (const hex of palette.avoid) consider(hex, false)
   const found = nearest as { hex: string; best: boolean; d: number } | null
-  return found && found.best && found.d <= MATCH_DISTANCE ? found.hex.toUpperCase() : null
+  return found && found.best && found.d <= maxDistance ? found.hex.toUpperCase() : null
 }
 
 /** "Navy, one of your Winter colours." */

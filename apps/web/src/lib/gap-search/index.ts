@@ -2,7 +2,7 @@ import type { BudgetTier, Department } from '@fashun/shared'
 import { countFilterDrops, filterProducts, MAX_CANDIDATES, type FilterDrops } from './filters'
 import { gapSearchFixturesEnabled, serpapiShopping } from './serpapi-shopping'
 import { tagPhotoColour } from './colour-tag'
-import { ColourTaggingError, MAX_TAGGED, matchBestColour, reasonLine, type ColourTagger, type GapPalette } from './colour'
+import { ColourTaggingError, MAX_TAGGED, TITLE_MATCH_DISTANCE, matchBestColour, reasonLine, type ColourTagger, type GapPalette } from './colour'
 import { titleColour } from './title-colour'
 import { colourName } from '../colour-names'
 import type { GapCandidate, GapSearchCategory, GapSearchQuery, ProductSource } from './product-source'
@@ -121,8 +121,9 @@ export async function findGapSuggestions(
     const word = titleColour(c.title)
     if (out.length >= MAX_CANDIDATES || (!word && (r.status !== 'fulfilled' || !r.value))) return
     const reading = word ?? (r as PromiseFulfilledResult<string | null>).value
-    const colour = reading ? matchBestColour(reading, input.palette) : null
-    if (!colour) return
+    const colour = reading ? matchBestColour(reading, input.palette, word ? TITLE_MATCH_DISTANCE : undefined) : null
+    // The title's word and the colour the reason names must be the same colour, or the card contradicts itself.
+    if (!colour || (word && colourName(colour) !== colourName(word))) return
     out.push({
       title: c.title, shop: c.shop, price: c.price, imageUrl: c.imageUrl, link: c.link, productId: c.productId,
       ...(c.immersiveToken ? { immersiveToken: c.immersiveToken } : {}),

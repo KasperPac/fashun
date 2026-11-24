@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import path from 'node:path'
-import { BUDGET_TIER_DEFINITIONS, tierRanges, type BudgetTier, type Department } from '@fashun/shared'
+import { BUDGET_TIER_DEFINITIONS, getProfileColours, tierRanges, type BudgetTier, type Department } from '@fashun/shared'
 import { findGapCandidates, findGapSuggestions, MAX_CANDIDATES, ProductSourceError, type GapSearchInput, type ProductSource, type RawProduct } from './index'
+import { colourName } from '../colour-names'
 import { countFilterDrops, filterProducts, itemDepartment } from './filters'
 import { titleColour } from './title-colour'
 import { buildSearchText } from './query'
@@ -416,5 +417,30 @@ describe('a colour word in the title is the item\'s colour', () => {
     expect(titleColour('Standard Tangled Tee')).toBeNull()
     expect(titleColour('Mens Chino - NAVY')).toBe('#000080')
     expect(titleColour('Sky Blue Shirt')).toBe('#87CEEB')
+  })
+})
+
+describe('a title colour never gets a reason naming a different colour (real season palettes)', () => {
+  const WORDS = ['KHAKI', 'CHARCOAL', 'BURGUNDY', 'RED', 'YELLOW', 'TAN', 'PURPLE', 'GREY', 'BROWN', 'LILAC', 'SKY BLUE', 'WHITE', 'CAMEL', 'RUST', 'NAVY', 'BLACK']
+  for (const season of ['spring', 'summer', 'autumn', 'winter'] as const) {
+    it(`${season}: every kept item's reason names the colour in its title`, async () => {
+      const palette = { season, ...getProfileColours(season) }
+      for (const word of WORDS) {
+        const items = await findGapSuggestions(
+          { ...input({ category: 'shoes' }), palette },
+          { source: sourceOf([raw(`Canvas Shoes - ${word}`, 'Kmart', 20)]) },
+        )
+        for (const s of items) expect(s.colourName, `${season} ${word}`).toBe(colourName(titleColour(s.title) as string))
+      }
+    })
+  }
+  it('QA\'s cases are dropped, not shown with another colour', async () => {
+    const pick = async (season: 'autumn' | 'summer' | 'winter', word: string) => findGapSuggestions(
+      { ...input({ category: 'shoes' }), palette: { season, ...getProfileColours(season) } },
+      { source: sourceOf([raw(`Canvas Shoes - ${word}`, 'Kmart', 20)]) },
+    )
+    expect(await pick('autumn', 'KHAKI')).toEqual([])
+    expect(await pick('summer', 'TAN')).toEqual([])
+    expect(await pick('winter', 'BROWN')).toEqual([])
   })
 })
