@@ -78,7 +78,9 @@ describe('gap photo route', () => {
 
   it('answers 404 when the switch is off and 400 for a bad gap', async () => {
     vi.stubEnv('ENABLE_GAP_SUGGESTIONS', '')
-    expect((await get(A_PHOTO)).status).toBe(404)
+    const off = await get(A_PHOTO)
+    expect(off.status).toBe(404)
+    expect(await off.text()).toContain('Photo not found')
     vi.stubEnv('ENABLE_GAP_SUGGESTIONS', 'true')
     expect((await get(A_PHOTO, 'occasion=party&category=shoes')).status).toBe(400)
   })

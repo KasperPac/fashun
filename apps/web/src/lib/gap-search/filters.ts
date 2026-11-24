@@ -63,6 +63,16 @@ export function inRange(price: number | null, range: readonly [number, number]):
   return price !== null && Number.isFinite(price) && price >= range[0] && price <= range[1]
 }
 
+/** True when the item's link, or its shop and title, was already seen; otherwise records both. */
+function isDuplicate(p: RawProduct, seen: Set<string>): boolean {
+  const byShopTitle = `st:${p.shop}|${p.title}`.toLowerCase()
+  const byLink = p.link ? `l:${p.link}` : null
+  if (seen.has(byShopTitle) || (byLink !== null && seen.has(byLink))) return true
+  seen.add(byShopTitle)
+  if (byLink !== null) seen.add(byLink)
+  return false
+}
+
 /**
  * Keeps items from the tier's shops, priced inside the range (ends included),
  * for the department and suited to the occasion. Drops duplicates (same link or
@@ -77,9 +87,7 @@ export function filterProducts(products: RawProduct[], query: GapSearchQuery, ti
     if (!inRange(p.price, query.priceRange)) continue
     if (!matchesDepartment(p.title, query.department)) continue
     if (!suitsOccasion(p.title, query.category, query.occasion)) continue
-    const key = p.link ?? `${p.shop}|${p.title}`.toLowerCase()
-    if (seen.has(key)) continue
-    seen.add(key)
+    if (isDuplicate(p, seen)) continue
     out.push({
       title: p.title, shop: p.shop, price: p.price, imageUrl: p.imageUrl, link: p.link, productId: p.productId,
       ...(p.immersiveToken ? { immersiveToken: p.immersiveToken } : {}),
@@ -107,9 +115,7 @@ export function countFilterDrops(products: RawProduct[], query: GapSearchQuery, 
     if (!isShopInTier(p.shop, tier)) { drops.notTierShop++; continue }
     if (!inRange(p.price, query.priceRange)) { drops.outOfPrice++; continue }
     if (!matchesDepartment(p.title, query.department) || !suitsOccasion(p.title, query.category, query.occasion)) { drops.wrongDepartmentOrOccasion++; continue }
-    const key = p.link ?? `${p.shop}|${p.title}`.toLowerCase()
-    if (seen.has(key)) { drops.duplicate++; continue }
-    seen.add(key)
+    if (isDuplicate(p, seen)) { drops.duplicate++; continue }
     drops.passed++
   }
   return drops

@@ -3,7 +3,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { BUDGET_TIER_DEFINITIONS, tierRanges, type BudgetTier, type Department } from '@fashun/shared'
 import { findGapCandidates, findGapSuggestions, MAX_CANDIDATES, ProductSourceError, type GapSearchInput, type ProductSource, type RawProduct } from './index'
-import { countFilterDrops, itemDepartment } from './filters'
+import { countFilterDrops, filterProducts, itemDepartment } from './filters'
 import { buildSearchText } from './query'
 import { isShopInTier, normaliseShopName } from './shop-names'
 import { parseShoppingResults, serpapiShopping } from './serpapi-shopping'
@@ -321,9 +321,22 @@ describe('the shop link fields of a Shopping result', () => {
   })
 })
 
+describe('the same item listed under different links', () => {
+  it('shows it once, in the list and in the diagnosis counts', () => {
+    const a = { ...raw('Men Shirt', 'Kmart', 20), link: 'https://google.test/a' }
+    const b = { ...raw('Men Shirt', 'Kmart', 20), link: 'https://google.test/b' }
+    const c = { ...raw('Men Shirt', 'kmart', 20), link: null }
+    const d = { ...raw('Men Shirt Two', 'Kmart', 20), link: 'https://google.test/a' }
+    const q = { occasion: 'work', category: 'tops', department: 'mens', priceRange: [10, 50], tier: 'budget' } as const
+    expect(filterProducts([a, b, c, raw('Men Shirt Three', 'Kmart', 20)], q, 'budget')).toHaveLength(2)
+    expect(filterProducts([a, d], q, 'budget')).toHaveLength(1)
+    expect(countFilterDrops([a, b, c], q, 'budget').duplicate).toBe(2)
+  })
+})
+
 describe('diagnosis of an empty answer', () => {
   it('counts what each filter dropped, in filter order', () => {
-    const q = { occasion: 'work', category: 'tops', department: 'mens', priceRange: [10, 50] } as const
+    const q = { occasion: 'work', category: 'tops', department: 'mens', priceRange: [10, 50], tier: 'budget' } as const
     const products: RawProduct[] = [
       raw('Men Shirt', 'Kmart', 20), raw('Men Shirt B', 'Kmart', 20),
       raw('Men Shirt', 'Rodd & Gunn', 20),
