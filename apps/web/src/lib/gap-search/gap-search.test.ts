@@ -20,7 +20,10 @@ const input = (over: Partial<GapSearchInput> & Pick<GapSearchInput, 'category'>)
 }
 const raw = (title: string, shop: string, price: number | null): RawProduct =>
   ({ title, shop, price, imageUrl: null, link: `https://example.test/${title}-${shop}-${price}`, productId: null })
-const sourceOf = (products: RawProduct[]): ProductSource => ({ search: async () => products })
+// Answers for the tier's first shop only, so a gap's several shop searches don't repeat the same list.
+const sourceOf = (products: RawProduct[]): ProductSource => ({
+  search: async (q) => (!q.shop || q.shop === BUDGET_TIER_DEFINITIONS[q.tier].shops[0] ? products : []),
+})
 
 beforeEach(() => {
   vi.stubEnv('GAP_SEARCH_FIXTURES', '1')
@@ -227,17 +230,17 @@ describe('saved results (fixture mode)', () => {
 })
 
 describe('the live source', () => {
-  it('asks Google Shopping Australia for 100 results, with no shop names or price in the query', async () => {
+  it('asks Google Shopping Australia for 100 results, with one shop name and no price in the query', async () => {
     vi.stubEnv('GAP_SEARCH_FIXTURES', '')
     vi.stubEnv('SERPAPI_API_KEY', 'test-key-not-real')
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ shopping_results: [{ title: "Men's Shirt", source: 'Kmart', extracted_price: 20, thumbnail: 'https://x.test/t.jpg', link: 'https://www.kmart.com.au/p/1' }] })))
     vi.stubGlobal('fetch', fetchMock)
-    const found = await serpapiShopping.search({ occasion: 'formal', category: 'shoes', department: 'mens', tier: 'budget', priceRange: [20, 80] })
+    const found = await serpapiShopping.search({ occasion: 'formal', category: 'shoes', department: 'mens', tier: 'budget', priceRange: [20, 80], shop: 'Kmart' })
     const url = new URL((fetchMock.mock.calls[0] as unknown as [string])[0])
     expect(url.searchParams.get('engine')).toBe('google_shopping')
     expect(url.searchParams.get('gl')).toBe('au')
     expect(url.searchParams.get('location')).toBe('Australia')
-    expect(url.searchParams.get('q')).toBe("men's shoes")
+    expect(url.searchParams.get('q')).toBe("Kmart men's shoes")
     expect(url.searchParams.get('num')).toBe('100')
     expect(url.searchParams.has('min_price')).toBe(false)
     expect(url.searchParams.has('max_price')).toBe(false)
@@ -260,20 +263,56 @@ describe('the live source', () => {
     const [p] = parseShoppingResults({ shopping_results: [{ title: 'A', source: 'Kmart', price: 'A$1,200.50' }, { title: 'B' }] })
     expect(p.price).toBe(1200.5)
   })
-  it('builds the search words from the department and category only', () => {
-    expect(buildSearchText({ category: 'bottoms', department: 'womens' })).toBe("women's pants")
+  it('builds the search words from the one shop, the department and the category only', () => {
+    expect(buildSearchText({ category: 'bottoms', department: 'womens', shop: 'Big W' })).toBe("Big W women's pants")
+    expect(buildSearchText({ category: 'tops', department: 'both', shop: 'THE ICONIC' })).toBe('THE ICONIC tops')
     expect(buildSearchText({ category: 'tops', department: 'both' })).toBe('tops')
   })
-  it.each(['budget', 'high-street', 'mid', 'premium'] as const)('the one search for the %s tier is one call with no shop names', async (tier) => {
+  it.each([['budget', 3], ['high-street', 3], ['mid', 4], ['premium', 3]] as const)('a %s opening makes one call per tier shop (%i), each with that one shop\'s name', async (tier, calls) => {
     vi.stubEnv('GAP_SEARCH_FIXTURES', '')
     vi.stubEnv('SERPAPI_API_KEY', 'test-key-not-real')
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ shopping_results: [] })))
     vi.stubGlobal('fetch', fetchMock)
     await findGapCandidates({ occasion: 'work', category: 'shoes', tier, department: 'both', priceRange: [20, 700] }, serpapiShopping)
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(new URL((fetchMock.mock.calls[0] as unknown as [string])[0]).searchParams.get('q')).toBe('shoes')
+    expect(fetchMock).toHaveBeenCalledTimes(calls)
+    const queries = fetchMock.mock.calls.map((c) => new URL((c as unknown as [string])[0]).searchParams.get('q'))
+    expect(queries.sort()).toEqual(BUDGET_TIER_DEFINITIONS[tier].shops.map((shop) => `${shop} shoes`).sort())
   })
-  it('one gap opening makes one call, and every filter still applies to the wider answer', async () => {
+  it('only the shops given are searched (the month\'s allowance can be short)', async () => {
+    vi.stubEnv('GAP_SEARCH_FIXTURES', '')
+    vi.stubEnv('SERPAPI_API_KEY', 'test-key-not-real')
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ shopping_results: [] })))
+    vi.stubGlobal('fetch', fetchMock)
+    await findGapCandidates({ ...input({ category: 'shoes', tier: 'mid' }), shops: ['Country Road', 'Myer'] }, serpapiShopping)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    fetchMock.mockClear()
+    expect(await findGapCandidates({ ...input({ category: 'shoes', tier: 'mid' }), shops: [] }, serpapiShopping)).toEqual([])
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+  it('one shop failing does not fail the opening; every shop failing does', async () => {
+    const calls: string[] = []
+    const source: ProductSource = {
+      search: async (q) => {
+        calls.push(q.shop ?? '')
+        if (q.shop === 'Target') throw new ProductSourceError('Product search failed (HTTP 500)')
+        return [raw(`${q.shop} Shoe`, q.shop as string, 30)]
+      },
+    }
+    const found = await findGapCandidates(input({ category: 'shoes' }), source)
+    expect(calls.sort()).toEqual(['Big W', 'Kmart', 'Target'])
+    expect(found.map((c) => c.shop).sort()).toEqual(['Big W', 'Kmart'])
+    const down: ProductSource = { search: async () => { throw new ProductSourceError('down') } }
+    await expect(findGapCandidates(input({ category: 'shoes' }), down)).rejects.toBeInstanceOf(ProductSourceError)
+  })
+  it('items are spread across the shops, not all from the first', async () => {
+    const source: ProductSource = {
+      search: async (q) => [1, 2, 3, 4].map((n) => raw(`${q.shop} Shoe ${n}`, q.shop as string, 30)),
+    }
+    const found = await findGapCandidates(input({ category: 'shoes' }), source)
+    expect(found).toHaveLength(MAX_CANDIDATES)
+    expect(found.map((c) => c.shop)).toEqual(['Kmart', 'Target', 'Big W', 'Kmart', 'Target', 'Big W'])
+  })
+  it('one gap opening makes one call per shop, and every filter still applies to the merged answer', async () => {
     vi.stubEnv('GAP_SEARCH_FIXTURES', '')
     vi.stubEnv('SERPAPI_API_KEY', 'test-key-not-real')
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ shopping_results: [
@@ -283,25 +322,30 @@ describe('the live source', () => {
     ] })))
     vi.stubGlobal('fetch', fetchMock)
     const found = await findGapCandidates({ occasion: 'work', category: 'shoes', tier: 'budget', department: 'both', priceRange: [15, 60] }, serpapiShopping)
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledTimes(3)
     expect(found.map((c) => c.shop)).toEqual(['Kmart'])
   })
-  it('onSearch gets the parameters without the key, the raw count, the shops and the counts after each filter', async () => {
+  it('onSearch is called once per shop search, with the parameters without the key, the raw count, the shops and the counts after each filter', async () => {
     vi.stubEnv('GAP_SEARCH_FIXTURES', '')
     vi.stubEnv('SERPAPI_API_KEY', 'test-key-not-real')
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ shopping_results: [
-      { title: 'Work Shoe', source: 'Kmart', extracted_price: 30 },
-      { title: 'Work Shoe', source: 'Rodd & Gunn', extracted_price: 30 },
-    ] }))))
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (new URL(url).searchParams.get('q')?.startsWith('Target')) return new Response('no', { status: 500 })
+      return new Response(JSON.stringify({ shopping_results: [
+        { title: 'Work Shoe', source: 'Kmart', extracted_price: 30 },
+        { title: 'Work Shoe', source: 'Rodd & Gunn', extracted_price: 30 },
+      ] }))
+    }))
     const onSearch = vi.fn()
     await findGapSuggestions({ ...input({ category: 'shoes' }), palette: { season: 'winter', best: ['#FFB347'], avoid: [] } }, { onSearch })
-    expect(onSearch).toHaveBeenCalledTimes(1)
-    const log = onSearch.mock.calls[0][0]
-    expect(log.shops).toEqual(['Kmart', 'Rodd & Gunn'])
-    expect(log.counts).toMatchObject({ raw: 2, notTierShop: 1, passed: 1, suggested: 0 })
-    expect(log.params).toMatchObject({ q: 'shoes', num: '100', gl: 'au' })
-    expect(JSON.stringify(log)).not.toContain('test-key-not-real')
-    expect(log.params).not.toHaveProperty('api_key')
+    expect(onSearch).toHaveBeenCalledTimes(3)
+    const logs = onSearch.mock.calls.map((c) => c[0])
+    expect(logs.map((l) => [l.shop, l.ok])).toEqual([['Kmart', true], ['Target', false], ['Big W', true]])
+    expect(logs[0].shops).toEqual(['Kmart', 'Rodd & Gunn'])
+    expect(logs[0].counts).toMatchObject({ raw: 2, notTierShop: 1, passed: 1 })
+    expect(logs[0].params).toMatchObject({ q: 'Kmart shoes', num: '100', gl: 'au' })
+    expect(logs[1].counts.raw).toBe(0)
+    expect(JSON.stringify(logs)).not.toContain('test-key-not-real')
+    expect(logs[0].params).not.toHaveProperty('api_key')
   })
   it.each(['mid', 'premium'] as const)('saved results give %s items only from that tier\'s shops', async (tier) => {
     vi.stubEnv('GAP_SEARCH_FIXTURES', '1')

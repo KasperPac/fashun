@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { isBudgetTier, isDepartment, DEFAULT_DEPARTMENT, OCCASIONS } from '@fashun/shared'
+import { BUDGET_TIER_DEFINITIONS, isBudgetTier, isDepartment, DEFAULT_DEPARTMENT, OCCASIONS } from '@fashun/shared'
 import { createServerClient, createServiceClient } from '@/lib/supabase/server'
 import { gapSuggestionsEnabled } from '@/lib/paid-extras'
 import { ColourTaggingError, findGapSuggestions, type EmptyCounts, type SearchLog, gapSearchFixturesEnabled, ProductSourceError, type GapPalette, type GapSuggestion } from '@/lib/gap-search'
@@ -25,10 +25,10 @@ function logFailure(reason: 'cache_read_failed' | 'count_failed' | 'source_faile
   console.error(`gap suggestions failed: ${reason}`)
 }
 
-/** One line per search: what was sent (no key), raw count, shops returned, the count left after each filter. No personal details. */
+/** One line per shop search: what was sent (no key), whether it worked, raw count, shops returned, the count left after each filter. No personal details. */
 function logSearch(l: SearchLog) {
   const c = l.counts
-  console.info(`gap-suggestions search params=${JSON.stringify(l.params)} raw=${c.raw} shops=${JSON.stringify(l.shops)} not_tier_shop=${c.notTierShop} out_of_price=${c.outOfPrice} wrong_department_or_occasion=${c.wrongDepartmentOrOccasion} duplicate=${c.duplicate} passed=${c.passed} colour_dropped=${c.colourDropped} title_colour_dropped=${c.titleColourDropped} suggested=${c.suggested}`)
+  console.info(`gap-suggestions search ok=${l.ok} params=${JSON.stringify(l.params)} raw=${c.raw} shops=${JSON.stringify(l.shops)} not_tier_shop=${c.notTierShop} out_of_price=${c.outOfPrice} wrong_department_or_occasion=${c.wrongDepartmentOrOccasion} duplicate=${c.duplicate} passed=${c.passed}`)
 }
 
 function unavailable() {
@@ -97,7 +97,7 @@ export async function GET(req: Request) {
 
   if (!process.env.SERPAPI_API_KEY && !gapSearchFixturesEnabled()) return unavailable()
 
-  // One search per opening, taken from the month's count before it is made.
+  // One search per tier shop, each taken from the month's count before it is made.
   // The colour step needs the user's palette: no palette, no search and no cost.
   const season = profile.colour_season
   const colourList = (v: unknown): string[] => (Array.isArray(v) ? v.filter((c): c is string => typeof c === 'string') : [])
@@ -111,14 +111,20 @@ export async function GET(req: Request) {
 
   const month = gapSearchMonth(now)
   const service = await createServiceClient()
-  let count: number | null
+  // Reserve one search per shop, in the tier's order, until the allowance runs out: only the shops reserved are searched.
+  const cap = readGapSearchCap()
+  const shops: string[] = []
   try {
-    count = await reserveGapSearch(service, month, readGapSearchCap())
+    for (const shop of BUDGET_TIER_DEFINITIONS[tier].shops) {
+      if ((await reserveGapSearch(service, month, cap)) === null) break
+      shops.push(shop)
+    }
   } catch {
+    // Keep the shops already reserved; with none, nothing can be searched.
     logFailure('count_failed')
-    return unavailable()
+    if (shops.length === 0) return unavailable()
   }
-  if (count === null) {
+  if (shops.length === 0) {
     const resumeOn = firstOfNextMonth(month)
     return NextResponse.json({
       status: 'paused',
@@ -131,7 +137,7 @@ export async function GET(req: Request) {
   let emptyCounts: EmptyCounts | null = null
   try {
     items = await withTimeout(
-      findGapSuggestions({ occasion, category, tier, department, priceRange, palette }, { onEmpty: (c) => { emptyCounts = c }, onSearch: logSearch }),
+      findGapSuggestions({ occasion, category, tier, department, priceRange, shops, palette }, { onEmpty: (c) => { emptyCounts = c }, onSearch: logSearch }),
       GAP_SEARCH_TIMEOUT_MS,
       () => new ProductSourceError('Product search timed out'),
     )

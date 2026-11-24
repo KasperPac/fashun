@@ -7,10 +7,12 @@ export interface GapSearchQuery {
   occasion: 'casual' | 'smart-casual' | 'work' | 'formal'
   category: GapSearchCategory
   department: Department
-  /** The budget tier: its example shops go into the one search. */
+  /** The budget tier: its example shops are searched one by one. */
   tier: BudgetTier
   /** The user's slider range for the category, in A$ (min, max), ends included. */
   priceRange: readonly [number, number]
+  /** The one tier shop this search is for. Each gap opening makes one search per tier shop. */
+  shop?: string
 }
 
 /** One item as a source returns it, before any filtering. */

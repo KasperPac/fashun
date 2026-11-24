@@ -6,6 +6,7 @@ import {
   type ProductSource,
   type RawProduct,
 } from './product-source'
+import { normaliseShopName } from './shop-names'
 import tops from './fixtures/google-shopping-au-tops.json'
 import bottoms from './fixtures/google-shopping-au-bottoms.json'
 import shoes from './fixtures/google-shopping-au-shoes.json'
@@ -86,7 +87,12 @@ export function searchParams(query: GapSearchQuery): Record<string, string> {
 /** SerpApi Google Shopping, Australia. The only place that knows about SerpApi. */
 export const serpapiShopping: ProductSource = {
   async search(query: GapSearchQuery): Promise<RawProduct[]> {
-    if (gapSearchFixturesEnabled()) return parseShoppingResults(FIXTURES[query.category])
+    if (gapSearchFixturesEnabled()) {
+      // Saved results hold every shop's answer for the category; one shop's search gets that shop's items.
+      const all = parseShoppingResults(FIXTURES[query.category])
+      const wanted = query.shop ? normaliseShopName(query.shop) : null
+      return wanted ? all.filter((p) => normaliseShopName(p.shop) === wanted) : all
+    }
     const key = process.env.SERPAPI_API_KEY
     if (!key) throw new ProductSourceError('SERPAPI_API_KEY is not set')
     const params = new URLSearchParams({ ...searchParams(query), api_key: key })
