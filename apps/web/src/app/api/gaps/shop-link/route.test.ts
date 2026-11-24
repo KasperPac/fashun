@@ -1,7 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
-vi.mock('next/navigation', () => ({ notFound: () => { throw new Error('NEXT_NOT_FOUND') } }))
-
 type Row = Record<string, unknown>
 const db = vi.hoisted(() => ({
   user: 'A' as string | null,
@@ -162,9 +160,15 @@ describe('GET /api/gaps/shop-link', () => {
     expect(db.usage['2026-11']).toBeUndefined()
   })
 
-  it('signed-out gets the standard not-found, and another user\'s item is not found', async () => {
+  it('signed-out gets a real 404 page in plain words, and another user\'s item is not found', async () => {
     db.user = null
-    await expect(get()).rejects.toThrow('NEXT_NOT_FOUND')
+    const out = await get()
+    expect(out.status).toBe(404)
+    expect(out.headers.get('content-type')).toContain('text/html')
+    const body = await out.text()
+    expect(body).toContain('Couldn&#39;t open the shop')
+    expect(body).toContain('Sign in to Fashun')
+    expect(lookup).not.toHaveBeenCalled()
     db.user = B
     const res = await get()
     expect(res.headers.get('location')).toBeNull()
@@ -174,6 +178,7 @@ describe('GET /api/gaps/shop-link', () => {
   it('an unknown gap is not found', async () => {
     const res = await GET(new Request('http://localhost/api/gaps/shop-link?occasion=x&category=shoes&t=a'))
     expect(res.status).toBe(404)
+    expect(await res.text()).toContain('Couldn&#39;t open the shop')
   })
 
   it('a stored shop-host link is opened with no search and nothing reserved, even when the item has a token', async () => {

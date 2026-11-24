@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server'
-import { notFound } from 'next/navigation'
 import { z } from 'zod'
 import { OCCASIONS } from '@fashun/shared'
 import { createServerClient, createServiceClient } from '@/lib/supabase/server'
@@ -64,13 +63,13 @@ const toShop = (link: string) => {
 export async function GET(req: Request) {
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) notFound()
+  if (!user) return couldntOpen('Sign in to Fashun, then open this link again. Close this tab and go back to Fashun.', 404)
 
   if (!gapSuggestionsEnabled()) return unavailablePage()
 
   const params = new URL(req.url).searchParams
   const parsed = QuerySchema.safeParse({ occasion: params.get('occasion'), category: params.get('category'), t: params.get('t') })
-  if (!parsed.success) return new NextResponse(null, { status: 404 })
+  if (!parsed.success) return notFoundPage(null)
   const { occasion, category, t } = parsed.data
 
   const { data: rows, error } = await supabase
