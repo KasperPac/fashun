@@ -38,7 +38,7 @@ export default function FillTheGapsCard({
   const tappable = ready && online
 
   let line: React.ReactNode = null
-  if (status === null) line = <Skeleton className="h-[15px] w-3/4" />
+  if (status === null) line = online ? <Skeleton className="h-[15px] w-3/4" /> : null
   else if (status.status === 'ready') line = <p className="text-[15px] text-ink-2">{cardSourceLine(status.tier, seasonName)}</p>
   else if (status.status === 'no_tier') line = <p className="text-[15px] font-semibold">{GAP_NO_TIER_LINE}</p>
   else if (status.status === 'paused') line = <p className="text-[15px] font-semibold">{pausedLine(status.resume_on)}</p>

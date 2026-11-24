@@ -66,6 +66,16 @@ describe('Shopping budget screen', () => {
     expect(html).toContain('aria-label="Highest price for tops"')
     expect(html).not.toContain('outerwear')
   })
+
+  it('S1 each category has two full-width inputs stacked 4 px apart, with end labels on one row under them', () => {
+    const html = render({ tier: 'budget', department: 'both', budgets: tierRanges('budget') })
+    const shoes = html.slice(html.indexOf('Lowest price for shoes') - 200)
+    const block = shoes.slice(shoes.indexOf('<div class="flex flex-col gap-1">'), shoes.indexOf('A$1,000') + 30)
+    expect(block.match(/<input/g)).toHaveLength(2)
+    expect(block.match(/class="m-0 block h-11 w-full/g)).toHaveLength(2)
+    expect(block).toMatch(/justify-between[^>]*><span>A\$0<\/span><span>A\$1,000<\/span>/)
+    expect(html).toContain('aria-label="Highest price for shoes"')
+  })
 })
 
 describe('Profile Shopping row', () => {

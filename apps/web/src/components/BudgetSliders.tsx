@@ -41,29 +41,29 @@ export default function BudgetSliders({ budgets, onChange, categories = ALL_CATE
               <span className="font-display text-[13px] font-bold uppercase tracking-[1.5px] text-ink">{label}</span>
               <span className="text-[15px] font-semibold text-ink">{dollars(low)} – {dollars(high)}</span>
             </div>
-            <div className="flex items-center gap-3">
-              <span className="w-10 text-[13px] text-ink-2">{dollars(0)}</span>
-              <div className="flex flex-1 flex-col gap-1">
-                <input
-                  type="range" min={0} max={max} step={5}
-                  value={low}
-                  disabled={disabled}
-                  aria-label={`Lowest price for ${lower}`}
-                  aria-valuetext={dollars(low)}
-                  onChange={(e) => updateRange(key, 0, Number(e.target.value))}
-                  className="h-11 w-full accent-ink"
-                />
-                <input
-                  type="range" min={0} max={max} step={5}
-                  value={high}
-                  disabled={disabled}
-                  aria-label={`Highest price for ${lower}`}
-                  aria-valuetext={dollars(high)}
-                  onChange={(e) => updateRange(key, 1, Number(e.target.value))}
-                  className="h-11 w-full accent-ink"
-                />
-              </div>
-              <span className="w-14 text-right text-[13px] text-ink-2">{dollars(max)}</span>
+            <div className="flex flex-col gap-1">
+              <input
+                type="range" min={0} max={max} step={5}
+                value={low}
+                disabled={disabled}
+                aria-label={`Lowest price for ${lower}`}
+                aria-valuetext={dollars(low)}
+                onChange={(e) => updateRange(key, 0, Number(e.target.value))}
+                className="m-0 block h-11 w-full accent-ink"
+              />
+              <input
+                type="range" min={0} max={max} step={5}
+                value={high}
+                disabled={disabled}
+                aria-label={`Highest price for ${lower}`}
+                aria-valuetext={dollars(high)}
+                onChange={(e) => updateRange(key, 1, Number(e.target.value))}
+                className="m-0 block h-11 w-full accent-ink"
+              />
+            </div>
+            <div className="flex items-center justify-between text-[13px] text-ink-2">
+              <span>{dollars(0)}</span>
+              <span>{dollars(max)}</span>
             </div>
           </div>
         )

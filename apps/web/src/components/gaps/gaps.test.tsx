@@ -95,6 +95,11 @@ describe('Fill the gaps card', () => {
     expect(card(WORK_NO_SHOES, 'work', READY, true)).not.toContain(line)
   })
 
+  it('S2 offline leaves no skeleton next to the offline line; online loading still shows it', () => {
+    expect(card(WORK_NO_SHOES, 'work', null, false)).not.toContain('animate-pulse-skeleton')
+    expect(card(WORK_NO_SHOES, 'work', null, true)).toContain('animate-pulse-skeleton')
+  })
+
   it('rows are enabled buttons when ready, and disabled while the status loads', () => {
     expect(card(WORK_NO_SHOES, 'work', READY)).not.toContain('disabled=""')
     expect(card(WORK_NO_SHOES, 'work', null)).toContain('disabled=""')
