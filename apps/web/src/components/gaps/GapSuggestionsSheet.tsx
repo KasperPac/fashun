@@ -1,10 +1,12 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { BudgetTier, OccasionTag } from '@fashun/shared'
 import { SEASON_NAMES } from '@/lib/profile-view'
 import type { ColourSeason } from '@fashun/shared'
 import { SEASON_ACCENTS } from '@/lib/style-me'
 import { colourName } from '@/lib/colour-names'
+import { CATEGORY_LABELS } from '@/lib/wardrobe-view'
+import type { WardrobeCategory } from '@fashun/shared'
 import type { GapSuggestion } from '@/lib/gap-search'
 import { BottomSheet } from '@/components/ui/Overlays'
 import { Button, ButtonLink, buttonClasses } from '@/components/ui/Button'
@@ -39,15 +41,30 @@ function readAnswer(httpStatus: number, body: Answer | null): SheetState {
   return { name: 'error' }
 }
 
+/** The listing title without a trailing " Size: 40" fragment. */
+export function displayName(title: string): string {
+  return title.replace(/\s+size\s*:.*$/i, '').trim() || title
+}
+
+function categoryLabel(category: string): string {
+  return category in CATEGORY_LABELS ? CATEGORY_LABELS[category as WardrobeCategory] : category
+}
+
 function ItemPhoto({ src, alt, category }: { src: string | null; alt: string; category: string }) {
   const [failed, setFailed] = useState(false)
+  const img = useRef<HTMLImageElement>(null)
+  // A photo that failed before the page was interactive has already fired its error event.
+  useEffect(() => {
+    const el = img.current
+    if (el && el.complete && el.naturalWidth === 0) setFailed(true)
+  }, [src])
   return (
     <div className="flex h-[120px] w-24 shrink-0 items-center justify-center overflow-hidden border-[1.5px] border-ink bg-tile">
       {src && !failed ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={src} alt={alt} onError={() => setFailed(true)} className="h-full w-full object-contain" />
+        <img ref={img} src={src} alt={alt} onError={() => setFailed(true)} className="h-full w-full object-contain" />
       ) : (
-        <span className="px-1 text-center font-display text-[13px] font-bold uppercase tracking-[1px] text-ink-2">{category}</span>
+        <span className="px-1 text-center font-display text-[13px] font-bold uppercase tracking-[1px] text-ink-2">{categoryLabel(category)}</span>
       )}
     </div>
   )
@@ -61,7 +78,7 @@ function ItemCard({ item, occasion, row, season }: { item: GapSuggestion; occasi
         <ItemPhoto src={photoHref(occasion, row.category, item.imageUrl)} alt={item.title} category={row.category} />
         <div className="min-w-0 flex-1">
           <p className="font-display text-[13px] font-bold uppercase tracking-[1.5px] text-ink-2">{item.shop}</p>
-          <p className="line-clamp-2 text-[15px] font-semibold">{item.title}</p>
+          <p className="line-clamp-2 text-[15px] font-semibold">{displayName(item.title)}</p>
           <p className="font-display text-[22px] font-extrabold leading-tight">
             <span aria-hidden="true">{priceText(item.price)}</span>
             <span className="sr-only">{priceSpoken(item.price)}</span>

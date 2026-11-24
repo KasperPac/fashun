@@ -7,7 +7,7 @@ import type { GapItem } from '@/lib/wardrobe-gaps'
 vi.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams() }))
 
 import FillTheGapsCard from './FillTheGapsCard'
-import { SheetBody, type SheetState } from './GapSuggestionsSheet'
+import { SheetBody, displayName, type SheetState } from './GapSuggestionsSheet'
 import { gapRows, toGapItems, type GapStatus } from '@/lib/gap-card'
 
 const item = (category: string, tag: OccasionTag, ownership = 'owned'): GapItem =>
@@ -151,8 +151,16 @@ describe('Suggestions sheet', () => {
     expect(html).toContain('>A$35<')
     expect(html).toContain('35 Australian dollars')
     expect(html).toContain('Navy, one of your Winter colours.')
-    expect(html).toContain('>shoes<') // no photo: the category label
+    expect(html).toContain('>Shoes<') // no photo: the category label
     expect(html).toContain('line-clamp-2')
+  })
+
+  it('item names drop a trailing Size fragment', () => {
+    expect(displayName('Zasel Mens Cotton Canvas Shoes - KHAKI Size: 40')).toBe('Zasel Mens Cotton Canvas Shoes - KHAKI')
+    expect(displayName('Loafers size : 9 and up')).toBe('Loafers')
+    expect(displayName('Plain Tee')).toBe('Plain Tee')
+    expect(displayName('Size: 40')).toBe('Size: 40')
+    expect(sheet({ name: 'items', items: [sug(1, { title: 'Canvas Shoes Size: 40' })] })).toContain('>Canvas Shoes<')
   })
 
   it('a gap shows at most 6 items in the sheet', () => {

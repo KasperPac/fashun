@@ -37,6 +37,13 @@ describe('Shopping budget screen', () => {
     expect(chips).toContain("Women&#x27;s")
   })
 
+  it('tier rows have no side padding, so they line up with the "Where you shop" heading', () => {
+    const html = render(fresh)
+    const tiers = html.slice(html.indexOf('id="where-you-shop"'), html.indexOf('id="i-shop"'))
+    expect(tiers.match(/px-0/g)).toHaveLength(4)
+    expect(tiers).not.toContain('px-1 ')
+  })
+
   it('saved tier shows after signing in again', () => {
     const html = render({ tier: 'mid', department: 'womens', budgets: tierRanges('mid') })
     const tiers = html.slice(html.indexOf('id="where-you-shop"'), html.indexOf('id="i-shop"'))

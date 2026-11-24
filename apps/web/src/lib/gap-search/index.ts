@@ -3,6 +3,7 @@ import { countFilterDrops, filterProducts, MAX_CANDIDATES, type FilterDrops } fr
 import { gapSearchFixturesEnabled, serpapiShopping } from './serpapi-shopping'
 import { tagPhotoColour } from './colour-tag'
 import { ColourTaggingError, MAX_TAGGED, matchBestColour, reasonLine, type ColourTagger, type GapPalette } from './colour'
+import { titleColour } from './title-colour'
 import { colourName } from '../colour-names'
 import type { GapCandidate, GapSearchCategory, GapSearchQuery, ProductSource } from './product-source'
 
@@ -71,6 +72,8 @@ export interface GapSuggestionDeps {
 export interface EmptyCounts extends FilterDrops {
   /** Passed the filters but dropped at the colour step (no photo, unsure, pattern, avoid or neither-list colour). */
   colourDropped: number
+  /** Of those, how many had a colour word in the title that isn't one of the user's best colours. */
+  titleColourDropped: number
 }
 
 /**
@@ -99,21 +102,26 @@ export async function findGapSuggestions(
   const fixtures = gapSearchFixturesEnabled()
   const readings = await Promise.allSettled(
     toTag.map((c): Promise<string | null> => {
+      if (titleColour(c.title)) return Promise.resolve(null)
       if (fixtures) return Promise.resolve(c.fixtureColour ?? null)
       if (!c.imageUrl) return Promise.resolve(null)
       return tagger(c.imageUrl)
     }),
   )
   // Every photo failing means the tagging itself is down: show "not available", not untagged items.
-  if (!fixtures && toTag.some((c) => c.imageUrl) && readings.every((r, i) => !toTag[i].imageUrl || r.status === 'rejected')) {
+  const photoRead = (i: number) => !titleColour(toTag[i].title) && !!toTag[i].imageUrl
+  if (!fixtures && toTag.some((_, i) => photoRead(i)) && readings.every((r, i) => !photoRead(i) || r.status === 'rejected')) {
     throw new ColourTaggingError('No photo could be colour-tagged')
   }
 
   const out: GapSuggestion[] = []
   toTag.forEach((c, i) => {
     const r = readings[i]
-    if (out.length >= MAX_CANDIDATES || r.status !== 'fulfilled' || !r.value) return
-    const colour = matchBestColour(r.value, input.palette)
+    // A colour word in the title is the item's colour; the photo reading is used only when the title has none.
+    const word = titleColour(c.title)
+    if (out.length >= MAX_CANDIDATES || (!word && (r.status !== 'fulfilled' || !r.value))) return
+    const reading = word ?? (r as PromiseFulfilledResult<string | null>).value
+    const colour = reading ? matchBestColour(reading, input.palette) : null
     if (!colour) return
     out.push({
       title: c.title, shop: c.shop, price: c.price, imageUrl: c.imageUrl, link: c.link, productId: c.productId,
@@ -123,7 +131,8 @@ export async function findGapSuggestions(
   })
   if (out.length === 0 && onEmpty) {
     const drops = countFilterDrops(products, query, input.tier)
-    onEmpty({ ...drops, colourDropped: drops.passed })
+    const titleColourDropped = passed.filter((c) => titleColour(c.title)).length
+    onEmpty({ ...drops, colourDropped: drops.passed, titleColourDropped })
   }
   return out
 }

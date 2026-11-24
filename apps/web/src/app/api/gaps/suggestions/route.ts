@@ -152,7 +152,7 @@ export async function GET(req: Request) {
   // Diagnosis for an empty live search: counts only, so QA can see which filter dropped the results.
   if (emptyCounts) {
     const c: EmptyCounts = emptyCounts
-    console.warn(`gap-suggestions empty raw=${c.raw} not_tier_shop=${c.notTierShop} out_of_price=${c.outOfPrice} wrong_department_or_occasion=${c.wrongDepartmentOrOccasion} duplicate=${c.duplicate} colour_dropped=${c.colourDropped}`)
+    console.warn(`gap-suggestions empty raw=${c.raw} not_tier_shop=${c.notTierShop} out_of_price=${c.outOfPrice} wrong_department_or_occasion=${c.wrongDepartmentOrOccasion} duplicate=${c.duplicate} colour_dropped=${c.colourDropped} title_colour_dropped=${c.titleColourDropped}`)
     return NextResponse.json({ status: 'ok', items, stored: false, diagnosis: c })
   }
   return NextResponse.json({ status: 'ok', items, stored: false })

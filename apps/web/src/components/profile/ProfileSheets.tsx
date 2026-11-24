@@ -28,12 +28,15 @@ export function OptionRow({
   disabled,
   onClick,
   role,
+  flush = false,
   children,
 }: {
   selected: boolean
   disabled: boolean
   onClick: () => void
   role: 'radio' | 'checkbox'
+  /** No side padding, so the row lines up with a heading above it. */
+  flush?: boolean
   children: ReactNode
 }) {
   return (
@@ -44,7 +47,7 @@ export function OptionRow({
         aria-checked={selected}
         disabled={disabled}
         onClick={onClick}
-        className={`flex min-h-12 w-full items-center justify-between gap-3 border-b-[1.5px] border-ink px-1 py-2 text-left text-base font-medium ${
+        className={`flex min-h-12 w-full items-center justify-between gap-3 border-b-[1.5px] border-ink ${flush ? 'px-0' : 'px-1'} py-2 text-left text-base font-medium ${
           selected ? 'font-bold' : ''
         }`}
       >

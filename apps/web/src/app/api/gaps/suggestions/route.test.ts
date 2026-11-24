@@ -97,12 +97,12 @@ describe('GET /api/gaps/suggestions', () => {
 
   it('an empty live search logs and returns the counts dropped at each filter, nothing else', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const counts = { raw: 20, notTierShop: 12, outOfPrice: 3, wrongDepartmentOrOccasion: 2, duplicate: 0, passed: 3, colourDropped: 3 }
+    const counts = { raw: 20, notTierShop: 12, outOfPrice: 3, wrongDepartmentOrOccasion: 2, duplicate: 0, passed: 3, colourDropped: 3, titleColourDropped: 1 }
     search.mockImplementation(async (_i: unknown, deps: { onEmpty: (c: typeof counts) => void }) => { deps.onEmpty(counts); return [] })
     const body = await (await get()).json()
     expect(body).toEqual({ status: 'ok', items: [], stored: false, diagnosis: counts })
     expect(warn).toHaveBeenCalledTimes(1)
-    expect(warn.mock.calls[0][0]).toBe('gap-suggestions empty raw=20 not_tier_shop=12 out_of_price=3 wrong_department_or_occasion=2 duplicate=0 colour_dropped=3')
+    expect(warn.mock.calls[0][0]).toBe('gap-suggestions empty raw=20 not_tier_shop=12 out_of_price=3 wrong_department_or_occasion=2 duplicate=0 colour_dropped=3 title_colour_dropped=1')
     warn.mockRestore()
   })
 

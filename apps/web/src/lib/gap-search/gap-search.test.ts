@@ -4,6 +4,7 @@ import path from 'node:path'
 import { BUDGET_TIER_DEFINITIONS, tierRanges, type BudgetTier, type Department } from '@fashun/shared'
 import { findGapCandidates, findGapSuggestions, MAX_CANDIDATES, ProductSourceError, type GapSearchInput, type ProductSource, type RawProduct } from './index'
 import { countFilterDrops, filterProducts, itemDepartment } from './filters'
+import { titleColour } from './title-colour'
 import { buildSearchText } from './query'
 import { isShopInTier, normaliseShopName } from './shop-names'
 import { parseShoppingResults, serpapiShopping } from './serpapi-shopping'
@@ -356,7 +357,7 @@ describe('diagnosis of an empty answer', () => {
       { source: sourceOf([raw('Men Shirt', 'Rodd & Gunn', 20), raw('Men Shirt', 'Kmart', 900)]), onEmpty },
     )
     expect(items).toEqual([])
-    expect(onEmpty).toHaveBeenCalledWith({ raw: 2, notTierShop: 1, outOfPrice: 1, wrongDepartmentOrOccasion: 0, duplicate: 0, passed: 0, colourDropped: 0 })
+    expect(onEmpty).toHaveBeenCalledWith({ raw: 2, notTierShop: 1, outOfPrice: 1, wrongDepartmentOrOccasion: 0, duplicate: 0, passed: 0, colourDropped: 0, titleColourDropped: 0 })
     onEmpty.mockClear()
     await findGapSuggestions({ ...input({ category: 'tops' }), palette: { season: 'winter', best: ['#FFB347'], avoid: [] } }, { onEmpty })
     expect(onEmpty).not.toHaveBeenCalled()
@@ -369,5 +370,51 @@ describe('diagnosis of an empty answer', () => {
     )
     expect(items).toEqual([])
     expect(onEmpty).toHaveBeenCalledWith(expect.objectContaining({ raw: 1, passed: 1, colourDropped: 1 }))
+  })
+})
+
+describe('a colour word in the title is the item\'s colour', () => {
+  const OLIVE = '#808000'
+  const CAMEL = '#C8A96E'
+  const palette = (best: string[], avoid: string[] = []) => ({ season: 'spring' as const, best, avoid })
+  const zasel = (title = 'Zasel Mens Cotton Canvas Shoes - KHAKI') => ({ ...raw(title, 'Kmart', 20), fixtureColour: CAMEL })
+
+  it('wins over the photo reading, and the reason names the title colour family', async () => {
+    const [s] = await findGapSuggestions(
+      { ...input({ category: 'shoes' }), palette: palette([OLIVE, CAMEL]) },
+      { source: sourceOf([zasel()]) },
+    )
+    expect(s.colour).toBe(OLIVE)
+    expect(s.reason).toBe('Olive, one of your Spring colours.')
+    expect(s.reason).not.toContain('camel')
+  })
+  it('an item whose title colour is not a best colour is dropped and counted, even if its photo reads as a best colour', async () => {
+    const onEmpty = vi.fn()
+    const out = await findGapSuggestions(
+      { ...input({ category: 'shoes' }), palette: palette([CAMEL]) },
+      { source: sourceOf([zasel()]), onEmpty },
+    )
+    expect(out).toEqual([])
+    expect(onEmpty).toHaveBeenCalledWith(expect.objectContaining({ passed: 1, colourDropped: 1, titleColourDropped: 1 }))
+  })
+  it('an avoid colour in the title drops the item', async () => {
+    const out = await findGapSuggestions(
+      { ...input({ category: 'shoes' }), palette: palette([CAMEL], [OLIVE]) },
+      { source: sourceOf([zasel()]) },
+    )
+    expect(out).toEqual([])
+  })
+  it('an item with no colour word still uses the photo reading', async () => {
+    const [s] = await findGapSuggestions(
+      { ...input({ category: 'shoes' }), palette: palette([OLIVE, CAMEL]) },
+      { source: sourceOf([zasel('Zasel Mens Cotton Canvas Shoes')]) },
+    )
+    expect(s.colour).toBe(CAMEL)
+  })
+  it('a title with two colour words, or a word only inside another word, uses the photo reading', () => {
+    expect(titleColour('Stripe Tee Navy / White')).toBeNull()
+    expect(titleColour('Standard Tangled Tee')).toBeNull()
+    expect(titleColour('Mens Chino - NAVY')).toBe('#000080')
+    expect(titleColour('Sky Blue Shirt')).toBe('#87CEEB')
   })
 })
