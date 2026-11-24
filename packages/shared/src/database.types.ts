@@ -39,6 +39,71 @@ export type Database = {
   }
   public: {
     Tables: {
+      gap_search_usage: {
+        Row: {
+          month: string
+          searches: number
+        }
+        Insert: {
+          month: string
+          searches?: number
+        }
+        Update: {
+          month?: string
+          searches?: number
+        }
+        Relationships: []
+      }
+      gap_suggestions: {
+        Row: {
+          category: string
+          created_at: string
+          day: string
+          department: string
+          id: string
+          items: Json
+          occasion: string
+          price_max: number
+          price_min: number
+          tier: string
+          user_id: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          day: string
+          department: string
+          id?: string
+          items?: Json
+          occasion: string
+          price_max: number
+          price_min: number
+          tier: string
+          user_id: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          day?: string
+          department?: string
+          id?: string
+          items?: Json
+          occasion?: string
+          price_max?: number
+          price_min?: number
+          tier?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gap_suggestions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invite_codes: {
         Row: {
           code: string
@@ -204,9 +269,11 @@ export type Database = {
         Row: {
           avoid_colours: string[]
           best_colours: string[]
+          budget_tier: string | null
           budgets: Json | null
           colour_season: string | null
           created_at: string | null
+          department: string
           email: string
           eye_colour: string | null
           hair_colour: string | null
@@ -222,9 +289,11 @@ export type Database = {
         Insert: {
           avoid_colours?: string[] | null
           best_colours?: string[] | null
+          budget_tier?: string | null
           budgets?: Json | null
           colour_season?: string | null
           created_at?: string | null
+          department?: string
           email: string
           eye_colour?: string | null
           hair_colour?: string | null
@@ -240,9 +309,11 @@ export type Database = {
         Update: {
           avoid_colours?: string[] | null
           best_colours?: string[] | null
+          budget_tier?: string | null
           budgets?: Json | null
           colour_season?: string | null
           created_at?: string | null
+          department?: string
           email?: string
           eye_colour?: string | null
           hair_colour?: string | null
@@ -324,6 +395,13 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      gap_search_reserve: {
+        Args: {
+          p_cap: number
+          p_month: string
+        }
+        Returns: number | null
+      }
       try_on_reserve: {
         Args: {
           p_cap_units: number

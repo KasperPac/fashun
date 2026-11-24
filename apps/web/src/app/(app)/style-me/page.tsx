@@ -9,6 +9,11 @@ import { Button, ButtonLink } from '@/components/ui/Button'
 import { EmptyState, ErrorState, Skeleton } from '@/components/ui/Feedback'
 import { Kicker, ScreenBlock } from '@/components/ui/Onboarding'
 import HangTag from '@/components/outfits/HangTag'
+import FillTheGapsCard from '@/components/gaps/FillTheGapsCard'
+import GapSuggestionsSheet from '@/components/gaps/GapSuggestionsSheet'
+import { DEFAULT_DEPARTMENT } from '@fashun/shared'
+import { SEASON_NAMES } from '@/lib/profile-view'
+import { gapRows, toGapItems, type GapRow, type GapStatus } from '@/lib/gap-card'
 import { prefersReducedMotion, rememberOccasion, useLastOccasion, useOnline } from '@/lib/browser-state'
 import {
   OCCASION_DESCRIPTIONS,
@@ -160,6 +165,20 @@ function StyleMeContent() {
   const slowTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const runId = useRef(0)
 
+  const [gapStatus, setGapStatus] = useState<GapStatus | null>(null)
+  const [openGap, setOpenGap] = useState<GapRow | null>(null)
+  const gapsShown = phase.name === 'results' || phase.name === 'not-enough'
+  useEffect(() => {
+    if (!gapsShown || !online) return
+    let cancelled = false
+    // The status call never searches. Any failure reads as "not available".
+    fetch('/api/gaps/status')
+      .then(async (res) => (res.ok ? ((await res.json()) as GapStatus) : ({ status: 'unavailable' } as GapStatus)))
+      .catch((): GapStatus => ({ status: 'unavailable' }))
+      .then((next) => { if (!cancelled) setGapStatus(next) })
+    return () => { cancelled = true }
+  }, [gapsShown, online])
+
   const items = setup.status === 'ready' ? setup.items : []
   const season = setup.status === 'ready' ? setup.season : null
   const readiness = useMemo(() => outfitReadiness(setup.status === 'ready' ? setup.items : []), [setup])
@@ -309,6 +328,30 @@ function StyleMeContent() {
     </main>
   )
 
+  const gapCard = (
+    <div className="mt-8 w-full max-w-[480px]">
+      <FillTheGapsCard
+        rows={gapRows(toGapItems(items), occasion, gapStatus?.status === 'ready' ? gapStatus.department : DEFAULT_DEPARTMENT)}
+        status={gapStatus}
+        online={online}
+        occasion={occasion}
+        seasonName={SEASON_NAMES[season]}
+        onOpen={(row) => setOpenGap(row)}
+      />
+      {gapStatus?.status === 'ready' && (
+        <GapSuggestionsSheet
+          row={openGap}
+          occasion={occasion}
+          tier={gapStatus.tier}
+          range={openGap ? gapStatus.ranges[openGap.category] : [0, 0]}
+          season={season}
+          online={online}
+          onClose={() => setOpenGap(null)}
+        />
+      )}
+    </div>
+  )
+
   if (phase.name === 'loading') {
     return frame(
       <div aria-busy="true">
@@ -346,6 +389,7 @@ function StyleMeContent() {
           <ButtonLink href={addHref(missing[0], occasion)}>Add a piece</ButtonLink>
           <Button variant="secondary" onClick={backToPicker}>Try another occasion</Button>
         </div>
+        {gapCard}
       </div>,
     )
   }
@@ -438,6 +482,7 @@ function StyleMeContent() {
         <Button variant="secondary" onClick={backToPicker}>Change occasion</Button>
         {!online && <p role="status" className="text-sm text-ink-2">You&apos;re offline. Connect to the internet to get new outfits.</p>}
       </div>
+      {gapCard}
     </>,
   )
 }

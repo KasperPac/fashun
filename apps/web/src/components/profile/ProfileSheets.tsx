@@ -13,7 +13,7 @@ import {
   type TraitConfig,
 } from '@/lib/profile-edit'
 
-function SaveError({ message }: { message: string | null }) {
+export function SaveError({ message }: { message: string | null }) {
   if (!message) return null
   return (
     <p role="alert" className="mt-3 text-[13px] font-semibold text-danger">
@@ -23,28 +23,31 @@ function SaveError({ message }: { message: string | null }) {
   )
 }
 
-function OptionRow({
+export function OptionRow({
   selected,
   disabled,
   onClick,
   role,
+  flush = false,
   children,
 }: {
   selected: boolean
   disabled: boolean
   onClick: () => void
   role: 'radio' | 'checkbox'
+  /** No side padding, so the row lines up with a heading above it. */
+  flush?: boolean
   children: ReactNode
 }) {
   return (
-    <li>
+    <li role="none">
       <button
         type="button"
         role={role}
         aria-checked={selected}
         disabled={disabled}
         onClick={onClick}
-        className={`flex min-h-12 w-full items-center justify-between gap-3 border-b-[1.5px] border-ink px-1 py-2 text-left text-base font-medium ${
+        className={`flex min-h-12 w-full items-center justify-between gap-3 border-b-[1.5px] border-ink ${flush ? 'px-0' : 'px-1'} py-2 text-left text-base font-medium ${
           selected ? 'font-bold' : ''
         }`}
       >

@@ -30,6 +30,8 @@ With the switch off, nothing in outcome 1 calls SerpAPI Google Lens (photo-to-sh
 
 Try-on (Fashn.ai) is not turned on by `ENABLE_PAID_EXTRAS`. It has its own switch and settings, `ENABLE_TRY_ON`, `FASHN_API_KEY`, `TRY_ON_MONTHLY_CAP_USD`, `TRY_ON_PRICE_USD` and `TRY_ON_OWNER_USER_ID`, and needs `supabase/migrations/008_try_on.sql` applied first. `TRY_ON_TEST_DATE` (an ISO date-time such as `2026-12-01T00:05:00+11:00`) makes the try-on month logic use that date for QA's new-month check. Set it on Preview only: it is ignored when `VERCEL_ENV` is `production`.
 
+Gap suggestions (FASHUN-3) have their own switch and settings, and need `supabase/migrations/009_fill_the_gaps.sql` applied first: `ENABLE_GAP_SUGGESTIONS` (on only when exactly `true`), `GAP_SEARCH_MONTHLY_CAP` (searches per Sydney calendar month, all users together; default 900), `SERPAPI_API_KEY` and, for QA only, `GAP_SEARCH_FIXTURES=1` (answers from saved results; still counts against the cap). The month and the stored-for-the-day clock follow `TRY_ON_TEST_DATE` on Preview.
+
 Only if the switch is turned on are these also needed: `SERPAPI_API_KEY`, `PHOTOROOM_API_KEY`.
 
 ## 3. Checks before release
