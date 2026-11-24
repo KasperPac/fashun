@@ -62,6 +62,7 @@ export default function FillTheGapsCard({
                   className="flex min-h-12 w-full items-center justify-between gap-3 py-2 text-left disabled:cursor-default"
                 >
                   <span className="min-w-0 font-display text-[15px] font-bold uppercase tracking-[1px]">{row.label}</span>
+                  {' '}
                   <span className="flex shrink-0 items-center gap-2 text-[15px] text-ink-2">
                     {row.status}
                     <Chevron />
@@ -70,6 +71,7 @@ export default function FillTheGapsCard({
               ) : (
                 <div className="flex min-h-12 w-full items-center justify-between gap-3 py-2">
                   <span className="min-w-0 font-display text-[15px] font-bold uppercase tracking-[1px]">{row.label}</span>
+                  {' '}
                   <span className="shrink-0 text-[15px] text-ink-2">{row.status}</span>
                 </div>
               )}

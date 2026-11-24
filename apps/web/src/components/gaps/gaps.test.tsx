@@ -32,13 +32,15 @@ describe('Fill the gaps card', () => {
     expect(html).toContain('>Work shoes<')
     expect(html).toContain('None yet')
     expect(html).toContain('aria-label="Work shoes, none yet, find suggestions"')
+    expect(html).toMatch(/Work shoes<\/span>(<!-- -->)? (<!-- -->)?<span[^>]*>None yet/)
   })
 
   it('UI-9 one Casual top gives "Another Casual top" / "You have 1"; two of each gives no card', () => {
     const html = card([item('tops', 'casual'), ...two('bottoms', 'casual'), ...two('shoes', 'casual')], 'casual', READY)
     expect(html).toContain('>Another Casual top<')
     expect(html).toContain('You have 1')
-    expect(html).toContain('aria-label="Another Casual top, only one, find suggestions"')
+    expect(html).toContain('aria-label="Another Casual top, you have 1, find suggestions"')
+    expect(html).toMatch(/Another Casual top<\/span>(<!-- -->)? (<!-- -->)?<span[^>]*>You have 1/)
     expect(card([...two('tops', 'casual'), ...two('bottoms', 'casual'), ...two('shoes', 'casual')], 'casual', READY)).toBe('')
   })
 

@@ -21,7 +21,7 @@ export type GapRow = {
   findLabel: string
   /** "None yet" or "You have 1". */
   status: string
-  /** Starts with the visible label (WCAG 2.5.3): "Work shoes, none yet, find suggestions". */
+  /** Starts with the visible label (WCAG 2.5.3): "Work shoes, none yet, find suggestions"; "Another Casual top, you have 1, find suggestions". */
   ariaLabel: string
 }
 
@@ -58,7 +58,7 @@ export function gapRows(items: GapItem[], occasion: OccasionTag, department: Dep
       label,
       findLabel: missingLabel(gap.category, occasion, department),
       status,
-      ariaLabel: `${label}, ${missing ? 'none yet' : 'only one'}, find suggestions`,
+      ariaLabel: `${label}, ${status.toLowerCase()}, find suggestions`,
     }
   })
 }
