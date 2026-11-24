@@ -1,8 +1,9 @@
-import { OCCASIONS, OCCASION_LABELS, isColourInSeason } from '@fashun/shared'
+import { OCCASIONS, OCCASION_LABELS } from '@fashun/shared'
 import type { ColourSeason, OccasionTag, WardrobeCategory } from '@fashun/shared'
 import { isEligibleForOccasion } from './outfit-builder'
 import { colourName } from './colour-names'
 import { SEASON_NAMES } from './profile-view'
+import { isOutsidePalette } from './palette-rule'
 
 export const CATEGORIES: WardrobeCategory[] = ['tops', 'bottoms', 'shoes', 'outerwear', 'bags', 'accessories']
 
@@ -57,9 +58,9 @@ export function paletteLine(colours: string[], season: ColourSeason | null | und
   const valid = colours.filter((c) => HEX.test(c))
   if (valid.length === 0) return null
   const name = SEASON_NAMES[season]
-  return valid.some((c) => isColourInSeason(c, season))
-    ? `✓ In your ${name} palette`
-    : `Outside your ${name} palette. It can still be used in outfits.`
+  return isOutsidePalette(valid, season)
+    ? `Outside your ${name} palette. It can still be used in outfits.`
+    : `✓ In your ${name} palette`
 }
 
 const READY_SLOTS = [

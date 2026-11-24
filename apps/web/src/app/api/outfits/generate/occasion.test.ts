@@ -176,6 +176,15 @@ describe('POST /api/outfits/generate (occasion only)', () => {
     expect(prompt).toContain('#FFB347')
   })
 
+  it('lets the model use at most one off-palette piece and asks for an honest reason', async () => {
+    await call({ occasion: 'formal' })
+    const prompt = mockCreate.mock.calls[0]![0].messages[0].content as string
+    expect(prompt).toContain('not a ban')
+    expect(prompt).toContain('at most one OFF-PALETTE piece')
+    expect(prompt).toContain('sits outside your Autumn palette, but')
+    expect(prompt).toContain('are both in your Autumn palette, and')
+  })
+
   it('asks for a colour profile, with no model call, when there is no season', async () => {
     profile = { colour_season: null, best_colours: [], avoid_colours: [] }
     const res = await call({ occasion: 'formal' })
