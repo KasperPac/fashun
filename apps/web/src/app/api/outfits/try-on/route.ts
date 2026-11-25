@@ -8,6 +8,7 @@ import { runImageTryOn, ImageTryOnError, ImageTryOnTimeoutError } from '@/lib/im
 import {
   chargePicture, chargedSpendByMonth, hasRoomForUnits, markPictureMade, releasePictures, reservePictures,
 } from '@/lib/try-on-ledger'
+import { hasAgreed } from '@/lib/try-on-photo-client'
 import { loadGarmentPhoto, loadPersonPhoto, TRY_ON_BUCKET } from '@/lib/try-on-images'
 import {
   TRY_ON_LABEL, firstOfNextMonth, planTryOn, readTryOnConfig, readTryOnProvider, sydneyMonth, tryOnNow,
@@ -128,9 +129,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Try-on is not set up yet', code: 'NOT_CONFIGURED' }, { status: 503 })
   }
 
-  const { data: profile } = await supabase.from('users').select('try_on_photo_url').eq('id', user.id).maybeSingle()
+  const { data: profile } = await supabase.from('users').select('try_on_photo_url,try_on_consent_at,try_on_consent_note').eq('id', user.id).maybeSingle()
   if (!profile?.try_on_photo_url) {
     return NextResponse.json({ error: 'Add a try-on photo to see this on you', code: 'NO_PERSON_PHOTO' }, { status: 400 })
+  }
+  // An agreement to an earlier privacy note doesn't count: no photo is read or sent until they agree to the current one.
+  if (!hasAgreed(profile)) {
+    return NextResponse.json({ error: 'Please agree to the privacy note first', code: 'CONSENT_REQUIRED' }, { status: 400 })
   }
 
   // Work out what to draw from the outfit's pieces and the user's own wardrobe.

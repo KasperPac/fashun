@@ -62,7 +62,7 @@ export async function POST(req: Request, { params }: Context) {
   const upload = await readPhotoUpload(await req.formData().catch(() => null))
   if (!upload.ok) return upload.response
   if (upload.mediaType !== 'image/jpeg') {
-    return NextResponse.json({ error: 'Use a JPEG, PNG or WebP photo', code: 'BAD_PHOTO' }, { status: 400 })
+    return NextResponse.json({ error: 'Use a JPEG photo', code: 'BAD_PHOTO' }, { status: 400 })
   }
 
   const path = `${user.id}/worn-${id}-${randomUUID()}.jpg`

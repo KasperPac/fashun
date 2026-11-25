@@ -80,7 +80,7 @@ class Fake {
             const off = opts?.offset ?? 0
             return { data: names.slice(off, off + (opts?.limit ?? 100)), error: null }
           },
-          createSignedUrl: async (path: string) =>
+          createSignedUrl: async (path: string, _seconds?: number) =>
             b.has(path) && mine(path)
               ? { data: { signedUrl: `https://signed.example/${name}/${path}` }, error: null }
               : { data: null, error: { message: 'not found' } },

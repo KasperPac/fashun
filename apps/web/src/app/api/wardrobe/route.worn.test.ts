@@ -6,7 +6,7 @@ vi.mock('@/lib/supabase/server', async () => {
   return { createServerClient: async () => f.userClient() }
 })
 
-import { DELETE, GET } from './route'
+import { DELETE, GET, PATCH } from './route'
 
 const ITEM = '10000000-0000-4000-8000-000000000001'
 const OTHER = '10000000-0000-4000-8000-0000000000b1'
@@ -41,5 +41,17 @@ describe('/api/wardrobe worn photos', () => {
     expect(items).toHaveLength(1)
     expect(items[0].hasWornPhoto).toBe(true)
     expect(JSON.stringify(items)).not.toContain('worn-')
+  })
+
+  it('existing wardrobe photos are not reprocessed', async () => {
+    const before = fake.tables.wardrobe_items.find((i) => i.id === ITEM) as Record<string, unknown>
+    const { image_url, worn_photo_path } = before
+    const res = await PATCH(new Request('http://localhost/api/wardrobe', { method: 'PATCH', body: JSON.stringify({ id: ITEM, name: 'Linen tee' }) }))
+    expect(res.status).toBe(200)
+    const after = fake.tables.wardrobe_items.find((i) => i.id === ITEM) as Record<string, unknown>
+    expect(after.name).toBe('Linen tee')
+    expect(after.image_url).toBe(image_url)
+    expect(after.worn_photo_path).toBe(worn_photo_path)
+    expect(fake.buckets['try-on-photos'].has(`${A}/worn-${ITEM}-x.jpg`)).toBe(true)
   })
 })

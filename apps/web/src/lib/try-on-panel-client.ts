@@ -54,6 +54,8 @@ export async function loadPanel(api: PanelApi, outfitId: string, images: 1 | 2):
 export type RunResult =
   | { kind: 'picture'; picture: Picture }
   | { kind: 'paused'; resumeOn: string | null }
+  /** The person hasn't agreed to the current privacy note: show it, and ask again once they agree. Nothing was sent or charged. */
+  | { kind: 'consent' }
   | { kind: 'failed' }
   /** No answer from the server (connection dropped or the wait ended): the picture may still be made. Never "nothing was charged". */
   | { kind: 'lost' }
@@ -87,6 +89,7 @@ export async function makePicture(
     if (res.status === 409 && json?.code === 'CAP_REACHED') {
       return { kind: 'paused', resumeOn: typeof json.resume_on === 'string' ? json.resume_on : null }
     }
+    if (res.status === 400 && json?.code === 'CONSENT_REQUIRED') return { kind: 'consent' }
     return { kind: 'failed' }
   } catch {
     return recover(api, outfitId, opts.previousMadeAt)

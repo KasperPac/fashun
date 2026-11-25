@@ -7,6 +7,7 @@ vi.mock('@/lib/supabase/server', async () => {
 })
 
 import { GET, POST } from './route'
+import { PRIVACY_NOTE_VERSION } from '@/lib/try-on-photo-client'
 import { GET as SPEND } from '@/app/api/try-on/spend/route'
 
 const OUTFIT = '20000000-0000-4000-8000-000000000001'
@@ -49,7 +50,7 @@ function seed(opts: { pieces?: unknown[]; items?: Array<{ id: string; category: 
     { id: TOP, category: 'tops', image_url: `${A}/top.jpg` },
     { id: BOTTOM, category: 'bottoms', image_url: `${A}/bottom.jpg` },
   ]
-  fake.tables.users.push({ id: A, try_on_photo_url: opts.photo === false ? null : `${A}/photo-1.jpg`, try_on_consent_at: 'x' })
+  fake.tables.users.push({ id: A, try_on_photo_url: opts.photo === false ? null : `${A}/photo-1.jpg`, try_on_consent_at: 'x', try_on_consent_note: PRIVACY_NOTE_VERSION })
   fake.tables.outfits.push({
     id: OUTFIT, user_id: A, try_on_image_path: null, try_on_made_at: null,
     pieces: opts.pieces ?? [piece('White tee', TOP), piece('Blue jeans', BOTTOM)],
@@ -242,6 +243,20 @@ describe('POST /api/outfits/try-on: refusals that charge nothing', () => {
     expect(res.status).toBe(400)
     expect((await res.json()).code).toBe('NO_PERSON_PHOTO')
     expect(mockFetch).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['no agreement', { try_on_consent_at: null, try_on_consent_note: null }],
+    ['only the old FASHN agreement', { try_on_consent_at: '2026-01-01', try_on_consent_note: null }],
+    ['an older note version', { try_on_consent_at: '2026-01-01', try_on_consent_note: 'gemini-1' }],
+  ])('refuses with %s: no photo read, nothing reserved, no provider call', async (_name, consent) => {
+    seed()
+    Object.assign(fake.tables.users[0] as object, consent)
+    const res = await post()
+    expect(res.status).toBe(400)
+    expect((await res.json()).code).toBe('CONSENT_REQUIRED')
+    expect(mockFetch).not.toHaveBeenCalled()
+    expect(ledger()).toHaveLength(0)
   })
 
   it('never uses another person\'s wardrobe item: it is skipped, not drawn', async () => {
@@ -594,6 +609,17 @@ function installGemini() {
 const geminiParts = (i = 0) => geminiRuns[i].body.contents[0].parts
 const geminiPictures = (i = 0) => geminiParts(i).filter((p) => p.inline_data)
 
+describe('POST /api/outfits/try-on: FASHN setting', () => {
+  it("FASHN setting keeps today's two-step try-on", async () => {
+    seed()
+    const res = await post()
+    expect(res.status).toBe(200)
+    expect(fashnRuns.map((r) => r.inputs.category)).toEqual(['tops', 'bottoms'])
+    expect(charged()).toHaveLength(2)
+    expect(charged().every((r) => r.price_units === 750)).toBe(true)
+  })
+})
+
 describe('POST /api/outfits/try-on: FASHN and worn photos', () => {
   it('FASHN ignores worn photos', async () => {
     seed()
@@ -758,12 +784,18 @@ describe('POST /api/outfits/try-on: Gemini (one request per outfit)', () => {
     expect(charged()).toHaveLength(1)
   })
 
-  it('a piece without a worn photo or an unreadable one is sent as before', async () => {
+  it('pieces without a worn photo behave as before', async () => {
+    seed()
+    expect((await post()).status).toBe(200)
+    const plain = JSON.stringify(geminiRuns[0].body) // T1's request
+    fake.reset()
+    geminiRuns = []
     seed()
     Object.assign(fake.tables.wardrobe_items.find((i) => i.id === TOP) as object, { worn_photo_path: `${A}/worn-${TOP}-missing.jpg`, fit_notes: null })
     expect((await post()).status).toBe(200)
     expect(geminiPictures()).toHaveLength(3)
     expect(geminiParts()[0].text).not.toMatch(/Fit notes|shows the same person/)
+    expect(JSON.stringify(geminiRuns[0].body)).toBe(plain) // an unreadable worn photo leaves the whole request identical
   })
 
   it('only the person own worn photos are ever read', async () => {

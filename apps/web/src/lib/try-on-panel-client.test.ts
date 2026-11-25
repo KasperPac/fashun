@@ -37,6 +37,7 @@ describe('makePicture', () => {
     expect(await makePicture({ fetch: async () => json(PICTURE) }, 'o1', { regenerate: false, previousMadeAt: null })).toMatchObject({ kind: 'picture' })
     expect(await makePicture({ fetch: async () => json({ code: 'CAP_REACHED', resume_on: '2026-12-01' }, 409) }, 'o1', { regenerate: false, previousMadeAt: null }))
       .toEqual({ kind: 'paused', resumeOn: '2026-12-01' })
+    expect(await makePicture({ fetch: async () => json({ code: 'CONSENT_REQUIRED' }, 400) }, 'o1', { regenerate: false, previousMadeAt: null })).toEqual({ kind: 'consent' })
     expect(await makePicture({ fetch: async () => json({ code: 'TRY_ON_FAILED' }, 502) }, 'o1', { regenerate: false, previousMadeAt: null })).toEqual({ kind: 'failed' })
   })
 

@@ -220,6 +220,7 @@ export type Database = {
           month: string
           outfit_id: string | null
           picture_made: boolean
+          price_units: number | null
           status: string
           step: string
           user_id: string | null
@@ -232,6 +233,7 @@ export type Database = {
           month: string
           outfit_id?: string | null
           picture_made?: boolean
+          price_units?: number | null
           status?: string
           step: string
           user_id?: string | null
@@ -244,6 +246,7 @@ export type Database = {
           month?: string
           outfit_id?: string | null
           picture_made?: boolean
+          price_units?: number | null
           status?: string
           step?: string
           user_id?: string | null
