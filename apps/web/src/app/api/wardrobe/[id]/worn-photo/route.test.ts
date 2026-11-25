@@ -37,8 +37,8 @@ beforeEach(() => {
   mockCreate.mockResolvedValue({ content: [{ type: 'text', text: NOTES }] })
   fake.reset()
   fake.tables.users.push(
-    { id: A, try_on_consent_at: 'x', try_on_consent_note: 'gemini-1' },
-    { id: B, try_on_consent_at: 'x', try_on_consent_note: 'gemini-1' },
+    { id: A, try_on_consent_at: 'x', try_on_consent_note: 'gemini-2' },
+    { id: B, try_on_consent_at: 'x', try_on_consent_note: 'gemini-2' },
   )
   fake.tables.wardrobe_items.push(
     { id: ITEM_A, user_id: A, worn_photo_path: null },

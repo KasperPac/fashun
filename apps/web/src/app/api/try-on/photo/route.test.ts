@@ -19,7 +19,7 @@ function upload(opts: { consent?: boolean; type?: string; bytes?: Uint8Array } =
 
 beforeEach(() => {
   fake.reset()
-  fake.tables.users.push({ id: A, try_on_photo_url: null, try_on_consent_at: null }, { id: B, try_on_photo_url: `${B}/photo-b.jpg`, try_on_consent_at: 'x', try_on_consent_note: 'gemini-1' })
+  fake.tables.users.push({ id: A, try_on_photo_url: null, try_on_consent_at: null }, { id: B, try_on_photo_url: `${B}/photo-b.jpg`, try_on_consent_at: 'x', try_on_consent_note: 'gemini-2' })
   fake.buckets['try-on-photos'].set(`${B}/photo-b.jpg`, JPEG)
   vi.stubEnv('ENABLE_TRY_ON', 'true')
 })
@@ -193,7 +193,7 @@ describe('/api/try-on/photo', () => {
     expect((await res.json()).code).toBe('CONSENT_REQUIRED')
     expect(fake.buckets['try-on-photos'].size).toBe(1) // nothing stored
     expect((await PUT()).status).toBe(200)
-    expect(fake.tables.users[0]).toMatchObject({ try_on_consent_note: 'gemini-1' })
+    expect(fake.tables.users[0]).toMatchObject({ try_on_consent_note: 'gemini-2' })
     expect((await (await GET()).json()).consented).toBe(true)
     expect((await upload()).status).toBe(200)
   })

@@ -34,15 +34,17 @@ describe('Your try-on photo section', () => {
 
   it('first Add photo shows the privacy note before any upload', () => {
     const html = renderToStaticMarkup(<PrivacyStep busy={false} error={null} onAgree={() => {}} onNotNow={() => {}} />)
-    expect(html).toContain(PRIVACY_NOTE.replace(/'/g, '&#x27;'))
+    expect(html).toContain(PRIVACY_NOTE.replace(/'/g, '&#x27;').replace(/"/g, '&quot;'))
     expect(html).toContain('>I agree<')
     expect(html).toContain('>Not now<')
     expect(html).not.toContain('Take a photo')
     expect(html).not.toContain('Choose a photo')
     expect(html).not.toContain('type="file"')
-    expect(PRIVACY_NOTE.startsWith('To show clothes on you, Fashun sends this photo and your clothing photos to Google, whose Gemini AI makes your picture.')).toBe(true)
+    expect(PRIVACY_NOTE.startsWith('To make your try-on picture, Fashun sends your photo, your clothing photos and any "photo of me wearing it" to Google, whose Gemini AI makes it.')).toBe(true)
     expect(PRIVACY_NOTE.endsWith('Try-on is for people aged 18 and over.')).toBe(true)
     expect(PRIVACY_NOTE).not.toContain('FASHN')
+    expect(PRIVACY_NOTE).toContain('Anthropic')
+    expect(PRIVACY_NOTE.split(/\s+/).length).toBeLessThan(110)
   })
 
   it('Not now uploads nothing and records no agreement', () => {

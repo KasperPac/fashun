@@ -1,14 +1,14 @@
 import { formatUsd, toUnits } from '@/lib/try-on'
 
 /**
- * DRAFT wording for the Gemini provider (KAS-693), from the Researcher's facts (KAS-652). The
+ * DRAFT wording for the Gemini provider (KAS-693, KAS-697), from the Researcher's facts (KAS-652 Google, KAS-696 Anthropic). The
  * Product Owner signs off the final text; until then this is not final.
  */
 export const PRIVACY_NOTE =
-  'To show clothes on you, Fashun sends this photo and your clothing photos to Google, whose Gemini AI makes your picture. Google doesn\'t use them to train its AI. It keeps them for up to 55 days to check for misuse, and may process them in any country. Fashun keeps your photo and your try-on pictures privately in your account until you delete them. You can delete them at any time under Profile. Try-on is for people aged 18 and over.'
+  'To make your try-on picture, Fashun sends your photo, your clothing photos and any "photo of me wearing it" to Google, whose Gemini AI makes it. To write short fit notes, it also sends worn photos to Anthropic, whose Claude AI describes the clothes. Neither trains its AI on them. Google keeps them for 55 days and Anthropic for 30 days (longer if flagged for misuse), and either may process them in other countries. Fashun keeps your photos privately until you delete them: under Profile, or on the item page for a worn photo. Try-on is for people aged 18 and over.'
 
 /** Which privacy note a person agreed to. Agreeing to an earlier note (the FASHN one has no version) doesn't count: they agree again. */
-export const PRIVACY_NOTE_VERSION = 'gemini-1'
+export const PRIVACY_NOTE_VERSION = 'gemini-2'
 
 /** True when the person has agreed to the current privacy note. */
 export function hasAgreed(profile: { try_on_consent_at?: string | null; try_on_consent_note?: string | null } | null | undefined): boolean {
