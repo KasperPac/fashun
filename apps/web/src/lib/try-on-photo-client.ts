@@ -1,9 +1,6 @@
 import { formatUsd, toUnits } from '@/lib/try-on'
 
-/**
- * DRAFT wording for the Gemini provider (KAS-693, KAS-697), from the Researcher's facts (KAS-652 Google, KAS-696 Anthropic). The
- * Product Owner signs off the final text; until then this is not final.
- */
+/** The privacy note the Product Owner signed off (KAS-700), version {@link PRIVACY_NOTE_VERSION}. Locked by the test "try-on privacy note matches the signed-off wording". */
 export const PRIVACY_NOTE =
   'To make your try-on picture, Fashun sends your photo, your clothing photos and any "photo of me wearing it" to Google, whose Gemini AI makes it. To write short fit notes, it also sends worn photos to Anthropic, whose Claude AI describes the clothes. Neither trains its AI on them. Google keeps them for 55 days and Anthropic for 30 days (longer if flagged for misuse), and either may process them in other countries. Fashun keeps your photos privately until you delete them: under Profile, or on the item page for a worn photo. Try-on is for people aged 18 and over.'
 

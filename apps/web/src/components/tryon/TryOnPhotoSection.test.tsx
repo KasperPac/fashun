@@ -47,6 +47,16 @@ describe('Your try-on photo section', () => {
     expect(PRIVACY_NOTE.split(/\s+/).length).toBeLessThan(110)
   })
 
+  it('try-on privacy note matches the signed-off wording', () => {
+    const signedOff =
+      'To make your try-on picture, Fashun sends your photo, your clothing photos and any "photo of me wearing it" to Google, whose Gemini AI makes it. To write short fit notes, it also sends worn photos to Anthropic, whose Claude AI describes the clothes. Neither trains its AI on them. Google keeps them for 55 days and Anthropic for 30 days (longer if flagged for misuse), and either may process them in other countries. Fashun keeps your photos privately until you delete them: under Profile, or on the item page for a worn photo. Try-on is for people aged 18 and over.'
+    const html = renderToStaticMarkup(<PrivacyStep busy={false} error={null} onAgree={() => {}} onNotNow={() => {}} />)
+    expect(html).toContain(signedOff.replace(/'/g, '&#x27;').replace(/"/g, '&quot;'))
+    expect(PRIVACY_NOTE).toBe(signedOff)
+    expect(PRIVACY_NOTE).toContain('Gemini')
+    expect(PRIVACY_NOTE).toContain('photo of me wearing it')
+  })
+
   it('Not now uploads nothing and records no agreement', () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch')
     const onAgree = vi.fn()
