@@ -352,6 +352,7 @@ export type Database = {
           style_tags: string[] | null
           user_id: string
           worn_photo_path: string | null
+          worn_fit: Json | null
           fit_notes: string | null
         }
         Insert: {
@@ -371,6 +372,7 @@ export type Database = {
           style_tags?: string[] | null
           user_id: string
           worn_photo_path?: string | null
+          worn_fit?: Json | null
           fit_notes?: string | null
         }
         Update: {
@@ -390,6 +392,7 @@ export type Database = {
           style_tags?: string[] | null
           user_id?: string
           worn_photo_path?: string | null
+          worn_fit?: Json | null
           fit_notes?: string | null
         }
         Relationships: [
