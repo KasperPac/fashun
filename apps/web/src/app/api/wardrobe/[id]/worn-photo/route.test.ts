@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { fake, A, B } from '@/lib/__fixtures__/try-on-fake'
 
+const { mockCreate } = vi.hoisted(() => ({ mockCreate: vi.fn() }))
+vi.mock('@anthropic-ai/sdk', () => ({
+  default: class { messages = { create: mockCreate } },
+}))
+
 vi.mock('@/lib/supabase/server', async () => {
   const { fake: f } = await import('@/lib/__fixtures__/try-on-fake')
   return { createServerClient: async () => f.userClient(), createServiceClient: async () => f.serviceClient() }
@@ -25,7 +30,11 @@ const get = (id: string) => GET(new Request(url(id)), ctx(id))
 const del = (id: string) => DELETE(new Request(url(id), { method: 'DELETE' }), ctx(id))
 const item = (id: string) => fake.tables.wardrobe_items.find((i) => i.id === id)
 
+const NOTES = 'Relaxed fit, hip length. Sleeves end at the wrist. Worn untucked.'
+
 beforeEach(() => {
+  mockCreate.mockReset()
+  mockCreate.mockResolvedValue({ content: [{ type: 'text', text: NOTES }] })
   fake.reset()
   fake.tables.users.push(
     { id: A, try_on_consent_at: 'x', try_on_consent_note: 'gemini-1' },
@@ -135,6 +144,54 @@ describe('/api/wardrobe/[id]/worn-photo', () => {
     expect(BUCKET().has(before)).toBe(true)
     expect(spy).not.toHaveBeenCalled()
     spy.mockRestore()
+  })
+
+  it('saving a worn photo stores garment-only fit notes', async () => {
+    expect((await upload(ITEM_A)).status).toBe(200)
+    expect(item(ITEM_A)?.fit_notes).toBe(NOTES)
+    expect(mockCreate).toHaveBeenCalledTimes(1)
+    const sent = mockCreate.mock.calls[0][0].messages[0].content
+    expect(sent[0]).toMatchObject({ type: 'image', source: { type: 'base64' } })
+    const ask = sent[1].text as string
+    for (const word of ['how loose or slim', 'length', 'sleeves or hem', 'tucked or untucked']) expect(ask).toContain(word)
+    expect(ask).toMatch(/describe only the garment/i)
+    expect(ask).toMatch(/never mention or judge the person's body/i)
+    const body = await get(ITEM_A).then((r) => r.json())
+    expect(body.fit_notes).toBe(NOTES)
+  })
+
+  it('fit notes failure does not break the worn photo', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    mockCreate.mockRejectedValue(Object.assign(new Error('boom for jane@example.com'), { status: 529 }))
+    const res = await upload(ITEM_A)
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ ok: true })
+    expect(item(ITEM_A)?.worn_photo_path).toMatch(/worn-/)
+    expect(item(ITEM_A)?.fit_notes).toBeNull()
+    expect(spy).toHaveBeenCalledTimes(1)
+    expect(spy).toHaveBeenCalledWith('fit-notes: anthropic 529')
+    expect(JSON.stringify(spy.mock.calls)).not.toContain('jane@example.com')
+    spy.mockRestore()
+  })
+
+  it('replacing a worn photo remakes its fit notes', async () => {
+    await upload(ITEM_A)
+    expect(item(ITEM_A)?.fit_notes).toBe(NOTES)
+    mockCreate.mockResolvedValue({ content: [{ type: 'text', text: 'Slim fit. Cropped length.' }] })
+    await upload(ITEM_A)
+    expect(item(ITEM_A)?.fit_notes).toBe('Slim fit. Cropped length.')
+    // a failed reading on replace leaves no old notes behind
+    mockCreate.mockRejectedValue(new Error('x'))
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    await upload(ITEM_A)
+    expect(item(ITEM_A)?.fit_notes).toBeNull()
+  })
+
+  it('deleting the worn photo clears its fit notes', async () => {
+    await upload(ITEM_A)
+    expect((await del(ITEM_A)).status).toBe(200)
+    expect(item(ITEM_A)?.fit_notes).toBeNull()
+    expect((await get(ITEM_A).then((r) => r.json())).fit_notes).toBeNull()
   })
 
   it('is off when try-on is switched off', async () => {

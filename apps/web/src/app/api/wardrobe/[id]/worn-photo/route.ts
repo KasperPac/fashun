@@ -5,6 +5,7 @@ import { tryOnEnabled } from '@/lib/paid-extras'
 import { TRY_ON_BUCKET } from '@/lib/try-on-images'
 import { hasAgreed } from '@/lib/try-on-photo-client'
 import { readPhotoUpload } from '@/lib/try-on-upload'
+import { makeFitNotes } from '@/lib/fit-notes'
 
 const SIGNED_SECONDS = 3600
 
@@ -17,15 +18,15 @@ const failed = (what: string) => NextResponse.json({ error: what }, { status: 50
 type ServerClient = Awaited<ReturnType<typeof createServerClient>>
 
 /** The signed-in person's own item. Another person's item looks the same as a missing one. */
-async function ownItem(supabase: ServerClient, userId: string, id: string): Promise<{ worn_photo_path: string | null } | null> {
-  const { data } = await supabase.from('wardrobe_items').select('worn_photo_path').eq('id', id).eq('user_id', userId).maybeSingle()
+async function ownItem(supabase: ServerClient, userId: string, id: string): Promise<{ worn_photo_path: string | null; fit_notes: string | null } | null> {
+  const { data } = await supabase.from('wardrobe_items').select('worn_photo_path,fit_notes').eq('id', id).eq('user_id', userId).maybeSingle()
   return data ?? null
 }
 
 /** Only ever remove a worn photo from the person's own folder. */
 const isOwnWornPath = (path: string | null, userId: string): path is string => !!path && path.startsWith(`${userId}/worn-`)
 
-/** GET: the item's worn photo (a short-lived signed address) and whether the person has agreed. */
+/** GET: the item's worn photo (a short-lived signed address), its fit notes and whether the person has agreed. */
 export async function GET(_req: Request, { params }: Context) {
   if (!tryOnEnabled()) return off()
   const { id } = await params
@@ -37,9 +38,9 @@ export async function GET(_req: Request, { params }: Context) {
   if (!item) return notFound()
   const { data: profile } = await supabase.from('users').select('try_on_consent_at,try_on_consent_note').eq('id', user.id).maybeSingle()
   const consented = hasAgreed(profile)
-  if (!isOwnWornPath(item.worn_photo_path, user.id)) return NextResponse.json({ image_url: null, consented })
+  if (!isOwnWornPath(item.worn_photo_path, user.id)) return NextResponse.json({ image_url: null, fit_notes: null, consented })
   const { data, error } = await supabase.storage.from(TRY_ON_BUCKET).createSignedUrl(item.worn_photo_path, SIGNED_SECONDS)
-  return NextResponse.json({ image_url: error || !data ? null : data.signedUrl, consented })
+  return NextResponse.json({ image_url: error || !data ? null : data.signedUrl, fit_notes: item.fit_notes, consented })
 }
 
 /** POST multipart {file}: adds or replaces the item's worn photo. Needs the same agreement as the try-on photo. */
@@ -68,7 +69,10 @@ export async function POST(req: Request, { params }: Context) {
   const { error: uploadError } = await supabase.storage.from(TRY_ON_BUCKET).upload(path, upload.bytes, { contentType: 'image/jpeg', upsert: false })
   if (uploadError) return failed('Could not save the photo')
 
-  const { error: saveError } = await supabase.from('wardrobe_items').update({ worn_photo_path: path }).eq('id', id).eq('user_id', user.id)
+  // Fit notes come from this photo. A failure is silent: the photo is kept and the notes stay empty (the old ones never stay).
+  const fitNotes = await makeFitNotes(Buffer.from(upload.bytes).toString('base64'))
+
+  const { error: saveError } = await supabase.from('wardrobe_items').update({ worn_photo_path: path, fit_notes: fitNotes }).eq('id', id).eq('user_id', user.id)
   if (saveError) {
     await supabase.storage.from(TRY_ON_BUCKET).remove([path])
     return failed('Could not save the photo')
@@ -80,7 +84,7 @@ export async function POST(req: Request, { params }: Context) {
   return NextResponse.json({ ok: true })
 }
 
-/** DELETE: removes the item's worn photo file and clears the item. */
+/** DELETE: removes the item's worn photo file and clears the item, with its fit notes. */
 export async function DELETE(_req: Request, { params }: Context) {
   if (!tryOnEnabled()) return off()
   const { id } = await params
@@ -95,7 +99,7 @@ export async function DELETE(_req: Request, { params }: Context) {
     const { error } = await supabase.storage.from(TRY_ON_BUCKET).remove([item.worn_photo_path])
     if (error) return failed('Could not delete the photo. Try again.')
   }
-  const { error: clearError } = await supabase.from('wardrobe_items').update({ worn_photo_path: null }).eq('id', id).eq('user_id', user.id)
+  const { error: clearError } = await supabase.from('wardrobe_items').update({ worn_photo_path: null, fit_notes: null }).eq('id', id).eq('user_id', user.id)
   if (clearError) return failed('Could not delete the photo. Try again.')
   return NextResponse.json({ ok: true })
 }

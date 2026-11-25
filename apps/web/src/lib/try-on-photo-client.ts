@@ -34,7 +34,7 @@ export const PHOTO_MAX_EDGE = 1536
 export type PhotoState =
   | { kind: 'off' }
   | { kind: 'error' }
-  | { kind: 'ready'; photoUrl: string | null; consented: boolean }
+  | { kind: 'ready'; photoUrl: string | null; consented: boolean; fitNotes?: string | null }
 
 export interface PhotoApi {
   fetch: typeof fetch
@@ -50,8 +50,13 @@ export async function loadPhotoState(api: { fetch: (input: string) => Promise<Re
     if (!res.ok) return { kind: 'error' }
     const json: unknown = await res.json()
     if (typeof json !== 'object' || json === null) return { kind: 'error' }
-    const { image_url, consented } = json as { image_url?: unknown; consented?: unknown }
-    return { kind: 'ready', photoUrl: typeof image_url === 'string' ? image_url : null, consented: consented === true }
+    const { image_url, consented, fit_notes } = json as { image_url?: unknown; consented?: unknown; fit_notes?: unknown }
+    return {
+      kind: 'ready',
+      photoUrl: typeof image_url === 'string' ? image_url : null,
+      consented: consented === true,
+      ...(typeof fit_notes === 'string' && fit_notes.trim() ? { fitNotes: fit_notes } : {}),
+    }
   } catch {
     return { kind: 'error' }
   }

@@ -136,15 +136,15 @@ export async function POST(req: Request) {
   // Work out what to draw from the outfit's pieces and the user's own wardrobe.
   const stored = (Array.isArray(outfit.pieces) ? outfit.pieces : []) as StoredPiece[]
   const itemIds = [...new Set(stored.flatMap((p) => (typeof p.item_id === 'string' && p.item_id ? [p.item_id] : [])))]
-  const wardrobe = new Map<string, { category: string; image_url: string | null }>()
+  const wardrobe = new Map<string, { category: string; image_url: string | null; worn_photo_path: string | null; fit_notes: string | null }>()
   if (itemIds.length > 0) {
     const { data: items, error } = await supabase
       .from('wardrobe_items')
-      .select('id,category,image_url')
+      .select('id,category,image_url,worn_photo_path,fit_notes')
       .eq('user_id', user.id)
       .in('id', itemIds)
     if (error) return NextResponse.json({ error: 'Could not read the outfit' }, { status: 500 })
-    for (const i of items ?? []) wardrobe.set(i.id, { category: i.category, image_url: i.image_url })
+    for (const i of items ?? []) wardrobe.set(i.id, { category: i.category, image_url: i.image_url, worn_photo_path: i.worn_photo_path, fit_notes: i.fit_notes })
   }
   const pieces: OutfitPiece[] = stored.map((p) => {
     const itemId = typeof p.item_id === 'string' && p.item_id ? p.item_id : null
@@ -154,6 +154,9 @@ export async function POST(req: Request) {
       itemId,
       category: found?.category ?? null,
       imageRef: found?.image_url || null,
+      // Only the one-request provider uses worn photos and fit notes; FASHN gets today's request.
+      wornPhotoPath: provider === 'gemini' ? found?.worn_photo_path ?? null : null,
+      fitNotes: provider === 'gemini' ? found?.fit_notes ?? null : null,
     }
   })
 
@@ -167,7 +170,7 @@ export async function POST(req: Request) {
   if (!person) {
     return NextResponse.json({ error: 'Could not read your try-on photo', code: 'IMAGE_UNAVAILABLE' }, { status: 500 })
   }
-  const garments: TryOnImage[] = []
+  const garments: Array<TryOnImage & { worn: TryOnImage | null; fitNotes: string | null }> = []
   for (const g of plan.garments) {
     const img = await loadGarmentPhoto(supabase, g.imageRef)
     if (!img) {
@@ -176,7 +179,10 @@ export async function POST(req: Request) {
         { status: 500 },
       )
     }
-    garments.push(img)
+    // A worn photo that can't be read is left out: the piece is sent as if it had none.
+    const ownWorn = g.wornPhotoPath && g.wornPhotoPath.startsWith(`${user.id}/worn-`) ? g.wornPhotoPath : null
+    const worn = ownWorn ? await loadPersonPhoto(supabase, ownWorn) : null
+    garments.push({ ...img, worn, fitNotes: g.fitNotes?.trim() || null })
   }
 
   // The whole outfit must fit under this month's cap before the provider is called.

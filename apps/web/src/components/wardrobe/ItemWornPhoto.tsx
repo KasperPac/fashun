@@ -110,7 +110,7 @@ export function useWornPhoto(itemId: string | null, itemName: string, onChange?:
     if (!ok) { setDeleteError(DELETE_FAILED); return }
     setDeleteOpen(false)
     setError(null)
-    setLoaded((l) => (l && l.state.kind === 'ready' ? { ...l, state: { ...l.state, photoUrl: null } } : l))
+    setLoaded((l) => (l && l.state.kind === 'ready' ? { ...l, state: { ...l.state, photoUrl: null, fitNotes: null } } : l))
     onChange?.(false)
     setToast('Photo deleted.')
     setFocusTarget('add')
@@ -166,6 +166,9 @@ export function ItemWornPhotoSection({ ctl, readOnly }: { ctl: WornPhotoControl;
                 <TryOnFrame variant="photo" src={photoUrl} alt={`You wearing ${itemName}`} />
                 <div className="flex flex-col items-start gap-3">
                   <p className="text-[15px] font-semibold"><span aria-hidden="true">🔒 </span>Only you can see this photo.</p>
+                  {state.kind === 'ready' && state.fitNotes && (
+                    <p className="text-[15px] leading-[1.4]"><span className="font-semibold">How it fits: </span>{state.fitNotes}</p>
+                  )}
                   {!readOnly && (
                     <div ref={replaceRef} className="flex flex-wrap gap-3">
                       <Button variant="secondary" compact fullWidth={false} onClick={() => ctl.startAdd(true)}>Replace</Button>

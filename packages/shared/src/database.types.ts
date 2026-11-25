@@ -349,6 +349,7 @@ export type Database = {
           style_tags: string[] | null
           user_id: string
           worn_photo_path: string | null
+          fit_notes: string | null
         }
         Insert: {
           affiliate_url?: string | null
@@ -367,6 +368,7 @@ export type Database = {
           style_tags?: string[] | null
           user_id: string
           worn_photo_path?: string | null
+          fit_notes?: string | null
         }
         Update: {
           affiliate_url?: string | null
@@ -385,6 +387,7 @@ export type Database = {
           style_tags?: string[] | null
           user_id?: string
           worn_photo_path?: string | null
+          fit_notes?: string | null
         }
         Relationships: [
           {

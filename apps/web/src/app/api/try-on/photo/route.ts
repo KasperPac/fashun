@@ -123,7 +123,7 @@ export async function DELETE() {
     .not('try_on_image_path', 'is', null)
   const { error: wornError } = await supabase
     .from('wardrobe_items')
-    .update({ worn_photo_path: null })
+    .update({ worn_photo_path: null, fit_notes: null })
     .eq('user_id', user.id)
     .not('worn_photo_path', 'is', null)
   const { error: userError } = await supabase

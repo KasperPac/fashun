@@ -594,6 +594,22 @@ function installGemini() {
 const geminiParts = (i = 0) => geminiRuns[i].body.contents[0].parts
 const geminiPictures = (i = 0) => geminiParts(i).filter((p) => p.inline_data)
 
+describe('POST /api/outfits/try-on: FASHN and worn photos', () => {
+  it('FASHN ignores worn photos', async () => {
+    seed()
+    const WORN = `${A}/worn-${TOP}-x.jpg`
+    Object.assign(fake.tables.wardrobe_items.find((i) => i.id === TOP) as object, { worn_photo_path: WORN, fit_notes: 'Boxy fit.' })
+    fake.buckets['try-on-photos'].set(WORN, JPEG)
+    const res = await post()
+    expect(res.status).toBe(200)
+    expect(fashnRuns).toHaveLength(2)
+    const sent = JSON.stringify(fashnRuns)
+    expect(sent).not.toContain('Boxy')
+    expect(Object.keys(fashnRuns[0].inputs).sort()).toEqual(Object.keys(fashnRuns[1].inputs).sort())
+    expect(charged()).toHaveLength(2)
+  })
+})
+
 describe('POST /api/outfits/try-on: Gemini (one request per outfit)', () => {
   beforeEach(() => {
     geminiRuns = []
@@ -717,6 +733,46 @@ describe('POST /api/outfits/try-on: Gemini (one request per outfit)', () => {
     seed()
     await post()
     expect(fashnRuns).toHaveLength(2)
+  })
+
+  it('worn photos and fit notes go with the try-on request', async () => {
+    seed()
+    const WORN = `${A}/worn-${TOP}-x.jpg`
+    const WORN_BYTES = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 9, 9, 9])
+    Object.assign(fake.tables.wardrobe_items.find((i) => i.id === TOP) as object, { worn_photo_path: WORN, fit_notes: 'Boxy, hip length. Worn untucked.' })
+    fake.buckets['try-on-photos'].set(WORN, WORN_BYTES)
+    const res = await post()
+    expect(res.status).toBe(200)
+    expect(geminiRuns).toHaveLength(1)
+    // person, top, bottoms, then the top's worn photo
+    expect(geminiPictures()).toHaveLength(4)
+    expect(geminiPictures()[3].inline_data?.data).toBe(b64(WORN_BYTES))
+    const text = geminiParts()[0].text as string
+    expect(text).toContain('picture 4 shows the same person wearing the garment in picture 2')
+    expect(text).toContain('Fit notes for the garment in picture 2')
+    expect(text).toContain('Boxy, hip length. Worn untucked.')
+    expect(text).not.toContain('picture 3 shows')
+    expect(JSON.stringify(geminiRuns[0].body)).not.toMatch(/https?:/)
+    // still one picture, charged as before
+    expect((await res.json()).charged_pictures).toBe(1)
+    expect(charged()).toHaveLength(1)
+  })
+
+  it('a piece without a worn photo or an unreadable one is sent as before', async () => {
+    seed()
+    Object.assign(fake.tables.wardrobe_items.find((i) => i.id === TOP) as object, { worn_photo_path: `${A}/worn-${TOP}-missing.jpg`, fit_notes: null })
+    expect((await post()).status).toBe(200)
+    expect(geminiPictures()).toHaveLength(3)
+    expect(geminiParts()[0].text).not.toMatch(/Fit notes|shows the same person/)
+  })
+
+  it('only the person own worn photos are ever read', async () => {
+    seed()
+    const OTHER = `${B}/worn-${TOP}-x.jpg`
+    Object.assign(fake.tables.wardrobe_items.find((i) => i.id === TOP) as object, { worn_photo_path: OTHER })
+    fake.buckets['try-on-photos'].set(OTHER, JPEG)
+    expect((await post()).status).toBe(200)
+    expect(geminiPictures()).toHaveLength(3)
   })
 
   it('without a Gemini key it is not set up and calls nothing', async () => {
