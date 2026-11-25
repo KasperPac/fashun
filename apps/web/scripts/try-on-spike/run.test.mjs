@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, writeFile, readFile, readdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { execFileSync } from 'node:child_process'
-import { fakeProvider, geminiProvider, loadInputs, openaiProvider, percentile, runSpike } from './lib.mjs'
+import { DEFAULT_MODELS, fakeProvider, geminiProvider, loadInputs, openaiProvider, percentile, runSpike } from './lib.mjs'
 
 async function photoFolder() {
   const dir = await mkdtemp(path.join(tmpdir(), 'spike-in-'))
@@ -68,6 +68,12 @@ describe('dry run', () => {
   })
 })
 
+describe('defaults', () => {
+  it('uses the researched model ids', () => {
+    expect(DEFAULT_MODELS).toEqual({ openai: 'gpt-image-2.6-sunburst', gemini: 'gemini-nano-banana-2.1' })
+  })
+})
+
 describe('provider requests', () => {
   const person = { name: 'person.jpg', mime: 'image/jpeg', bytes: Buffer.from('P') }
   const garments = [{ name: 'top.jpg', mime: 'image/jpeg', bytes: Buffer.from('T') }, { name: 'b.png', mime: 'image/png', bytes: Buffer.from('B') }]
@@ -93,6 +99,22 @@ describe('provider requests', () => {
     const body = JSON.parse(seen.init.body)
     expect(body.contents[0].parts.filter((p) => p.inline_data)).toHaveLength(3)
     expect(r.bytes.toString()).toBe('out')
+  })
+
+  it('uses a set base address for both providers, and the public one by default', async () => {
+    const urls = []
+    const ok = (body) => async (url) => { urls.push(url); return { ok: true, json: async () => body } }
+    const gem = { candidates: [{ content: { parts: [{ inlineData: { mimeType: 'image/png', data: png } }] } }] }
+    await openaiProvider({ apiKey: 'k', model: 'm', baseUrl: 'https://gw.test/api/studio/paid/R/openai/', fetchImpl: ok({ data: [{ b64_json: png }] }) }).generate({ person, garments, prompt: 'p' })
+    await geminiProvider({ apiKey: 'k', model: 'm', baseUrl: 'https://gw.test/api/studio/paid/R/gemini', fetchImpl: ok(gem) }).generate({ person, garments, prompt: 'p' })
+    await openaiProvider({ apiKey: 'k', model: 'm', fetchImpl: ok({ data: [{ b64_json: png }] }) }).generate({ person, garments, prompt: 'p' })
+    await geminiProvider({ apiKey: 'k', model: 'm', fetchImpl: ok(gem) }).generate({ person, garments, prompt: 'p' })
+    expect(urls).toEqual([
+      'https://gw.test/api/studio/paid/R/openai/v1/images/edits',
+      'https://gw.test/api/studio/paid/R/gemini/v1beta/models/m:generateContent',
+      'https://api.openai.com/v1/images/edits',
+      'https://generativelanguage.googleapis.com/v1beta/models/m:generateContent',
+    ])
   })
 
   it('errors carry the status only, not the provider body', async () => {

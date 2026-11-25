@@ -12,8 +12,20 @@ node apps/web/scripts/try-on-spike/run.mjs <photo-folder> --out try-on-spike-out
 
 Photo folder: `person.jpg`, `outfit-1/top.jpg`, `outfit-1/bottom.jpg`, ... `outfit-5/` (any number of garment photos per outfit, `.jpg`, `.png` or `.webp`).
 Add `--dry-run` to check the flow without keys or network. Override models with `--openai-model` / `--gemini-model`
-(or `OPENAI_IMAGE_MODEL` / `GEMINI_IMAGE_MODEL`); the defaults are `gpt-image-1` and `gemini-2.5-flash-image`.
-Check each provider's docs for the current model first.
+(or `OPENAI_IMAGE_MODEL` / `GEMINI_IMAGE_MODEL`); the defaults are `gpt-image-2.6-sunburst` and `gemini-nano-banana-2.1`.
+
+### Through the studio gateway (paid run)
+
+```
+U=${PAPERCLIP_API_URL%/}; U=${U%/api}
+export OPENAI_BASE_URL="$U/api/studio/paid/<run id>/openai"
+export GEMINI_BASE_URL="$U/api/studio/paid/<run id>/gemini"
+export OPENAI_API_KEY="$PAPERCLIP_API_KEY" GEMINI_API_KEY="$PAPERCLIP_API_KEY"
+NODE_USE_ENV_PROXY=1 node apps/web/scripts/try-on-spike/run.mjs <photo-folder> --out try-on-spike-out --runs 1
+```
+
+Unset base addresses default to the providers' public ones. The gateway allows one picture per call, so the harness
+sends one request per picture. Never write a real key or run id into the repo.
 
 Output: every returned picture, `outfit-N-sheet.html` (person | garments | OpenAI | Gemini, open in a browser), and `results.json` (models, time per call, run count, sizes, p50/p95).
 

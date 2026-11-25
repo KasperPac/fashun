@@ -8,10 +8,18 @@ export const PROMPT =
   '(buttons, belt loops, pockets, zips) exactly as photographed. Dress them naturally: tuck or untuck each garment as it suits. ' +
   'Leave the feet bare unless shoes are shown in the other pictures. Return one photo-realistic picture of the person wearing the outfit.'
 
-// Defaults are the current models as last known; check each provider's docs and override with
-// --openai-model / --gemini-model (or OPENAI_IMAGE_MODEL / GEMINI_IMAGE_MODEL). The chosen names
-// are written to results.json.
-export const DEFAULT_MODELS = { openai: 'gpt-image-1', gemini: 'gemini-2.5-flash-image' }
+// Default models (KAS-652 research); override with --openai-model / --gemini-model (or
+// OPENAI_IMAGE_MODEL / GEMINI_IMAGE_MODEL). The chosen names are written to results.json.
+export const DEFAULT_MODELS = { openai: 'gpt-image-2.6-sunburst', gemini: 'gemini-nano-banana-2.1' }
+
+// Base addresses: today's public ones by default. Set OPENAI_BASE_URL / GEMINI_BASE_URL (or the
+// --openai-base-url / --gemini-base-url flags) to go through the studio gateway. The key is only
+// ever sent in a header, never in the address.
+export const DEFAULT_BASE_URLS = {
+  openai: 'https://api.openai.com',
+  gemini: 'https://generativelanguage.googleapis.com',
+}
+const trimBase = (u) => u.replace(/\/+$/, '')
 
 const MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' }
 const EXT = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp' }
@@ -55,7 +63,7 @@ function httpError(provider, status) {
   return new Error(`${provider} request failed (HTTP ${status})`)
 }
 
-export function openaiProvider({ apiKey, model, fetchImpl = fetch }) {
+export function openaiProvider({ apiKey, model, baseUrl = DEFAULT_BASE_URLS.openai, fetchImpl = fetch }) {
   return {
     id: 'openai',
     model,
@@ -69,7 +77,7 @@ export function openaiProvider({ apiKey, model, fetchImpl = fetch }) {
       for (const img of [person, ...garments]) {
         form.append('image[]', new Blob([img.bytes], { type: img.mime }), img.name)
       }
-      const res = await fetchImpl('https://api.openai.com/v1/images/edits', {
+      const res = await fetchImpl(`${trimBase(baseUrl)}/v1/images/edits`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${apiKey}` },
         body: form,
@@ -83,7 +91,7 @@ export function openaiProvider({ apiKey, model, fetchImpl = fetch }) {
   }
 }
 
-export function geminiProvider({ apiKey, model, fetchImpl = fetch }) {
+export function geminiProvider({ apiKey, model, baseUrl = DEFAULT_BASE_URLS.gemini, fetchImpl = fetch }) {
   return {
     id: 'gemini',
     model,
@@ -93,7 +101,7 @@ export function geminiProvider({ apiKey, model, fetchImpl = fetch }) {
         parts.push({ inline_data: { mime_type: img.mime, data: img.bytes.toString('base64') } })
       }
       const res = await fetchImpl(
-        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+        `${trimBase(baseUrl)}/v1beta/models/${encodeURIComponent(model)}:generateContent`,
         {
           method: 'POST',
           headers: { 'x-goog-api-key': apiKey, 'content-type': 'application/json' },
