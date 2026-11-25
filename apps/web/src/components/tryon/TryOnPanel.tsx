@@ -160,10 +160,12 @@ export default function TryOnPanel({
   onAvailable?: (available: boolean) => void
   api?: PanelApi
 }) {
-  const plan = useMemo(() => planPanel(pieces), [pieces])
-  const images = plan.kind === 'ready' ? plan.images : 1
   const [attempt, setAttempt] = useState(0)
   const [state, setState] = useState<PanelState | null>(null)
+  // The first load asks as FASHN would (only FASHN reads the count); the answer names the provider the plan then follows.
+  const provider = state?.kind === 'ready' ? state.provider : 'fashn'
+  const plan = useMemo(() => planPanel(pieces, provider), [pieces, provider])
+  const images = useMemo(() => { const p = planPanel(pieces, 'fashn'); return p.kind === 'ready' ? p.images : 1 }, [pieces])
   const [picture, setPicture] = useState<Picture | null>(null)
   const [phase, setPhase] = useState<Phase>('idle')
   const [paused, setPaused] = useState<{ resumeOn: string | null } | null>(null)

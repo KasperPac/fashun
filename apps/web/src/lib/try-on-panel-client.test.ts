@@ -27,6 +27,12 @@ describe('loadPanel', () => {
     expect(state).toMatchObject({ kind: 'ready', hasPhoto: true, paused: true, resumeOn: '2026-12-01', picture: { url: 'https://signed/new.jpg' } })
   })
 
+  it('reads which provider makes the picture, defaulting to FASHN', async () => {
+    const make = (extra: object) => ({ fetch: async (url: string) => url.startsWith('/api/try-on/photo') ? json({ image_url: 'https://p', consented: true }) : json({ ...PICTURE, ...extra }) })
+    expect(await loadPanel(make({ provider: 'gemini' }), 'o1', 1)).toMatchObject({ provider: 'gemini' })
+    expect(await loadPanel(make({}), 'o1', 1)).toMatchObject({ provider: 'fashn' })
+  })
+
   it('shows an error state when it cannot load', async () => {
     expect(await loadPanel({ fetch: async () => { throw new Error('offline') } }, 'o1', 1)).toEqual({ kind: 'error' })
   })

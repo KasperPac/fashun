@@ -1,3 +1,4 @@
+import type { PanelProvider } from '@/lib/try-on-panel'
 import { loadPhotoState } from '@/lib/try-on-photo-client'
 
 /** The client stops waiting here (the server's own limit is also 90 seconds). */
@@ -17,7 +18,7 @@ export interface Picture {
 export type PanelState =
   | { kind: 'off' }
   | { kind: 'error' }
-  | { kind: 'ready'; hasPhoto: boolean; photoUrl: string | null; picture: Picture | null; paused: boolean; resumeOn: string | null }
+  | { kind: 'ready'; hasPhoto: boolean; photoUrl: string | null; picture: Picture | null; paused: boolean; resumeOn: string | null; provider: PanelProvider }
 
 export interface PanelApi {
   fetch: (input: string, init?: RequestInit) => Promise<Response>
@@ -32,12 +33,12 @@ export async function loadPanel(api: PanelApi, outfitId: string, images: 1 | 2):
   const photo = await loadPhotoState(api)
   if (photo.kind === 'off') return { kind: 'off' }
   if (photo.kind === 'error') return { kind: 'error' }
-  if (photo.photoUrl === null) return { kind: 'ready', hasPhoto: false, photoUrl: null, picture: null, paused: false, resumeOn: null }
+  if (photo.photoUrl === null) return { kind: 'ready', hasPhoto: false, photoUrl: null, picture: null, paused: false, resumeOn: null, provider: 'fashn' }
   try {
     const res = await api.fetch(`/api/outfits/try-on?outfit_id=${encodeURIComponent(outfitId)}&images=${images}`)
     if (res.status === 404) return { kind: 'off' }
     if (!res.ok) return { kind: 'error' }
-    const json = (await res.json()) as { image_url?: unknown; made_at?: unknown; paused?: unknown; resume_on?: unknown }
+    const json = (await res.json()) as { image_url?: unknown; made_at?: unknown; paused?: unknown; resume_on?: unknown; provider?: unknown }
     return {
       kind: 'ready',
       hasPhoto: true,
@@ -45,6 +46,7 @@ export async function loadPanel(api: PanelApi, outfitId: string, images: 1 | 2):
       picture: parsePicture(json),
       paused: json.paused === true,
       resumeOn: typeof json.resume_on === 'string' ? json.resume_on : null,
+      provider: json.provider === 'gemini' ? 'gemini' : 'fashn',
     }
   } catch {
     return { kind: 'error' }

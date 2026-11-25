@@ -91,6 +91,7 @@ export async function GET(req: Request) {
     label: TRY_ON_LABEL,
     paused,
     resume_on: paused ? firstOfNextMonth(month) : null,
+    provider,
   })
 }
 
