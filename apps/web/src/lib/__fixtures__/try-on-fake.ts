@@ -80,6 +80,7 @@ class Fake {
             const off = opts?.offset ?? 0
             return { data: names.slice(off, off + (opts?.limit ?? 100)), error: null }
           },
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars -- same signature as the real client
           createSignedUrl: async (path: string, _expiresIn?: number) =>
             b.has(path) && mine(path)
               ? { data: { signedUrl: `https://signed.example/${name}/${path}` }, error: null }
