@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
 import { z } from 'zod'
 import { OCCASIONS, type WardrobeItem } from '@fashun/shared'
+import { TRY_ON_BUCKET } from '@/lib/try-on-images'
 import { signWardrobeImage, toObjectPath, isExternalUrl } from '@/lib/wardrobe-image'
 
 const CATEGORIES = ['tops', 'bottoms', 'shoes', 'outerwear', 'bags', 'accessories'] as const
@@ -46,6 +47,7 @@ export async function GET(req: Request) {
     colours: string[] | null; style_tags: string[] | null; occasion_tags: string[] | null
     image_url: string | null; store_url: string | null; affiliate_url: string | null
     price: number | null; retailer: string | null; last_worn_at: string | null; created_at: string
+    worn_photo_path?: string | null
   }
   const rows = (data ?? []) as Row[]
 
@@ -64,6 +66,7 @@ export async function GET(req: Request) {
     price: row.price ?? undefined,
     retailer: row.retailer ?? undefined,
     lastWornAt: row.last_worn_at ?? undefined,
+    hasWornPhoto: !!row.worn_photo_path,
     createdAt: row.created_at,
   })))
 
@@ -78,6 +81,14 @@ export async function DELETE(req: Request) {
   const body = await req.json().catch(() => ({}))
   const { id } = body
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+
+  // The item's photo of the person wearing it goes with it.
+  const { data: own } = await supabase.from('wardrobe_items').select('worn_photo_path').eq('id', id).eq('user_id', user.id).maybeSingle()
+  const wornPath = own?.worn_photo_path
+  if (wornPath && wornPath.startsWith(`${user.id}/worn-`)) {
+    const { error: removeError } = await supabase.storage.from(TRY_ON_BUCKET).remove([wornPath])
+    if (removeError) return NextResponse.json({ error: 'Could not delete the item. Try again.' }, { status: 500 })
+  }
 
   const { data, error } = await supabase
     .from('wardrobe_items')

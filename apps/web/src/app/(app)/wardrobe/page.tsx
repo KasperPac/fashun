@@ -242,6 +242,7 @@ function WardrobeContent() {
         onClose={() => setOpenId(null)}
         onEdit={() => { setEditError(null); setEditing(true) }}
         onDelete={() => { setDeleteError(null); setConfirmDelete(true) }}
+        onWornPhotoChange={(id, has) => setItems((all) => all.map((i) => (i.id === id ? { ...i, hasWornPhoto: has } : i)))}
       />
       <BottomSheet open={editing && open !== null} title="Edit item" onClose={() => setEditing(false)}>
         {open && (
@@ -259,7 +260,7 @@ function WardrobeContent() {
       <ConfirmDialog
         open={confirmDelete && open !== null}
         title={`Delete ${open?.name ?? 'this item'}?`}
-        body="It will be removed from your wardrobe. Saved outfits that use it will show it as removed. You can't undo this."
+        body={`It will be removed from your wardrobe${open?.hasWornPhoto ? ', with the photo of you wearing it' : ''}. Saved outfits that use it will show it as removed. You can't undo this.`}
         confirmLabel="Delete"
         busy={deleting}
         error={deleteError}

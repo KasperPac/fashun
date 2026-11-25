@@ -45,6 +45,7 @@ class Fake {
     chain.select = () => chain
     chain.update = (p: Row) => { op = 'update'; patch = p; return chain }
     chain.delete = () => { op = 'delete'; return chain }
+    chain.order = () => chain
     chain.eq = (c: string, v: unknown) => filter((r) => r[c] === v)
     chain.in = (c: string, v: unknown[]) => filter((r) => v.includes(r[c]))
     chain.not = (c: string, _op: string, v: unknown) => filter((r) => r[c] !== v)

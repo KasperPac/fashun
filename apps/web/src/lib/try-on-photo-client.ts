@@ -15,10 +15,17 @@ export function hasAgreed(profile: { try_on_consent_at?: string | null; try_on_c
   return !!profile?.try_on_consent_at && profile.try_on_consent_note === PRIVACY_NOTE_VERSION
 }
 
+/** Where the person's own try-on photo lives; an item's worn photo is at {@link wornPhotoUrl}. */
+export const TRY_ON_PHOTO_URL = '/api/try-on/photo'
+
+/** The address of one wardrobe item's "photo of me wearing it". */
+export const wornPhotoUrl = (itemId: string) => `/api/wardrobe/${encodeURIComponent(itemId)}/worn-photo`
+
 export const UPLOAD_FAILED = "Couldn't add your photo. Check your connection and try again."
 export const BAD_PHOTO = "That file isn't a photo we can use. Choose a JPG or PNG photo."
 export const DELETE_FAILED = "Couldn't delete your photo. Try again."
 export const LOAD_FAILED = "Couldn't load your try-on photo."
+export const WORN_LOAD_FAILED = "Couldn't load your photo."
 export const CONSENT_FAILED = "Couldn't save that. Check your connection and try again."
 
 /** Long edge of the photo sent to the server, in px. */
@@ -36,9 +43,9 @@ export interface PhotoApi {
 }
 
 /** Reads the person's photo state. "off" when try-on is switched off (the section is then not shown). */
-export async function loadPhotoState(api: { fetch: (input: string) => Promise<Response> }): Promise<PhotoState> {
+export async function loadPhotoState(api: { fetch: (input: string) => Promise<Response> }, url = TRY_ON_PHOTO_URL): Promise<PhotoState> {
   try {
-    const res = await api.fetch('/api/try-on/photo')
+    const res = await api.fetch(url)
     if (res.status === 404) return { kind: 'off' }
     if (!res.ok) return { kind: 'error' }
     const json: unknown = await res.json()
@@ -76,7 +83,7 @@ export async function recordConsent(api: Pick<PhotoApi, 'fetch'>): Promise<boole
 export type UploadResult = { ok: true } | { ok: false; message: string }
 
 /** Shrinks the photo on the device, then adds or replaces it. */
-export async function uploadPhoto(file: File, api: PhotoApi): Promise<UploadResult> {
+export async function uploadPhoto(file: File, api: PhotoApi, url = TRY_ON_PHOTO_URL): Promise<UploadResult> {
   let blob: Blob
   try {
     blob = await api.resize(file)
@@ -86,7 +93,7 @@ export async function uploadPhoto(file: File, api: PhotoApi): Promise<UploadResu
   const form = new FormData()
   form.set('file', new File([blob], 'try-on.jpg', { type: 'image/jpeg' }))
   try {
-    const res = await api.fetch('/api/try-on/photo', { method: 'POST', body: form })
+    const res = await api.fetch(url, { method: 'POST', body: form })
     if (res.ok) return { ok: true }
     const json = (await res.json().catch(() => null)) as { code?: unknown } | null
     return { ok: false, message: json?.code === 'BAD_PHOTO' ? BAD_PHOTO : UPLOAD_FAILED }
@@ -95,10 +102,10 @@ export async function uploadPhoto(file: File, api: PhotoApi): Promise<UploadResu
   }
 }
 
-/** Deletes the photo and every try-on picture made from it. */
-export async function deletePhoto(api: Pick<PhotoApi, 'fetch'>): Promise<boolean> {
+/** Deletes the photo and every try-on picture made from it (or, with an item's worn-photo address, that one photo). */
+export async function deletePhoto(api: Pick<PhotoApi, 'fetch'>, url = TRY_ON_PHOTO_URL): Promise<boolean> {
   try {
-    return (await api.fetch('/api/try-on/photo', { method: 'DELETE' })).ok
+    return (await api.fetch(url, { method: 'DELETE' })).ok
   } catch {
     return false
   }

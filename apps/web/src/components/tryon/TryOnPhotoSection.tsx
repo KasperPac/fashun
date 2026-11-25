@@ -33,11 +33,15 @@ export function PrivacyStep({ busy, error, onAgree, onNotNow }: { busy: boolean;
 }
 
 /** Step 2: take or choose. The file inputs are only reachable from here, so nothing opens before I agree. */
-export function PickStep({ replacing, onTake, onChoose }: { replacing: boolean; onTake: () => void; onChoose: () => void }) {
+export function PickStep({
+  replacing, onTake, onChoose,
+  hint = 'Full-length, plain background, facing the camera.',
+  replacingNote = 'Your saved try-on pictures stay. Tap See it on me again to use the new photo.',
+}: { replacing: boolean; onTake: () => void; onChoose: () => void; hint?: string; replacingNote?: string }) {
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-[15px] font-semibold">Full-length, plain background, facing the camera.</p>
-      {replacing && <p className="text-[15px] text-ink-2">Your saved try-on pictures stay. Tap See it on me again to use the new photo.</p>}
+      <p className="text-[15px] font-semibold">{hint}</p>
+      {replacing && <p className="text-[15px] text-ink-2">{replacingNote}</p>}
       <Button onClick={onTake}>Take a photo</Button>
       <Button variant="secondary" onClick={onChoose}>Choose a photo</Button>
     </div>
@@ -139,7 +143,7 @@ export default function TryOnPhotoSection({ initial }: { initial: PhotoState }) 
     setDeleteOpen(false)
     setError(null)
     setState({ kind: 'ready', photoUrl: null, consented: false })
-    setToast('Photo and try-on pictures deleted.')
+    setToast('Your try-on photo, try-on pictures and photos of you wearing your clothes are deleted.')
   }
 
   return (
@@ -199,7 +203,7 @@ export default function TryOnPhotoSection({ initial }: { initial: PhotoState }) 
       <ConfirmDialog
         open={deleteOpen}
         title="Delete your try-on photo?"
-        body="This also deletes every try-on picture made from it. Your outfits stay saved."
+        body="This also deletes every try-on picture made from it, and every photo of you wearing your clothes. Your outfits and clothes stay saved."
         confirmLabel="Delete"
         busy={deleting}
         error={deleteError}
