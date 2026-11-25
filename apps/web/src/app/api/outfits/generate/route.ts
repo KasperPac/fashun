@@ -8,6 +8,8 @@ import {
   OUTFIT_COUNT, describeFewer, describeShortfall, eligibleItems, missingCategories, possibleOutfitCount, presentCategories, seasonLabel, validateSuggestions,
   type BuiltOutfit, type OwnedItem,
 } from '@/lib/outfit-builder'
+import { isOffPalettePiece } from '@/lib/palette-rule'
+import { colourName } from '@/lib/colour-names'
 import { signWardrobeImage } from '@/lib/wardrobe-image'
 import { logClaudeError, logClaudeFailure } from '@/lib/claude-log'
 
@@ -44,10 +46,11 @@ function buildOccasionPrompt(
   const label = seasonLabel(season)
   const system = `You are a personal colour and style consultant. You only use clothes the user already owns, and you only refer to them by the ids you are given. Return only valid JSON, no explanation, no markdown.`
   const lines = items
-    .map(i => `- [id:${i.id}] ${i.name} | ${i.category} | ${(i.colours ?? []).join(', ') || 'unknown colour'} | ${(i.occasion_tags ?? []).join(', ') || 'untagged'}`)
+    .map(i => `- [id:${i.id}] ${i.name} | ${i.category} | ${(i.colours ?? []).filter((c) => /^#[0-9a-fA-F]{6}$/.test(c)).map(colourName).join(', ') || 'unknown colour'} | ${(i.occasion_tags ?? []).join(', ') || 'untagged'}${isOffPalettePiece(i.colours ?? [], season, avoidColours) ? ' | OFF-PALETTE' : ''}`)
     .join('\n')
-  const user = `The user's colour season is ${label}. ${label} suits: ${ctx.suits}. Avoid: ${ctx.avoid}.
+  const user = `The user's colour season is ${label}. ${label} suits: ${ctx.suits}. Usually avoided: ${ctx.avoid}.
 Their best colours: ${bestColours.join(', ') || 'none saved'}. Colours to avoid: ${avoidColours.join(', ') || 'none saved'}.
+Their palette is a strong preference, not a ban. Pieces marked OFF-PALETTE in the wardrobe list are outside it.
 
 Build ${count} different complete outfit${count === 1 ? '' : 's'} for the occasion: ${OCCASION_LABELS[occasion]}.
 
@@ -59,6 +62,8 @@ Rules:
 2. Use only ids from the list above. Never invent an item.
 3. Each outfit must suit the occasion. Never use an item tagged only casual for a formal outfit.
 4. The reason is ONE sentence of at most 140 characters, using the colour names of the pieces (never hex codes). Use this pattern: "{Colour A} and {colour B} are both in your ${label} palette, and {short styling reason}." If only one palette colour is used: "{Colour A} is one of your best ${label} colours, and {short styling reason}."
+5. Prefer pieces that are not marked OFF-PALETTE. You may use at most one OFF-PALETTE piece in an outfit, and only when the other pieces balance it (for example warm neutrals beside a cool shirt). Never use two.
+6. When an outfit has an OFF-PALETTE piece, never say its colour is in the palette. Use this reason pattern instead, still one sentence of at most 140 characters, with colour names only: "The {colour} {piece} sits outside your ${label} palette, but {in-palette pieces} {balance it}."
 
 Return exactly this JSON (array of ${count}):
 [{"name":"2-3 word name","description":"One sentence.","reason":"One sentence in the pattern above.","item_ids":["uuid","uuid","uuid"]}]`
@@ -108,7 +113,7 @@ async function generateForOccasion(supabase: Awaited<ReturnType<typeof createSer
       if (content.type !== 'text') throw new Error('Unexpected content type')
       const raw = content.text.trim().replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
       const parsed = OccasionSuggestionsSchema.parse(JSON.parse(raw))
-      const usable = validateSuggestions(parsed, eligible, occasion, colourSeason, seen, target - outfits.length).slice(0, target - outfits.length)
+      const usable = validateSuggestions(parsed, eligible, occasion, colourSeason, seen, target - outfits.length, avoid).slice(0, target - outfits.length)
       if (usable.length === 0) logClaudeFailure('outfits-generate', 'no usable outfits')
       outfits.push(...usable)
     } catch (err) {
@@ -169,7 +174,7 @@ function buildWardrobeSection(items: DbItem[]): string {
     .map(([cat, catItems]) => {
       const label = CATEGORY_LABELS[cat] ?? cat
       const lines = catItems
-        .map(i => `  - ${i.name} [id:${i.id}] | ${(i.colours ?? []).join(', ') || 'unknown colour'}`)
+        .map(i => `  - ${i.name} [id:${i.id}] | ${(i.colours ?? []).filter((c) => /^#[0-9a-fA-F]{6}$/.test(c)).map(colourName).join(', ') || 'unknown colour'}`)
         .join('\n')
       return `${label}:\n${lines}`
     })

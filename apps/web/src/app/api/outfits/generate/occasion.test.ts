@@ -176,6 +176,37 @@ describe('POST /api/outfits/generate (occasion only)', () => {
     expect(prompt).toContain('#FFB347')
   })
 
+  it('lets the model use at most one off-palette piece and asks for an honest reason', async () => {
+    await call({ occasion: 'formal' })
+    const prompt = mockCreate.mock.calls[0]![0].messages[0].content as string
+    expect(prompt).toContain('not a ban')
+    expect(prompt).toContain('at most one OFF-PALETTE piece')
+    expect(prompt).toContain('sits outside your Autumn palette, but')
+    expect(prompt).toContain('are both in your Autumn palette, and')
+  })
+
+  it('marks an off-palette piece OFF-PALETTE and lists colours by name, not hex', async () => {
+    wardrobe = [mk(1, 'tops', ['work'], ['#2E5C9E']), mk(3, 'bottoms', ['work'], ['#CD853F']), mk(5, 'shoes', ['work'], ['#C19A6B'])]
+    mockCreate.mockResolvedValue(reply([outfit([id(1), id(3), id(5)])]))
+    await call({ occasion: 'work' })
+    const prompt = mockCreate.mock.calls[0]![0].messages[0].content as string
+    const lines = prompt.split('\n')
+    expect(lines.find(l => l.includes(id(1)))).toMatch(/\| Blue \| .*OFF-PALETTE$/)
+    expect(lines.find(l => l.includes(id(3)))).toContain('| Camel |')
+    expect(lines.find(l => l.includes(id(3)))).not.toContain('OFF-PALETTE')
+    expect(prompt).not.toContain('#2E5C9E')
+  })
+
+  it('checks the reason against the saved avoid colours', async () => {
+    profile = { colour_season: 'autumn', best_colours: [], avoid_colours: ['#B7410E'] }
+    wardrobe = [mk(1, 'tops', ['work'], ['#B7410E']), mk(3, 'bottoms', ['work'], ['#CD853F']), mk(5, 'shoes', ['work'], ['#C19A6B'])]
+    const claim = 'Rust and camel are both in your Autumn palette, and the shoes finish it.'
+    mockCreate.mockResolvedValue(reply([outfit([id(1), id(3), id(5)], claim)]))
+    const { suggestions } = await (await call({ occasion: 'work' })).json()
+    expect(suggestions[0].reason).not.toBe(claim)
+    expect(suggestions[0].reason).not.toMatch(/rust/i)
+  })
+
   it('asks for a colour profile, with no model call, when there is no season', async () => {
     profile = { colour_season: null, best_colours: [], avoid_colours: [] }
     const res = await call({ occasion: 'formal' })

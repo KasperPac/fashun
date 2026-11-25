@@ -126,32 +126,157 @@ describe('eligibleItems', () => {
 })
 
 describe('finaliseReason', () => {
-  const navy = '#000080'
-  const camel = '#C19A6B'
+  const navy = '#000080' // outside Autumn
+  const camel = '#C19A6B' // in Autumn
+  const rust = '#D2691E'
+  const tan = '#C19A6B'
+  const blue = '#2E5C9E'
+  const white = '#FFFFFF'
   it('keeps a good one-sentence reason that names the season palette', () => {
-    const r = 'Navy and Camel are both in your Autumn palette, and the boots keep it warm.'
-    expect(finaliseReason(r, 'autumn', [navy, camel])).toBe(r)
+    const r = 'Rust and Camel are both in your Autumn palette, and the boots keep it warm.'
+    expect(finaliseReason(r, 'autumn', [rust, camel])).toBe(r)
   })
   it('accepts "your best {Season} colours"', () => {
-    const r = 'Navy is one of your best Winter colours, and the shoes sharpen it.'
-    expect(finaliseReason(r, 'winter', [navy])).toBe(r)
+    const r = 'Rust is one of your best Autumn colours, and it lifts the neutrals.'
+    expect(finaliseReason(r, 'autumn', [rust])).toBe(r)
   })
   it.each([
     ['empty', ''],
     ['whitespace', '   '],
     ['does not name the season', 'Looks sharp.'],
     ['names the season but not in the pattern', 'Rich Autumn tones.'],
-    ['two sentences', 'Navy is in your Autumn palette. The boots help.'],
-    ['over 140 characters', `Navy is in your Autumn palette, and ${'the shoes keep it warm '.repeat(8)}.`],
+    ['two sentences', 'Rust is in your Autumn palette. The boots help.'],
+    ['over 140 characters', `Rust is in your Autumn palette, and ${'the shoes keep it warm '.repeat(8)}.`],
   ])('replaces a reason that is %s', (_label, reason) => {
-    const out = finaliseReason(reason, 'autumn', [navy, camel])
+    const out = finaliseReason(reason, 'autumn', [rust, camel])
     expect(out).toMatch(/^\w[\w ]* and \w[\w ]* are both in your Autumn palette\.$/)
     expect(out.length).toBeLessThanOrEqual(140)
   })
-  it('uses one colour name, or none, when that is all there is, and never a hex code', () => {
-    expect(finaliseReason('', 'spring', [navy, navy])).toMatch(/is one of your best Spring colours\.$/)
-    expect(finaliseReason('', 'spring', ['', 'nope'])).toBe('This outfit is built from your Spring palette.')
-    expect(finaliseReason('', 'spring', [navy])).not.toContain('#')
+  it('uses one colour name, or a neutral line, and never a hex code', () => {
+    expect(finaliseReason('', 'autumn', [rust, rust])).toMatch(/is one of your best Autumn colours\.$/)
+    expect(finaliseReason('', 'spring', ['', 'nope'])).not.toMatch(/palette|best/i)
+    expect(finaliseReason('', 'autumn', [rust])).not.toContain('#')
+  })
+
+  it('accepts an honest off-palette reason', () => {
+    const r = 'The blue stripe sits outside your Autumn palette, but camel chinos and tan shoes warm it up.'
+    expect(finaliseReason(r, 'autumn', [blue, white, camel, tan])).toBe(r)
+  })
+  it('replaces a reason that says an off-palette colour is in the palette', () => {
+    const out = finaliseReason('Blue and camel are both in your Autumn palette, and the stripe adds interest.', 'autumn', [blue, white, camel])
+    expect(out).toBe('Tan is one of your best Autumn colours.')
+    expect(out).not.toMatch(/blue|white/i)
+  })
+  it('replaces "one of your best colours" for an off-palette colour', () => {
+    const out = finaliseReason('Blue is one of your best Autumn colours, and tan boots ground it.', 'autumn', [blue, tan])
+    expect(out).not.toMatch(/blue/i)
+  })
+  it('replaces an "outside" reason when nothing in the outfit is outside', () => {
+    const out = finaliseReason('The rust tee sits outside your Autumn palette, but camel warms it.', 'autumn', [rust, camel])
+    expect(out).toBe('Rust and Tan are both in your Autumn palette.')
+  })
+  it('fallback for an outfit with one in-palette colour claims only that colour', () => {
+    const out = finaliseReason('', 'autumn', [blue, navy, tan])
+    expect(out).toBe('Tan is one of your best Autumn colours.')
+  })
+  it('fallback with no in-palette colours makes no palette claim', () => {
+    const out = finaliseReason('', 'autumn', [blue, navy, '#1C1C1C'])
+    expect(out).not.toMatch(/palette|best/i)
+    expect(out.length).toBeLessThanOrEqual(140)
+    expect(out).not.toMatch(/[.!?]\s+\S/)
+  })
+  it('never claims a saved avoid colour is in the palette', () => {
+    const out = finaliseReason('Rust and camel are both in your Autumn palette, and tan boots finish it.', 'autumn', [rust, camel], [camel])
+    expect(out).toBe('Rust is one of your best Autumn colours.')
+    expect(finaliseReason('', 'autumn', [camel], [camel])).not.toMatch(/palette|best/i)
+  })
+  it("never claims a mixed-colour piece's off-palette colour", () => {
+    const out = finaliseReason('Blue and camel are both in your Autumn palette, and boots finish it.', 'autumn', [rust, blue, camel])
+    expect(out).not.toMatch(/blue/i)
+  })
+  describe('false palette claims (KAS-628 round 1)', () => {
+    const camelHex = '#CD853F'
+    const tanHex = '#C19A6B'
+    const stripe = [blue, white, camelHex, tanHex]
+    it.each([
+      'Navy and camel are both in your Autumn palette, and tan boots finish it.',
+      'The navy stripe and camel are both in your Autumn palette, and tan boots finish it.',
+      'The striped shirt and camel chinos are both in your Autumn palette, and tan boots finish it.',
+    ])('replaces "%s" for an outfit with an off-palette shirt', (r) => {
+      const out = finaliseReason(r, 'autumn', stripe)
+      expect(out).not.toBe(r)
+      expect(out).not.toMatch(/navy|blue|white|striped/i)
+    })
+    it.each([
+      ['#000000', 'Black and camel are both in your Autumn palette, and the tee keeps it easy.'],
+      ['#00008B', 'Navy and camel are both in your Autumn palette, and the tee keeps it easy.'],
+    ])('replaces a claim when the shoes %s are off-palette', (shoes, r) => {
+      const out = finaliseReason(r, 'autumn', [rust, camelHex, shoes])
+      expect(out).not.toBe(r)
+      expect(out).not.toMatch(/black|navy/i)
+    })
+    it('does not accept an honest form that does not name the off-palette colour', () => {
+      const r = 'Camel sits outside your Autumn palette, but blue warms it up.'
+      expect(finaliseReason(r, 'autumn', stripe)).not.toBe(r)
+      const r2 = 'The striped shirt sits outside your Autumn palette, but camel warms it up.'
+      expect(finaliseReason(r2, 'autumn', stripe)).not.toBe(r2)
+    })
+    it('does not accept a 3-digit hex code', () => {
+      const r = '#FFF sits outside your Autumn palette, but camel warms it up.'
+      expect(finaliseReason(r, 'autumn', stripe)).not.toBe(r)
+    })
+  })
+  it.each(['spring', 'summer', 'autumn', 'winter'] as const)('every fallback form in %s is one short sentence with no hex', (season) => {
+    const longest = ['#00008B', '#191970', '#C8A951', '#E6B89C', '#FFFACD']
+    for (const hexes of [longest, longest.slice(0, 1), [], ['#00008B', '#191970']]) {
+      const out = finaliseReason('', season, hexes)
+      expect(out.length).toBeLessThanOrEqual(140)
+      expect(out).not.toMatch(/#[0-9a-f]{3}/i)
+      expect(out).not.toMatch(/[.!?]\s+\S/)
+      expect(out.endsWith('.')).toBe(true)
+    }
+  })
+  it('replaces a reason with a hex code or two sentences or over 140 characters', () => {
+    const honest = 'The blue stripe sits outside your Autumn palette, but camel warms it up.'
+    expect(finaliseReason('#2E5C9E sits outside your Autumn palette, but camel warms it up.', 'autumn', [blue, camel])).not.toContain('#')
+    expect(finaliseReason('The blue stripe sits outside your Autumn palette. Camel warms it up.', 'autumn', [blue, camel])).toBe('Tan is one of your best Autumn colours.')
+    const long = `${honest.slice(0, -1)} and ${'so very warm '.repeat(10)}.`
+    expect(long.length).toBeGreaterThan(140)
+    expect(finaliseReason(long, 'autumn', [blue, camel]).length).toBeLessThanOrEqual(140)
+  })
+  it('works for other seasons', () => {
+    const peach = '#FFCBA4'
+    expect(finaliseReason('White sits outside your Spring palette, but peach lifts it.', 'spring', [white, peach])).toBe('White sits outside your Spring palette, but peach lifts it.')
+    expect(finaliseReason('White and peach are both in your Spring palette, and it is fresh.', 'spring', [white, peach])).not.toMatch(/white/i)
+  })
+})
+
+describe('validateSuggestions with off-palette pieces', () => {
+  const pieces = [
+    item('shirt', 'tops', ['casual'], ['#2E5C9E', '#FFFFFF']),
+    item('tee', 'tops', ['casual'], ['#D2691E']),
+    item('jeans', 'bottoms', ['casual'], ['#000080']),
+    item('chinos', 'bottoms', ['casual'], ['#CD853F']),
+    item('boots', 'shoes', ['casual'], ['#C19A6B']),
+  ]
+  const sug = (ids: string[], reason: string) => ({ name: 'n', description: 'd', reason, item_ids: ids })
+  it('keeps outfits with one or two off-palette pieces and an honest reason', () => {
+    const honest = 'The blue stripe sits outside your Autumn palette, but camel chinos and tan boots warm it up.'
+    const out = validateSuggestions([sug(['shirt', 'chinos', 'boots'], honest), sug(['shirt', 'jeans', 'boots'], 'Blue and camel are both in your Autumn palette.')], pieces, 'casual', 'autumn')
+    expect(out).toHaveLength(2)
+    expect(out[0]!.reason).toBe(honest)
+    expect(out[1]!.reason).not.toMatch(/blue/i)
+  })
+  it('keeps today\'s wording for an in-palette outfit', () => {
+    const r = 'Rust and camel are both in your Autumn palette, and tan boots finish it.'
+    const [o] = validateSuggestions([sug(['tee', 'chinos', 'boots'], r)], pieces, 'casual', 'autumn')
+    expect(o!.reason).toBe(r)
+  })
+  it('uses the saved avoid colours', () => {
+    const r = 'Rust and camel are both in your Autumn palette, and tan boots finish it.'
+    const [o] = validateSuggestions([sug(['tee', 'chinos', 'boots'], r)], pieces, 'casual', 'autumn', new Set(), 3, ['#CD853F'])
+    expect(o!.reason).toBe('Rust and Tan are both in your Autumn palette.')
+    expect(o!.reason).not.toMatch(/camel/i)
   })
 })
 

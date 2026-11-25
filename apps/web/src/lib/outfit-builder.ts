@@ -1,6 +1,7 @@
 import { OCCASION_LABELS } from '@fashun/shared'
 import type { ColourSeason, OccasionTag, WardrobeCategory } from '@fashun/shared'
 import { colourName } from './colour-names'
+import { isInPaletteColour } from './palette-rule'
 
 export type OwnedItem = {
   id: string
@@ -116,21 +117,44 @@ export function presentCategories(eligible: OwnedItem[]): Array<(typeof REQUIRED
 
 export const REASON_MAX_LENGTH = 140
 
+const HEX_IN_TEXT = /#[0-9a-fA-F]{3,8}/
+const NEUTRAL_REASON = 'The pieces balance each other for a relaxed, well-put-together look.'
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
 /**
- * The reason must be one sentence of at most 140 characters that names the
- * user's season as "your {Season} palette" or "your best {Season} colours".
- * Anything else is replaced by a plain reason built from the outfit's own colours.
+ * The reason must be one sentence of at most 140 characters, with colour names
+ * and no hex codes. It is accepted when it either
+ *  - names the user's season as "your {Season} palette" / "your best {Season} colours"
+ *    without naming a colour that is not really in the palette, or
+ *  - honestly says a colour sits "outside your {Season} palette" (only when the
+ *    outfit has such a colour) and makes no palette claim of its own.
+ * Anything else is replaced by a plain reason that only claims palette membership
+ * for colours that really are in it (`avoid` holds the user's saved avoid colours),
+ * or makes no palette claim when there are none.
  */
-export function finaliseReason(reason: string, season: ColourSeason, colourHexes: string[]): string {
+export function finaliseReason(reason: string, season: ColourSeason, colourHexes: string[], avoid: string[] = []): string {
   const label = seasonLabel(season)
   const text = reason.trim().replace(/\s+/g, ' ')
-  const names = [...new Set(colourHexes.filter((h) => HEX.test(h)).map((h) => colourName(h)))]
-  const namesSeason = new RegExp(`your (${label} palette|best ${label} colours)`, 'i').test(text)
-  const oneSentence = !/[.!?]\s+\S/.test(text)
-  if (text && namesSeason && oneSentence && text.length <= REASON_MAX_LENGTH) return text
-  if (names.length >= 2) return `${names[0]} and ${names[1]} are both in your ${label} palette.`
-  if (names.length === 1) return `${names[0]} is one of your best ${label} colours.`
-  return `This outfit is built from your ${label} palette.`
+  const valid = colourHexes.filter((h) => HEX.test(h))
+  const inNames = [...new Set(valid.filter((h) => isInPaletteColour(h, season, avoid)).map((h) => colourName(h)))]
+  const offNames = [...new Set(valid.filter((h) => !isInPaletteColour(h, season, avoid)).map((h) => colourName(h)))].filter((n) => !inNames.includes(n))
+  const claimsPalette = new RegExp(`(?<!outside )your (${label} palette|best ${label} colours)`, 'i').test(text)
+  const outsideAt = text.search(new RegExp(`outside your ${label} palette`, 'i'))
+  const names = (list: string[], part: string) => list.some((n) => new RegExp(`\\b${escapeRegExp(n)}\\b`, 'i').test(part))
+  const hasOffPiece = valid.some((h) => !isInPaletteColour(h, season, avoid))
+  const wellFormed = text !== '' && !/[.!?]\s+\S/.test(text) && text.length <= REASON_MAX_LENGTH && !HEX_IN_TEXT.test(text)
+  // Honest form: what comes before "outside your ... palette" names an off-palette colour and no in-palette one.
+  const before = outsideAt >= 0 ? text.slice(0, outsideAt) : ''
+  const honestOffPalette = outsideAt >= 0 && !claimsPalette && offNames.length > 0 && names(offNames, before) && !names(inNames, before)
+  // A palette claim is only safe when no piece of the outfit is off-palette: the model's own colour words cannot be trusted to match ours.
+  const trueClaim = claimsPalette && outsideAt < 0 && !hasOffPiece
+  if (wellFormed && (honestOffPalette || trueClaim)) return text
+  if (inNames.length >= 2) return `${inNames[0]} and ${inNames[1]} are both in your ${label} palette.`
+  if (inNames.length === 1) return `${inNames[0]} is one of your best ${label} colours.`
+  return NEUTRAL_REASON
 }
 
 export function seasonLabel(season: ColourSeason): string {
@@ -143,7 +167,7 @@ type RawSuggestion = { name: string; description: string; reason: string; item_i
  * Turns the model's suggestions into outfits we can trust. Items are looked up
  * by id in the user's own eligible items only; anything else rejects the whole
  * outfit. Outfits must have a top, bottom and shoes, and must be different from
- * each other (by their tops, bottoms and shoes), up to `limit`. The reason is guaranteed to name the user's colour season.
+ * each other (by their tops, bottoms and shoes), up to `limit`. The reason is guaranteed to be honest about the palette: it never calls an off-palette colour part of it.
  */
 export function validateSuggestions(
   raw: RawSuggestion[],
@@ -152,6 +176,7 @@ export function validateSuggestions(
   season: ColourSeason,
   seen: Set<string> = new Set(),
   limit: number = OUTFIT_COUNT,
+  avoid: string[] = [],
 ): BuiltOutfit[] {
   const byId = new Map(eligible.map((i) => [i.id, i]))
   const out: BuiltOutfit[] = []
@@ -165,8 +190,8 @@ export function validateSuggestions(
     const key = owned.filter((i) => (REQUIRED_CATEGORIES as readonly string[]).includes(i.category)).map((i) => i.id).sort().join('|')
     if (seen.has(key)) continue
     seen.add(key)
-    const colourHexes = owned.map((i) => (i.colours ?? []).find((c) => HEX.test(c)) ?? '')
-    const reason = finaliseReason(s.reason, season, colourHexes)
+    const colourHexes = owned.flatMap((i) => (i.colours ?? []).filter((c) => HEX.test(c)))
+    const reason = finaliseReason(s.reason, season, colourHexes, avoid)
     out.push({
       name: s.name,
       occasion,
