@@ -40,8 +40,9 @@ describe('Your try-on photo section', () => {
     expect(html).not.toContain('Take a photo')
     expect(html).not.toContain('Choose a photo')
     expect(html).not.toContain('type="file"')
-    expect(PRIVACY_NOTE.startsWith('To show clothes on you, Fashun sends this photo and your clothing photos to FASHN, an outside try-on service.')).toBe(true)
-    expect(PRIVACY_NOTE.endsWith('You can delete them at any time under Profile.')).toBe(true)
+    expect(PRIVACY_NOTE.startsWith('To show clothes on you, Fashun sends this photo and your clothing photos to Google, whose Gemini AI makes your picture.')).toBe(true)
+    expect(PRIVACY_NOTE.endsWith('Try-on is for people aged 18 and over.')).toBe(true)
+    expect(PRIVACY_NOTE).not.toContain('FASHN')
   })
 
   it('Not now uploads nothing and records no agreement', () => {

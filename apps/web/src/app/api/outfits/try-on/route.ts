@@ -4,16 +4,18 @@ import { z } from 'zod'
 import { createServerClient, createServiceClient } from '@/lib/supabase/server'
 import { tryOnEnabled } from '@/lib/paid-extras'
 import { runTryOn, FashnError, FashnTimeoutError, type TryOnImage } from '@/lib/fashn'
+import { runImageTryOn, ImageTryOnError, ImageTryOnTimeoutError } from '@/lib/image-tryon'
 import {
-  chargePicture, chargedSpendByMonth, hasRoomForImages, markPictureMade, releasePictures, reservePictures,
+  chargePicture, chargedSpendByMonth, hasRoomForUnits, markPictureMade, releasePictures, reservePictures,
 } from '@/lib/try-on-ledger'
 import { loadGarmentPhoto, loadPersonPhoto, TRY_ON_BUCKET } from '@/lib/try-on-images'
 import {
-  TRY_ON_LABEL, firstOfNextMonth, planTryOn, readTryOnConfig, sydneyMonth, tryOnNow,
+  TRY_ON_LABEL, firstOfNextMonth, planTryOn, readTryOnConfig, readTryOnProvider, sydneyMonth, tryOnNow,
   type OutfitPiece,
 } from '@/lib/try-on'
 
-// Two FASHN pictures can take up to ~34 seconds; leave room for photos and saving.
+// Gemini gives up after 65 seconds (its slowest spike call took 46); two FASHN pictures take up to ~34.
+// Either way leave room for reading the photos and saving the picture.
 export const maxDuration = 90
 
 const SIGNED_SECONDS = 3600
@@ -21,12 +23,12 @@ const SIGNED_SECONDS = 3600
 const BodySchema = z.object({ outfit_id: z.string().uuid(), regenerate: z.boolean().optional() })
 const QuerySchema = z.object({
   outfit_id: z.string().uuid(),
-  // How many FASHN images this outfit needs (a top and bottoms need 2), so "paused" matches what POST would do.
+  // How many FASHN images this outfit needs (a top and bottoms need 2), so "paused" matches what POST would do. Gemini always makes one.
   images: z.enum(['1', '2']).default('1'),
 })
 
 /** One fixed reason per failure. Never the error text, an address, a name or an email, which could hold personal data. */
-function logFailure(reason: 'fashn_refused' | 'fashn_timeout' | 'unexpected' | 'storage_failed' | 'save_failed' | 'ledger_failed') {
+function logFailure(reason: 'fashn_refused' | 'fashn_timeout' | 'gemini_refused' | 'gemini_timeout' | 'unexpected' | 'storage_failed' | 'save_failed' | 'ledger_failed') {
   console.error(`try-on failed: ${reason}`)
 }
 
@@ -73,11 +75,13 @@ export async function GET(req: Request) {
   const imageUrl = outfit.try_on_image_path ? await signedPicture(supabase, outfit.try_on_image_path) : null
 
   const month = sydneyMonth(tryOnNow())
-  const config = readTryOnConfig()
+  const provider = readTryOnProvider()
+  const config = readTryOnConfig(provider)
   let paused = true
   if (config) {
+    const rows = provider === 'fashn' ? Number(parsed.data.images) : 1
     const spend = await chargedSpendByMonth(await createServiceClient())
-    paused = !hasRoomForImages(spend.find((s) => s.month === month), Number(parsed.data.images), config.capUnits, config.priceUnits)
+    paused = !hasRoomForUnits(spend.find((s) => s.month === month), rows * config.priceUnits, config.capUnits)
   }
 
   return NextResponse.json({
@@ -106,7 +110,7 @@ export async function POST(req: Request) {
 
   const previousPath = outfit.try_on_image_path
 
-  // A saved picture is free: no FASHN call, nothing added to spend.
+  // A saved picture is free: no provider call, nothing added to spend.
   if (outfit.try_on_image_path && !parsed.data.regenerate) {
     const imageUrl = await signedPicture(supabase, outfit.try_on_image_path)
     if (imageUrl) {
@@ -117,8 +121,9 @@ export async function POST(req: Request) {
     }
   }
 
-  const apiKey = process.env.FASHN_API_KEY
-  const config = readTryOnConfig()
+  const provider = readTryOnProvider()
+  const apiKey = provider === 'fashn' ? process.env.FASHN_API_KEY : process.env.GEMINI_API_KEY
+  const config = readTryOnConfig(provider)
   if (!apiKey || !config) {
     return NextResponse.json({ error: 'Try-on is not set up yet', code: 'NOT_CONFIGURED' }, { status: 503 })
   }
@@ -152,7 +157,7 @@ export async function POST(req: Request) {
     }
   })
 
-  const plan = planTryOn(pieces)
+  const plan = planTryOn(pieces, provider)
   if (!plan.ok) {
     return NextResponse.json({ error: plan.message, code: plan.code, missing: plan.missing }, { status: 400 })
   }
@@ -163,18 +168,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Could not read your try-on photo', code: 'IMAGE_UNAVAILABLE' }, { status: 500 })
   }
   const garments: TryOnImage[] = []
-  for (const s of plan.steps) {
-    const img = await loadGarmentPhoto(supabase, s.imageRef)
+  for (const g of plan.garments) {
+    const img = await loadGarmentPhoto(supabase, g.imageRef)
     if (!img) {
       return NextResponse.json(
-        { error: `Could not read the photo of your ${s.label}`, code: 'IMAGE_UNAVAILABLE' },
+        { error: `Could not read the photo of your ${g.label}`, code: 'IMAGE_UNAVAILABLE' },
         { status: 500 },
       )
     }
     garments.push(img)
   }
 
-  // The whole outfit must fit under this month's cap before FASHN is called.
+  // The whole outfit must fit under this month's cap before the provider is called.
   const month = sydneyMonth(tryOnNow())
   const service = await createServiceClient()
   const reserved = await reservePictures(service, {
@@ -189,17 +194,31 @@ export async function POST(req: Request) {
   }
 
   let current: TryOnImage = person
-  let returned = 0 // images FASHN gave back: each is charged to us, whatever happens next
+  let returned = 0 // images the provider gave back: each is charged to us, whatever happens next
   let charged = 0 // of those, the ones now recorded as spend
   try {
-    for (let i = 0; i < plan.steps.length; i++) {
-      current = await runTryOn({ person: current, garment: garments[i], category: plan.steps[i].category, apiKey })
+    if (provider === 'gemini') {
+      // One request with the person and every garment; one picture back.
+      current = await runImageTryOn({
+        person,
+        garments: garments.map((g, i) => ({ ...g, kind: plan.garments[i].kind })),
+        apiKey,
+      })
       returned += 1
-      await chargePicture(service, reserved[i])
+      await chargePicture(service, reserved[0])
       charged += 1
+    } else {
+      for (let i = 0; i < plan.steps.length; i++) {
+        const category = plan.steps[i].category
+        if (!category) throw new Error('Unexpected try-on step')
+        current = await runTryOn({ person: current, garment: garments[i], category, apiKey })
+        returned += 1
+        await chargePicture(service, reserved[i])
+        charged += 1
+      }
     }
   } catch (err) {
-    // An image FASHN returned stays counted even if recording it failed: try once more, and if the
+    // An image the provider returned stays counted even if recording it failed: try once more, and if the
     // ledger still can't be written leave its reservation in place rather than under-count.
     if (returned > charged) {
       try {
@@ -209,13 +228,19 @@ export async function POST(req: Request) {
         logFailure('ledger_failed')
       }
     }
-    // Pictures FASHN did not return add nothing to spend.
+    // Pictures the provider did not return add nothing to spend.
     await releasePictures(service, reserved.slice(returned))
-    const fromFashn = err instanceof FashnError
-    logFailure(err instanceof FashnTimeoutError ? 'fashn_timeout' : fromFashn ? 'fashn_refused' : 'unexpected')
+    const fromProvider = err instanceof FashnError || err instanceof ImageTryOnError
+    logFailure(
+      err instanceof FashnTimeoutError ? 'fashn_timeout'
+        : err instanceof ImageTryOnTimeoutError ? 'gemini_timeout'
+        : err instanceof FashnError ? 'fashn_refused'
+        : err instanceof ImageTryOnError ? 'gemini_refused'
+        : 'unexpected',
+    )
     return NextResponse.json(
       {
-        error: fromFashn
+        error: fromProvider
           ? "Try-on didn't work this time. Try again later."
           : 'Something went wrong. Try again later.',
         code: 'TRY_ON_FAILED',
@@ -225,7 +250,7 @@ export async function POST(req: Request) {
     )
   }
 
-  // FASHN deletes its copy within the hour: keep ours, privately, with the outfit.
+  // The provider does not keep the picture for us: keep ours, privately, with the outfit.
   const ext = current.mediaType === 'image/png' ? 'png' : current.mediaType === 'image/webp' ? 'webp' : 'jpg'
   const path = `${user.id}/outfit-${outfit.id}-${randomUUID()}.${ext}`
   const { error: uploadError } = await supabase.storage

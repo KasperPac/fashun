@@ -1,5 +1,5 @@
 import type { createServiceClient } from '@/lib/supabase/server'
-import { imagesToUnits, summariseSpend, type SpendMonth, type TryOnStep } from '@/lib/try-on'
+import { summariseSpend, unitsByMonth, type SpendMonth, type TryOnStep } from '@/lib/try-on'
 
 type ServiceClient = Awaited<ReturnType<typeof createServiceClient>>
 
@@ -46,14 +46,21 @@ export async function releasePictures(service: ServiceClient, ids: string[]): Pr
   if (error) throw new Error('Could not release the try-on reservation')
 }
 
-/** Charged spend per month, newest first. In-flight reservations are not included. */
-export async function chargedSpendByMonth(service: ServiceClient): Promise<SpendMonth[]> {
-  const { data, error } = await service.from('try_on_ledger').select('month,batch_id,picture_made').eq('status', 'charged')
-  if (error) throw new Error('Could not read the try-on spend')
-  return summariseSpend(data ?? [])
+export type ChargedMonth = SpendMonth & {
+  /** Exact spend in whole units: every row at the price it was made at. */
+  units: number
 }
 
-/** True when this month's charged images leave room for `images` more, checked on the exact amount. */
-export function hasRoomForImages(spent: SpendMonth | undefined, images: number, capUnits: number, priceUnits: number): boolean {
-  return imagesToUnits((spent?.images ?? 0) + images, priceUnits) <= capUnits
+/** Charged spend per month, newest first. In-flight reservations are not included. */
+export async function chargedSpendByMonth(service: ServiceClient): Promise<ChargedMonth[]> {
+  const { data, error } = await service.from('try_on_ledger').select('month,batch_id,picture_made,price_units').eq('status', 'charged')
+  if (error) throw new Error('Could not read the try-on spend')
+  const rows = data ?? []
+  const units = unitsByMonth(rows)
+  return summariseSpend(rows).map((m) => ({ ...m, units: units.get(m.month) ?? 0 }))
+}
+
+/** True when this month's charged spend leaves room for `neededUnits` more, checked on the exact amount. */
+export function hasRoomForUnits(spent: ChargedMonth | undefined, neededUnits: number, capUnits: number): boolean {
+  return (spent?.units ?? 0) + neededUnits <= capUnits
 }

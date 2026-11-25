@@ -284,6 +284,7 @@ export type Database = {
           style_prefs: string[] | null
           suggested_styles: string[]
           try_on_consent_at: string | null
+          try_on_consent_note: string | null
           try_on_photo_url: string | null
         }
         Insert: {
@@ -304,6 +305,7 @@ export type Database = {
           style_prefs?: string[] | null
           suggested_styles?: string[] | null
           try_on_consent_at?: string | null
+          try_on_consent_note?: string | null
           try_on_photo_url?: string | null
         }
         Update: {
@@ -324,6 +326,7 @@ export type Database = {
           style_prefs?: string[] | null
           suggested_styles?: string[] | null
           try_on_consent_at?: string | null
+          try_on_consent_note?: string | null
           try_on_photo_url?: string | null
         }
         Relationships: []

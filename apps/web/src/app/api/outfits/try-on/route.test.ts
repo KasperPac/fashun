@@ -83,6 +83,7 @@ beforeEach(() => {
   vi.stubEnv('ENABLE_TRY_ON', 'true')
   vi.stubEnv('ENABLE_PAID_EXTRAS', '')
   vi.stubEnv('FASHN_API_KEY', 'test-key')
+  vi.stubEnv('TRY_ON_PROVIDER', 'fashn') // the FASHN suite below is today's path; Gemini has its own describe at the end
   vi.stubEnv('TRY_ON_MONTHLY_CAP_USD', '7.50')
   vi.stubEnv('TRY_ON_PRICE_USD', '0.075')
 })
@@ -561,5 +562,279 @@ describe('exact cap', () => {
     const second = await post({ outfit_id: OUTFIT, regenerate: true })
     expect(second.status).toBe(409)
     expect(fashnRuns).toHaveLength(2) // the second request never reached FASHN
+  })
+})
+
+// ---- Gemini: one request per outfit (KAS-693) ----
+
+const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-nano-banana-2.1:generateContent'
+const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 7, 7])
+
+interface GeminiBody {
+  contents: Array<{ parts: Array<{ text?: string; inline_data?: { mime_type: string; data: string } }> }>
+}
+let geminiRuns: Array<{ url: string; key: string | undefined; body: GeminiBody }>
+let geminiMode: 'ok' | 'refuse' | 'no-picture' | 'hang' | 'hostile'
+
+function installGemini() {
+  mockFetch.mockImplementation(async (url: string, init?: { body?: string; headers?: Record<string, string>; signal?: AbortSignal }) => {
+    if (!url.startsWith('https://generativelanguage.googleapis.com/')) throw new Error(`unexpected fetch ${url}`)
+    geminiRuns.push({ url, key: init?.headers?.['x-goog-api-key'], body: JSON.parse(init?.body ?? '{}') as GeminiBody })
+    if (geminiMode === 'hang') {
+      return new Promise((_, reject) => init?.signal?.addEventListener('abort', () => reject(new Error('aborted'))))
+    }
+    if (geminiMode === 'refuse' || geminiMode === 'hostile') {
+      return { ok: false, status: geminiMode === 'refuse' ? 429 : 500, json: async () => ({ error: { message: 'quota for person@example.com see https://evil.example Jane Doe' } }) }
+    }
+    if (geminiMode === 'no-picture') return { ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: 'sorry' }] } }] }) }
+    return { ok: true, json: async () => ({ candidates: [{ content: { parts: [{ inlineData: { mimeType: 'image/png', data: b64(PNG) } }] } }] }) }
+  })
+}
+
+const geminiParts = (i = 0) => geminiRuns[i].body.contents[0].parts
+const geminiPictures = (i = 0) => geminiParts(i).filter((p) => p.inline_data)
+
+describe('POST /api/outfits/try-on: Gemini (one request per outfit)', () => {
+  beforeEach(() => {
+    geminiRuns = []
+    geminiMode = 'ok'
+    vi.stubEnv('TRY_ON_PROVIDER', '')
+    vi.stubEnv('GEMINI_API_KEY', 'gemini-test-key')
+    vi.stubEnv('FASHN_API_KEY', '')
+    vi.stubEnv('TRY_ON_PRICE_USD', '0.045')
+    installGemini()
+  })
+
+  it('new provider makes a top and bottoms outfit in one request', async () => {
+    seed()
+    const res = await post()
+    expect(res.status).toBe(200)
+    expect(geminiRuns).toHaveLength(1)
+    expect(geminiRuns[0].url).toBe(GEMINI_URL)
+    expect(geminiRuns[0].key).toBe('gemini-test-key')
+    // the person, then the top, then the bottoms
+    expect(geminiPictures()).toHaveLength(3)
+    const json = await res.json()
+    expect(json.charged_pictures).toBe(1)
+    expect(charged()).toHaveLength(1)
+    expect(charged()[0]).toMatchObject({ step: 'outfit', price_units: 450, picture_made: true })
+    const owner = await (async () => { vi.stubEnv('TRY_ON_OWNER_USER_ID', A); return (await SPEND()).json() })()
+    expect(owner).toMatchObject({ images: 1, pictures: 1, spent_usd: 0.045 })
+    expect(fake.tables.outfits[0].try_on_image_path).toMatch(/\.png$/)
+  })
+
+  it('one-shot outfit counts as one picture against the cap', async () => {
+    seed()
+    vi.stubEnv('TRY_ON_MONTHLY_CAP_USD', '0.09')
+    const get = async (images: string) =>
+      (await (await GET(new Request(`http://localhost/api/outfits/try-on?outfit_id=${OUTFIT}&images=${images}`))).json()).paused
+    // ?images=2 is a FASHN figure: Gemini always makes one picture, so room for one means not paused
+    expect(await get('2')).toBe(false)
+    expect((await post()).status).toBe(200)
+    expect((await post({ outfit_id: OUTFIT, regenerate: true })).status).toBe(200) // 2 x 0.045 = the cap exactly
+    expect(await get('1')).toBe(true)
+    expect((await post({ outfit_id: OUTFIT, regenerate: true })).status).toBe(409)
+    expect(geminiRuns).toHaveLength(2)
+  })
+
+  it('photos go to the provider as base64 never links', async () => {
+    seed()
+    await post()
+    for (const p of geminiPictures()) {
+      expect(p.inline_data?.data).toBe(b64(JPEG))
+      expect(p.inline_data?.mime_type).toBe('image/jpeg')
+    }
+    expect(JSON.stringify(geminiRuns[0].body)).not.toMatch(/https?:/)
+    expect(geminiParts()[0].text).toContain("Keep the person's own shoes")
+  })
+
+  it('new provider picture is saved and shown again for free with the AI label', async () => {
+    seed()
+    await post()
+    mockFetch.mockClear()
+    const again = await (await post()).json()
+    expect(again).toMatchObject({ saved: true, charged_pictures: 0, label: 'Made by AI. Fit and details may not be exact.' })
+    const got = await (await GET(new Request(`http://localhost/api/outfits/try-on?outfit_id=${OUTFIT}`))).json()
+    expect(got.image_url).toContain('outfit-')
+    expect(got.label).toBe('Made by AI. Fit and details may not be exact.')
+    expect(mockFetch).not.toHaveBeenCalled()
+    expect(charged()).toHaveLength(1)
+  })
+
+  it('plan draws or skips each category as decided', async () => {
+    const JACKET = '10000000-0000-4000-8000-000000000006'
+    seed({
+      pieces: [piece('White tee', TOP), piece('Blue jeans', BOTTOM), piece('White sneakers', SHOES), piece('Tote', BAG), piece('Denim jacket', JACKET)],
+      items: [
+        { id: TOP, category: 'tops', image_url: `${A}/top.jpg` },
+        { id: BOTTOM, category: 'bottoms', image_url: `${A}/bottom.jpg` },
+        { id: SHOES, category: 'shoes', image_url: `${A}/shoes.jpg` },
+        { id: BAG, category: 'bags', image_url: `${A}/bag.jpg` },
+        { id: JACKET, category: 'outerwear', image_url: `${A}/jacket.jpg` },
+      ],
+    })
+    const json = await (await post()).json()
+    expect(geminiRuns).toHaveLength(1)
+    expect(geminiPictures()).toHaveLength(5) // person, top, bottoms, jacket, shoes; never the bag
+    expect(geminiParts()[0].text).toContain('picture 2 is a top; picture 3 is bottoms; picture 4 is a jacket or coat, worn over the top; picture 5 is shoes')
+    expect(geminiParts()[0].text).not.toContain('White tee')
+    expect(json.skipped).toEqual([{ label: 'Tote', reason: 'not_drawn' }])
+    expect(charged()).toHaveLength(1)
+  })
+
+  it('dress or jumpsuit outfit makes one picture', async () => {
+    for (const category of ['dresses', 'jumpsuits']) {
+      geminiRuns = []
+      fake.reset()
+      seed({
+        pieces: [piece('Red dress', DRESS), piece('White sneakers', SHOES)],
+        items: [
+          { id: DRESS, category, image_url: `${A}/dress.jpg` },
+          { id: SHOES, category: 'shoes', image_url: `${A}/shoes.jpg` },
+        ],
+      })
+      expect((await post()).status).toBe(200)
+      expect(geminiRuns).toHaveLength(1)
+      expect(geminiPictures()).toHaveLength(3)
+      expect(geminiParts()[0].text).toContain('picture 2 is a dress or jumpsuit; picture 3 is shoes')
+      expect(charged()).toHaveLength(1)
+    }
+  })
+
+  it('unknown provider setting falls back safely', async () => {
+    for (const value of ['', 'openai', 'FASHN-typo', '  ']) {
+      vi.stubEnv('TRY_ON_PROVIDER', value)
+      fake.reset(); geminiRuns = []
+      seed()
+      expect((await post()).status).toBe(200)
+      expect(geminiRuns).toHaveLength(1) // Gemini, never an unknown service and never a server error
+    }
+    vi.stubEnv('TRY_ON_PROVIDER', ' FASHN ')
+    fake.reset(); geminiRuns = []; fashnRuns = []
+    mockFetch.mockReset()
+    installFetch()
+    vi.stubEnv('FASHN_API_KEY', 'test-key')
+    seed()
+    await post()
+    expect(fashnRuns).toHaveLength(2)
+  })
+
+  it('without a Gemini key it is not set up and calls nothing', async () => {
+    vi.stubEnv('GEMINI_API_KEY', '')
+    seed()
+    expect((await post()).status).toBe(503)
+    expect(mockFetch).not.toHaveBeenCalled()
+  })
+
+  it('unreadable photo stops before any provider call on both providers', async () => {
+    for (const provider of ['gemini', 'fashn']) {
+      vi.stubEnv('TRY_ON_PROVIDER', provider)
+      vi.stubEnv('FASHN_API_KEY', 'test-key')
+      fake.reset(); mockFetch.mockClear()
+      seed()
+      fake.buckets['wardrobe-images'].delete(`${A}/bottom.jpg`)
+      const res = await post()
+      expect(res.status).toBe(500)
+      expect((await res.json()).code).toBe('IMAGE_UNAVAILABLE')
+      expect(mockFetch).not.toHaveBeenCalled()
+      expect(ledger()).toHaveLength(0)
+    }
+  })
+
+  it('cap is checked before the provider is called on both providers', async () => {
+    for (const provider of ['gemini', 'fashn']) {
+      vi.stubEnv('TRY_ON_PROVIDER', provider)
+      vi.stubEnv('FASHN_API_KEY', 'test-key')
+      fake.reset(); mockFetch.mockClear()
+      seed({ pieces: [piece('White tee', TOP)] })
+      vi.stubEnv('TRY_ON_MONTHLY_CAP_USD', '0.044') // under one Gemini picture (0.045) and one FASHN image (0.075)
+      expect((await post()).status).toBe(409)
+      expect(mockFetch).not.toHaveBeenCalled()
+      expect(ledger()).toHaveLength(0)
+      vi.stubEnv('TRY_ON_MONTHLY_CAP_USD', provider === 'gemini' ? '0.045' : '0.075') // room for exactly one
+      if (provider === 'fashn') installFetch(); else installGemini()
+      expect((await post()).status).toBe(200)
+      expect(charged()).toHaveLength(1)
+    }
+  })
+
+  it('each picture is counted at the price it was made at', async () => {
+    seed()
+    await post() // Gemini at 0.045
+    vi.stubEnv('TRY_ON_PRICE_USD', '0.06') // the price changes afterwards
+    vi.stubEnv('TRY_ON_PROVIDER', 'fashn')
+    vi.stubEnv('FASHN_API_KEY', 'test-key')
+    mockFetch.mockReset(); installFetch()
+    await post({ outfit_id: OUTFIT, regenerate: true }) // 2 FASHN images at 0.075
+    vi.stubEnv('TRY_ON_OWNER_USER_ID', A)
+    const owner = await (await SPEND()).json()
+    expect(owner.images).toBe(3)
+    expect(owner.spent_usd).toBeCloseTo(0.045 + 2 * 0.075, 10)
+    expect(fake.rpcCalls.map((c) => c.p_price_units)).toEqual([450, 750])
+  })
+
+  it('two requests at the cap never exceed it on both providers', async () => {
+    seed()
+    vi.stubEnv('TRY_ON_MONTHLY_CAP_USD', '0.045')
+    expect((await post()).status).toBe(200)
+    expect((await post({ outfit_id: OUTFIT, regenerate: true })).status).toBe(409)
+    expect(geminiRuns).toHaveLength(1)
+    expect(charged()).toHaveLength(1)
+  })
+
+  it('only returned pictures are charged on the new provider', async () => {
+    for (const mode of ['refuse', 'hostile', 'no-picture', 'hang'] as const) {
+      fake.reset(); geminiRuns = []
+      geminiMode = mode
+      seed()
+      const res = await post()
+      expect(res.status).toBe(502)
+      const json = await res.json()
+      expect(json.code).toBe('TRY_ON_FAILED')
+      expect(json.charged_pictures).toBe(0)
+      expect(ledger()).toHaveLength(0)
+      expect(fake.tables.outfits[0].try_on_image_path).toBeNull()
+    }
+    // A picture came back but could not be saved: counted, and no try-on used up.
+    fake.reset(); geminiMode = 'ok'
+    seed()
+    fake.uploadError = true
+    const res = await post()
+    expect(res.status).toBe(500)
+    expect((await res.json()).charged_pictures).toBe(1)
+    expect(charged()).toHaveLength(1)
+    expect(charged()[0].picture_made).toBe(false)
+  })
+
+  it('slow new provider gives up in time and charges nothing', async () => {
+    geminiMode = 'hang'
+    seed()
+    const started = Date.now()
+    const res = await post()
+    expect(res.status).toBe(502)
+    expect(Date.now() - started).toBeLessThan(90_000) // inside the route's 90 second limit
+    expect(ledger()).toHaveLength(0)
+  })
+
+  it('try-on failures log a fixed reason only on both providers', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    geminiMode = 'hostile'
+    seed()
+    await post()
+    geminiMode = 'hang'
+    await post()
+    geminiMode = 'ok'
+    fake.uploadError = true
+    await post()
+    const lines = log.mock.calls.map((c) => c.join(' '))
+    expect(lines).toEqual([
+      'try-on failed: gemini_refused',
+      'try-on failed: gemini_timeout',
+      'try-on failed: storage_failed',
+    ])
+    for (const secret of ['person@example.com', 'evil.example', 'Jane Doe', 'quota', A, 'photo-1', 'gemini-test-key', 'White tee', 'base64']) {
+      expect(lines.join('\n')).not.toContain(secret)
+    }
+    log.mockRestore()
   })
 })

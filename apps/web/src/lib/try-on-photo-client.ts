@@ -1,8 +1,19 @@
 import { formatUsd, toUnits } from '@/lib/try-on'
 
-/** The privacy note, word for word as agreed with the Product Owner (16 Nov 2026). */
+/**
+ * DRAFT wording for the Gemini provider (KAS-693), from the Researcher's facts (KAS-652). The
+ * Product Owner signs off the final text; until then this is not final.
+ */
 export const PRIVACY_NOTE =
-  'To show clothes on you, Fashun sends this photo and your clothing photos to FASHN, an outside try-on service. FASHN and the companies it works with, including some in the US and South-East Asia, use them only to make your picture. FASHN deletes them within a day and doesn\'t use them to train its AI. Fashun keeps your photo and your try-on pictures privately in your account until you delete them. You can delete them at any time under Profile.'
+  'To show clothes on you, Fashun sends this photo and your clothing photos to Google, whose Gemini AI makes your picture. Google doesn\'t use them to train its AI. It keeps them for up to 55 days to check for misuse, and may process them in any country. Fashun keeps your photo and your try-on pictures privately in your account until you delete them. You can delete them at any time under Profile. Try-on is for people aged 18 and over.'
+
+/** Which privacy note a person agreed to. Agreeing to an earlier note (the FASHN one has no version) doesn't count: they agree again. */
+export const PRIVACY_NOTE_VERSION = 'gemini-1'
+
+/** True when the person has agreed to the current privacy note. */
+export function hasAgreed(profile: { try_on_consent_at?: string | null; try_on_consent_note?: string | null } | null | undefined): boolean {
+  return !!profile?.try_on_consent_at && profile.try_on_consent_note === PRIVACY_NOTE_VERSION
+}
 
 export const UPLOAD_FAILED = "Couldn't add your photo. Check your connection and try again."
 export const BAD_PHOTO = "That file isn't a photo we can use. Choose a JPG or PNG photo."

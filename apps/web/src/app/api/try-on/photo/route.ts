@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
 import { tryOnEnabled } from '@/lib/paid-extras'
 import { TRY_ON_BUCKET, mediaTypeFromBytes } from '@/lib/try-on-images'
+import { PRIVACY_NOTE_VERSION, hasAgreed } from '@/lib/try-on-photo-client'
 
 const MAX_BYTES = 10 * 1024 * 1024
 const EXT: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }
@@ -31,10 +32,10 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { data: profile } = await supabase.from('users').select('try_on_photo_url,try_on_consent_at').eq('id', user.id).maybeSingle()
-  if (!profile?.try_on_photo_url) return NextResponse.json({ image_url: null, consented: !!profile?.try_on_consent_at })
+  const { data: profile } = await supabase.from('users').select('try_on_photo_url,try_on_consent_at,try_on_consent_note').eq('id', user.id).maybeSingle()
+  if (!profile?.try_on_photo_url) return NextResponse.json({ image_url: null, consented: hasAgreed(profile) })
   const { data, error } = await supabase.storage.from(TRY_ON_BUCKET).createSignedUrl(profile.try_on_photo_url, SIGNED_SECONDS)
-  return NextResponse.json({ image_url: error || !data ? null : data.signedUrl, consented: !!profile.try_on_consent_at })
+  return NextResponse.json({ image_url: error || !data ? null : data.signedUrl, consented: hasAgreed(profile) })
 }
 
 /** POST multipart {file, consent}: adds or replaces the photo. The first one needs consent. */
@@ -59,8 +60,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Use a JPEG, PNG or WebP photo', code: 'BAD_PHOTO' }, { status: 400 })
   }
 
-  const { data: profile } = await supabase.from('users').select('try_on_photo_url,try_on_consent_at').eq('id', user.id).maybeSingle()
-  const agreed = !!profile?.try_on_consent_at || form?.get('consent') === 'true'
+  const { data: profile } = await supabase.from('users').select('try_on_photo_url,try_on_consent_at,try_on_consent_note').eq('id', user.id).maybeSingle()
+  const alreadyAgreed = hasAgreed(profile)
+  const agreed = alreadyAgreed || form?.get('consent') === 'true'
   if (!agreed) {
     return NextResponse.json({ error: 'Please agree before adding a photo', code: 'CONSENT_REQUIRED' }, { status: 400 })
   }
@@ -71,7 +73,11 @@ export async function POST(req: Request) {
 
   const { error: saveError } = await supabase
     .from('users')
-    .update({ try_on_photo_url: path, try_on_consent_at: profile?.try_on_consent_at ?? new Date().toISOString() })
+    .update({
+      try_on_photo_url: path,
+      try_on_consent_at: alreadyAgreed ? profile?.try_on_consent_at : new Date().toISOString(),
+      try_on_consent_note: PRIVACY_NOTE_VERSION,
+    })
     .eq('id', user.id)
   if (saveError) {
     await supabase.storage.from(TRY_ON_BUCKET).remove([path])
@@ -91,10 +97,13 @@ export async function PUT() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { data: profile } = await supabase.from('users').select('try_on_consent_at').eq('id', user.id).maybeSingle()
+  const { data: profile } = await supabase.from('users').select('try_on_consent_at,try_on_consent_note').eq('id', user.id).maybeSingle()
   if (!profile) return NextResponse.json({ error: 'Could not save your agreement' }, { status: 500 })
-  if (!profile.try_on_consent_at) {
-    const { error } = await supabase.from('users').update({ try_on_consent_at: new Date().toISOString() }).eq('id', user.id)
+  if (!hasAgreed(profile)) {
+    const { error } = await supabase
+      .from('users')
+      .update({ try_on_consent_at: new Date().toISOString(), try_on_consent_note: PRIVACY_NOTE_VERSION })
+      .eq('id', user.id)
     if (error) return NextResponse.json({ error: 'Could not save your agreement' }, { status: 500 })
   }
   return NextResponse.json({ ok: true })
@@ -124,7 +133,7 @@ export async function DELETE() {
     .not('try_on_image_path', 'is', null)
   const { error: userError } = await supabase
     .from('users')
-    .update({ try_on_photo_url: null, try_on_consent_at: null })
+    .update({ try_on_photo_url: null, try_on_consent_at: null, try_on_consent_note: null })
     .eq('id', user.id)
   if (outfitsError || userError) {
     return NextResponse.json({ error: 'Could not delete your try-on photo. Try again.' }, { status: 500 })

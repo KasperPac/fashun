@@ -3,7 +3,18 @@
  * money (in whole 1/10,000 US$ so cents never drift) and the Sydney-time month.
  */
 
-export type TryOnStep = 'top' | 'bottom' | 'one-piece'
+export type TryOnStep = 'top' | 'bottom' | 'one-piece' | 'outfit'
+
+/** 'gemini': one image-edit request per outfit (default). 'fashn': today's two-pass path, kept as the fallback. */
+export type TryOnProvider = 'gemini' | 'fashn'
+
+/** TRY_ON_PROVIDER=fashn switches back to FASHN. Anything else, including missing or misspelt, is Gemini, so an unknown value never reaches an unknown service. */
+export function readTryOnProvider(): TryOnProvider {
+  return process.env.TRY_ON_PROVIDER?.trim().toLowerCase() === 'fashn' ? 'fashn' : 'gemini'
+}
+
+/** FASHN's published price of one image (US$0.075) in whole units. Fixed, so rolling back to FASHN needs no price change. */
+export const FASHN_PRICE_UNITS = 750
 
 export const TRY_ON_LABEL = 'Made by AI. Fit and details may not be exact.'
 
@@ -37,11 +48,15 @@ export function readTryOnSettings(): { capUnits: number | null; priceUnits: numb
   return { capUnits: cap === null ? null : toUnits(cap), priceUnits: price === null ? null : toUnits(price) }
 }
 
-/** Monthly cap and price per picture from settings. null when either is missing or not a positive number, so nothing is ever drawn unconfigured. */
-export function readTryOnConfig(): TryOnConfig | null {
+/**
+ * Monthly cap and the price of one ledger row (one Gemini picture, or one FASHN image) for the
+ * provider in use. Gemini's price is TRY_ON_PRICE_USD; FASHN's is fixed (the setting must still be
+ * set). null when the cap or the price is missing or not a positive number, so nothing is ever drawn unconfigured.
+ */
+export function readTryOnConfig(provider: TryOnProvider = readTryOnProvider()): TryOnConfig | null {
   const { capUnits, priceUnits } = readTryOnSettings()
   if (capUnits === null || priceUnits === null) return null
-  return { capUnits, priceUnits }
+  return { capUnits, priceUnits: provider === 'fashn' ? FASHN_PRICE_UNITS : priceUnits }
 }
 
 /** True when this user is the owner named in TRY_ON_OWNER_USER_ID. */
@@ -99,9 +114,16 @@ export interface OutfitPiece {
 
 export interface PlannedStep {
   step: TryOnStep
+  /** FASHN v1.6 category. null for the one-request 'outfit' step. */
+  category: 'tops' | 'bottoms' | 'one-pieces' | null
+}
+
+/** What a garment photo is, so the request can say what each picture shows. Never the person's own label. */
+export type GarmentKind = 'top' | 'bottom' | 'one-piece' | 'outerwear' | 'shoes'
+
+export interface PlannedGarment {
+  kind: GarmentKind
   label: string
-  /** FASHN v1.6 category. */
-  category: 'tops' | 'bottoms' | 'one-pieces'
   imageRef: string
 }
 
@@ -111,24 +133,32 @@ export interface SkippedPiece {
 }
 
 export type TryOnPlan =
-  | { ok: true; steps: PlannedStep[]; skipped: SkippedPiece[] }
+  | { ok: true; steps: PlannedStep[]; garments: PlannedGarment[]; skipped: SkippedPiece[] }
   | { ok: false; code: 'NO_TRYABLE_PIECES' | 'MISSING_GARMENT_PHOTO'; message: string; missing: string[] }
 
 const NOT_DRAWN = new Set(['shoes', 'bags', 'accessories', 'outerwear'])
 
 /**
- * Works out what to draw: a dress or jumpsuit is one step; otherwise the top, then the
- * bottom. Shoes, bags, accessories and outerwear are skipped and listed back. If any
- * piece that would be drawn has no photo, nothing is planned (so nothing is charged).
+ * Works out what to draw. FASHN (the default here, as before): a dress or jumpsuit is one
+ * step; otherwise the top, then the bottom; shoes, bags, accessories and outerwear are
+ * skipped and listed back. Gemini: one 'outfit' step that carries the same core pieces plus
+ * one pair of shoes and one outerwear piece when the outfit has them (an add-on without a
+ * photo is skipped, not an error); bags and accessories are never sent. If any core piece
+ * has no photo, nothing is planned (so nothing is charged).
  */
-export function planTryOn(pieces: OutfitPiece[]): TryOnPlan {
+export function planTryOn(pieces: OutfitPiece[], provider: TryOnProvider = 'fashn'): TryOnPlan {
+  const oneShot = provider === 'gemini'
   const skipped: SkippedPiece[] = []
   const tops: OutfitPiece[] = []
   const bottoms: OutfitPiece[] = []
   const onePieces: OutfitPiece[] = []
+  const outerwear: OutfitPiece[] = []
+  const shoes: OutfitPiece[] = []
 
   for (const p of pieces) {
     if (p.category === null) skipped.push({ label: p.label, reason: 'not_in_wardrobe' })
+    else if (oneShot && p.category === 'outerwear') outerwear.push(p)
+    else if (oneShot && p.category === 'shoes') shoes.push(p)
     else if (NOT_DRAWN.has(p.category)) skipped.push({ label: p.label, reason: 'not_drawn' })
     else if (p.category === 'tops') tops.push(p)
     else if (p.category === 'bottoms') bottoms.push(p)
@@ -136,7 +166,7 @@ export function planTryOn(pieces: OutfitPiece[]): TryOnPlan {
     else skipped.push({ label: p.label, reason: 'not_drawn' })
   }
 
-  const chosen: Array<{ piece: OutfitPiece; step: TryOnStep; category: PlannedStep['category'] }> = []
+  const chosen: Array<{ piece: OutfitPiece; step: Exclude<TryOnStep, 'outfit'>; category: PlannedStep['category'] }> = []
   if (onePieces.length > 0) {
     chosen.push({ piece: onePieces[0], step: 'one-piece', category: 'one-pieces' })
     for (const p of [...onePieces.slice(1), ...tops, ...bottoms]) skipped.push({ label: p.label, reason: 'covered' })
@@ -165,11 +195,22 @@ export function planTryOn(pieces: OutfitPiece[]): TryOnPlan {
     }
   }
 
-  return {
-    ok: true,
-    steps: chosen.map((c) => ({ step: c.step, label: c.piece.label, category: c.category, imageRef: c.piece.imageRef as string })),
-    skipped,
+  const garments: PlannedGarment[] = chosen.map((c) => ({ kind: c.step, label: c.piece.label, imageRef: c.piece.imageRef as string }))
+
+  if (!oneShot) {
+    return { ok: true, steps: chosen.map((c) => ({ step: c.step, category: c.category })), garments, skipped }
   }
+
+  // Core pieces first, then outerwear, then shoes: the request names each picture in this order. A second jacket or pair of shoes is covered, as a second top is.
+  for (const [list, kind] of [[outerwear, 'outerwear'], [shoes, 'shoes']] as const) {
+    const [first, ...rest] = list
+    if (first) {
+      if (first.imageRef) garments.push({ kind, label: first.label, imageRef: first.imageRef })
+      else skipped.push({ label: first.label, reason: 'not_drawn' })
+    }
+    for (const p of rest) skipped.push({ label: p.label, reason: 'covered' })
+  }
+  return { ok: true, steps: [{ step: 'outfit', category: null }], garments, skipped }
 }
 
 export interface SpendMonth {
@@ -183,6 +224,16 @@ export interface SpendMonth {
 /** Exact spend of a number of FASHN images, in whole units. */
 export function imagesToUnits(images: number, priceUnits: number): number {
   return images * priceUnits
+}
+
+/**
+ * Exact spend per month in whole units: each row at the price it was made at. Rows from before
+ * the price was stored (price_units null) are FASHN images, counted at FASHN's price.
+ */
+export function unitsByMonth(rows: Array<{ month: string; price_units?: number | null }>): Map<string, number> {
+  const byMonth = new Map<string, number>()
+  for (const r of rows) byMonth.set(r.month, (byMonth.get(r.month) ?? 0) + (r.price_units ?? FASHN_PRICE_UNITS))
+  return byMonth
 }
 
 /** Groups charged ledger rows (one per FASHN image) by month, newest first. */

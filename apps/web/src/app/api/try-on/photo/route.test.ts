@@ -19,7 +19,7 @@ function upload(opts: { consent?: boolean; type?: string; bytes?: Uint8Array } =
 
 beforeEach(() => {
   fake.reset()
-  fake.tables.users.push({ id: A, try_on_photo_url: null, try_on_consent_at: null }, { id: B, try_on_photo_url: `${B}/photo-b.jpg`, try_on_consent_at: 'x' })
+  fake.tables.users.push({ id: A, try_on_photo_url: null, try_on_consent_at: null }, { id: B, try_on_photo_url: `${B}/photo-b.jpg`, try_on_consent_at: 'x', try_on_consent_note: 'gemini-1' })
   fake.buckets['try-on-photos'].set(`${B}/photo-b.jpg`, JPEG)
   vi.stubEnv('ENABLE_TRY_ON', 'true')
 })
@@ -160,5 +160,18 @@ describe('/api/try-on/photo', () => {
     expect((await DELETE()).status).toBe(401)
     expect((await upload({ consent: true })).status).toBe(401)
     expect(fake.tables.users[0].try_on_photo_url).not.toBeNull()
+  })
+
+  it('an agreement to an earlier note does not count: the person agrees again', async () => {
+    fake.tables.users[0].try_on_consent_at = '2026-11-01T00:00:00Z' // the FASHN note: no version stored
+    expect((await (await GET()).json()).consented).toBe(false)
+    const res = await upload()
+    expect(res.status).toBe(400)
+    expect((await res.json()).code).toBe('CONSENT_REQUIRED')
+    expect(fake.buckets['try-on-photos'].size).toBe(1) // nothing stored
+    expect((await PUT()).status).toBe(200)
+    expect(fake.tables.users[0]).toMatchObject({ try_on_consent_note: 'gemini-1' })
+    expect((await (await GET()).json()).consented).toBe(true)
+    expect((await upload()).status).toBe(200)
   })
 })
