@@ -41,7 +41,7 @@ beforeEach(() => {
     { id: B, try_on_consent_at: 'x', try_on_consent_note: 'gemini-2' },
   )
   fake.tables.wardrobe_items.push(
-    { id: ITEM_A, user_id: A, worn_photo_path: null },
+    { id: ITEM_A, user_id: A, worn_photo_path: null, name: 'Dark Indigo Straight Leg Jeans', category: 'bottoms' },
     { id: ITEM_B, user_id: B, worn_photo_path: `${B}/worn-${ITEM_B}-b.jpg` },
   )
   BUCKET().set(`${B}/worn-${ITEM_B}-b.jpg`, JPEG)
@@ -154,10 +154,18 @@ describe('/api/wardrobe/[id]/worn-photo', () => {
     expect(sent[0]).toMatchObject({ type: 'image', source: { type: 'base64' } })
     const ask = sent[1].text as string
     for (const word of ['how loose or slim', 'length', 'sleeves or hem', 'tucked or untucked']) expect(ask).toContain(word)
-    expect(ask).toMatch(/describe only the garment/i)
+    expect(ask).toMatch(/describe only that item/i)
     expect(ask).toMatch(/never mention or judge the person's body/i)
     const body = await get(ITEM_A).then((r) => r.json())
     expect(body.fit_notes).toBe(NOTES)
+  })
+
+  it('the fit-notes request names the item and its category and says to ignore other clothing', async () => {
+    await upload(ITEM_A)
+    const ask = mockCreate.mock.calls[0][0].messages[0].content[1].text as string
+    expect(ask).toContain('"Dark Indigo Straight Leg Jeans"')
+    expect(ask).toContain('(category: bottoms)')
+    expect(ask).toMatch(/ignore every other garment, shoe and accessory/i)
   })
 
   it('fit notes failure does not break the worn photo', async () => {

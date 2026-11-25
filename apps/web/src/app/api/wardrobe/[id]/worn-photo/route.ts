@@ -18,8 +18,8 @@ const failed = (what: string) => NextResponse.json({ error: what }, { status: 50
 type ServerClient = Awaited<ReturnType<typeof createServerClient>>
 
 /** The signed-in person's own item. Another person's item looks the same as a missing one. */
-async function ownItem(supabase: ServerClient, userId: string, id: string): Promise<{ worn_photo_path: string | null; fit_notes: string | null } | null> {
-  const { data } = await supabase.from('wardrobe_items').select('worn_photo_path,fit_notes').eq('id', id).eq('user_id', userId).maybeSingle()
+async function ownItem(supabase: ServerClient, userId: string, id: string): Promise<{ worn_photo_path: string | null; fit_notes: string | null; name: string | null; category: string | null } | null> {
+  const { data } = await supabase.from('wardrobe_items').select('worn_photo_path,fit_notes,name,category').eq('id', id).eq('user_id', userId).maybeSingle()
   return data ?? null
 }
 
@@ -70,7 +70,7 @@ export async function POST(req: Request, { params }: Context) {
   if (uploadError) return failed('Could not save the photo')
 
   // Fit notes come from this photo. A failure is silent: the photo is kept and the notes stay empty (the old ones never stay).
-  const fitNotes = await makeFitNotes(Buffer.from(upload.bytes).toString('base64'))
+  const fitNotes = await makeFitNotes(Buffer.from(upload.bytes).toString('base64'), { name: item.name ?? '', category: item.category ?? '' })
 
   const { error: saveError } = await supabase.from('wardrobe_items').update({ worn_photo_path: path, fit_notes: fitNotes }).eq('id', id).eq('user_id', user.id)
   if (saveError) {

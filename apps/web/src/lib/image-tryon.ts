@@ -45,7 +45,7 @@ export function tryOnPrompt(kinds: GarmentKind[], extras: GarmentExtras[] = []):
   kinds.forEach((k, i) => {
     const e = extras[i]
     if (e?.worn) {
-      fitLines.push(`picture ${next} shows the same person wearing the garment in picture ${i + 2}: use it only to see how that garment fits this person (length, looseness, tucked or not), never to copy the person, pose or background.`)
+      fitLines.push(`picture ${next} shows the same person wearing the garment in picture ${i + 2}: use it only to see how that garment fits this person (length, looseness, tucked or not), never to copy the person, pose or background. Ignore every other piece of clothing, shoe and accessory in that picture: draw only the garments shown in pictures 2 to ${kinds.length + 1}.`)
       next += 1
     }
     const notes = e?.fitNotes?.trim()
@@ -56,7 +56,7 @@ export function tryOnPrompt(kinds: GarmentKind[], extras: GarmentExtras[] = []):
     "Edit the first picture, which shows a person. Keep the person's face, body, pose and background exactly as they are. " +
     `Dress the person in the garments shown in the other pictures (${shown}).${fit} ` +
     "Keep each garment's colour, pattern, fabric and hardware (buttons, belt loops, pockets, zips) exactly as photographed. " +
-    'Dress them naturally: tuck or untuck each garment as it suits. ' +
+    'Where a worn photo or fit notes say a garment is tucked or untucked, draw it that way; otherwise tuck or untuck it as suits. ' +
     "Keep the person's own shoes exactly as they are in the first picture unless shoes are shown in the other pictures. " +
     'Return one photo-realistic picture of the person wearing the outfit.'
   )
