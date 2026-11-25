@@ -73,7 +73,6 @@ export function openaiProvider({ apiKey, model, baseUrl = DEFAULT_BASE_URLS.open
       form.append('prompt', prompt)
       form.append('n', '1')
       form.append('quality', 'high')
-      form.append('input_fidelity', 'high')
       for (const img of [person, ...garments]) {
         form.append('image[]', new Blob([img.bytes], { type: img.mime }), img.name)
       }
