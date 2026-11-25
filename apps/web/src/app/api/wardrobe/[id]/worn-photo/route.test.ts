@@ -30,11 +30,14 @@ const get = (id: string) => GET(new Request(url(id)), ctx(id))
 const del = (id: string) => DELETE(new Request(url(id), { method: 'DELETE' }), ctx(id))
 const item = (id: string) => fake.tables.wardrobe_items.find((i) => i.id === id)
 
-const NOTES = 'Relaxed fit, hip length. Sleeves end at the wrist. Worn untucked.'
+const NOTES = 'Relaxed fit, hip length. Sleeves end at the wrist.'
+const BOX = { left: 0.2, top: 0.3, right: 0.8, bottom: 0.9 }
+const reply = (r: { notes?: string | null; box?: unknown; tucked?: string }) =>
+  ({ content: [{ type: 'text', text: JSON.stringify({ notes: null, box: null, tucked: 'unclear', ...r }) }] })
 
 beforeEach(() => {
   mockCreate.mockReset()
-  mockCreate.mockResolvedValue({ content: [{ type: 'text', text: NOTES }] })
+  mockCreate.mockResolvedValue(reply({ notes: NOTES, box: BOX, tucked: 'untucked' }))
   fake.reset()
   fake.tables.users.push(
     { id: A, try_on_consent_at: 'x', try_on_consent_note: 'gemini-2' },
@@ -149,12 +152,14 @@ describe('/api/wardrobe/[id]/worn-photo', () => {
   it('saving a worn photo stores garment-only fit notes', async () => {
     expect((await upload(ITEM_A)).status).toBe(200)
     expect(item(ITEM_A)?.fit_notes).toBe(NOTES)
+    expect(item(ITEM_A)?.worn_fit).toEqual({ box: BOX, tucked: 'untucked' })
     expect(mockCreate).toHaveBeenCalledTimes(1)
     const sent = mockCreate.mock.calls[0][0].messages[0].content
     expect(sent[0]).toMatchObject({ type: 'image', source: { type: 'base64' } })
     const ask = sent[1].text as string
-    for (const word of ['how loose or slim', 'length', 'sleeves or hem', 'tucked or untucked']) expect(ask).toContain(word)
-    expect(ask).toMatch(/describe only that item/i)
+    for (const word of ['how loose or slim', 'length', 'sleeves or hem', '"box"', '"tucked"']) expect(ask).toContain(word)
+    expect(ask).toMatch(/that item only/i)
+    expect(ask).toMatch(/do not mention tucking in the notes/i)
     expect(ask).toMatch(/never mention or judge the person's body/i)
     const body = await get(ITEM_A).then((r) => r.json())
     expect(body.fit_notes).toBe(NOTES)
@@ -185,20 +190,34 @@ describe('/api/wardrobe/[id]/worn-photo', () => {
   it('replacing a worn photo remakes its fit notes', async () => {
     await upload(ITEM_A)
     expect(item(ITEM_A)?.fit_notes).toBe(NOTES)
-    mockCreate.mockResolvedValue({ content: [{ type: 'text', text: 'Slim fit. Cropped length.' }] })
+    mockCreate.mockResolvedValue(reply({ notes: 'Slim fit. Cropped length.', box: null, tucked: 'tucked' }))
     await upload(ITEM_A)
     expect(item(ITEM_A)?.fit_notes).toBe('Slim fit. Cropped length.')
+    expect(item(ITEM_A)?.worn_fit).toEqual({ box: null, tucked: 'tucked' })
     // a failed reading on replace leaves no old notes behind
     mockCreate.mockRejectedValue(new Error('x'))
     vi.spyOn(console, 'error').mockImplementation(() => {})
     await upload(ITEM_A)
     expect(item(ITEM_A)?.fit_notes).toBeNull()
+    expect(item(ITEM_A)?.worn_fit).toBeNull()
+  })
+
+  it('a box that is out of range or missing is dropped, never guessed', async () => {
+    mockCreate.mockResolvedValue(reply({ notes: NOTES, box: { left: 0.5, top: 0.1, right: 0.4, bottom: 0.9 }, tucked: 'sideways' }))
+    await upload(ITEM_A)
+    expect(item(ITEM_A)?.worn_fit).toEqual({ box: null, tucked: 'unclear' })
+    mockCreate.mockResolvedValue({ content: [{ type: 'text', text: 'Relaxed fit. Worn untucked.' }] })
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    await upload(ITEM_A)
+    expect(item(ITEM_A)?.fit_notes).toBeNull() // plain text, not the JSON we asked for
+    expect(item(ITEM_A)?.worn_fit).toBeNull()
   })
 
   it('deleting the worn photo clears its fit notes', async () => {
     await upload(ITEM_A)
     expect((await del(ITEM_A)).status).toBe(200)
     expect(item(ITEM_A)?.fit_notes).toBeNull()
+    expect(item(ITEM_A)?.worn_fit).toBeNull()
     expect((await get(ITEM_A).then((r) => r.json())).fit_notes).toBeNull()
   })
 

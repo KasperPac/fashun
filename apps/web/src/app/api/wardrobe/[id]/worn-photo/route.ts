@@ -70,9 +70,9 @@ export async function POST(req: Request, { params }: Context) {
   if (uploadError) return failed('Could not save the photo')
 
   // Fit notes come from this photo. A failure is silent: the photo is kept and the notes stay empty (the old ones never stay).
-  const fitNotes = await makeFitNotes(Buffer.from(upload.bytes).toString('base64'), { name: item.name ?? '', category: item.category ?? '' })
+  const reading = await makeFitNotes(Buffer.from(upload.bytes).toString('base64'), { name: item.name ?? '', category: item.category ?? '' })
 
-  const { error: saveError } = await supabase.from('wardrobe_items').update({ worn_photo_path: path, fit_notes: fitNotes }).eq('id', id).eq('user_id', user.id)
+  const { error: saveError } = await supabase.from('wardrobe_items').update({ worn_photo_path: path, fit_notes: reading?.notes ?? null, worn_fit: reading?.fit ?? null }).eq('id', id).eq('user_id', user.id)
   if (saveError) {
     await supabase.storage.from(TRY_ON_BUCKET).remove([path])
     return failed('Could not save the photo')
@@ -99,7 +99,7 @@ export async function DELETE(_req: Request, { params }: Context) {
     const { error } = await supabase.storage.from(TRY_ON_BUCKET).remove([item.worn_photo_path])
     if (error) return failed('Could not delete the photo. Try again.')
   }
-  const { error: clearError } = await supabase.from('wardrobe_items').update({ worn_photo_path: null, fit_notes: null }).eq('id', id).eq('user_id', user.id)
+  const { error: clearError } = await supabase.from('wardrobe_items').update({ worn_photo_path: null, fit_notes: null, worn_fit: null }).eq('id', id).eq('user_id', user.id)
   if (clearError) return failed('Could not delete the photo. Try again.')
   return NextResponse.json({ ok: true })
 }

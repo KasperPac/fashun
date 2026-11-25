@@ -1,6 +1,8 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { mediaTypeFromBase64 } from './image-media-type'
 import { logClaudeError, logClaudeFailure } from './claude-log'
+import { extractJson } from './extract-json'
+import { WornBoxSchema, TuckedSchema, type WornFit } from './worn-crop'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -17,10 +19,12 @@ function describeItem(item: FitNotesItem): string {
 }
 
 export function fitNotesPrompt(item: FitNotesItem): string {
-  return `This photo shows a person wearing several pieces of clothing. Write short fit notes about ONE item only: ${describeItem(item)}. Find that item in the photo and ignore every other garment, shoe and accessory the person wears, even if it is more visible.
-Describe how that item fits: how loose or slim it is, its length, where the sleeves or hem fall, and how it is worn (tucked or untucked, cuffs rolled, buttoned or open), as far as they apply to that kind of item.
-Rules: describe only that item. Never mention or judge the person's body, weight, shape, age, skin, face or anything else about them. Use plain short sentences, at most 3, no lists, no markdown.
-Reply with the notes only. If that item is not visible or you cannot tell how it fits, reply with exactly: NONE`
+  return `This photo shows a person wearing several pieces of clothing. Look at ONE item only: ${describeItem(item)}. Find that item in the photo and ignore every other garment, shoe and accessory the person wears, even if it is more visible.
+Reply with JSON only, no markdown, in exactly this shape:
+{"notes": string or null, "box": {"left": number, "top": number, "right": number, "bottom": number} or null, "tucked": "tucked" or "untucked" or "unclear"}
+- notes: short fit notes about that item only: how loose or slim it is, its length, where the sleeves or hem fall, cuffs rolled, buttoned or open, as far as they apply to that kind of item. Do not mention tucking in the notes. Never mention or judge the person's body, weight, shape, age, skin, face or anything else about them. Plain short sentences, at most 3, no lists. null if you cannot tell how it fits.
+- box: where that item is, as fractions of the photo from its top left corner (0 to 1; left, top, right and bottom edges). Cover only that item: for trousers, skirts and shorts end at the ankle and leave out shoes; for a top, cover the top itself. null if the item is not visible.
+- tucked: for a top, whether it is tucked into the bottoms. "unclear" for anything that is not a top, or if you cannot tell.`
 }
 
 /** Tidies the model's reply into plain short text. null when there is nothing usable. */
@@ -33,15 +37,36 @@ export function cleanFitNotes(raw: string): string | null {
   return lastStop > 0 ? cut.slice(0, lastStop + 1) : cut.trimEnd()
 }
 
+/** What the worn photo told us about its item: short notes, where the item is, and whether it is tucked. */
+export interface FitReading { notes: string | null; fit: WornFit }
+
+/** Reads the model's JSON reply. A box or tucked field that isn't in the expected shape is dropped, never guessed. null when nothing usable. */
+export function parseFitReading(raw: string): FitReading | null {
+  const json = extractJson<Record<string, unknown>>(raw, 'object')
+  if (!json || typeof json !== 'object') return null
+  const notes = typeof json.notes === 'string' ? cleanFitNotes(json.notes) : null
+  const box = WornBoxSchema.safeParse(json.box)
+  const tucked = TuckedSchema.safeParse(json.tucked)
+  const fit: WornFit = { box: box.success ? box.data : null, tucked: tucked.success ? tucked.data : 'unclear' }
+  if (!notes && !fit.box) return null
+  return { notes, fit }
+}
+
+/** The notes sent with a try-on. Tucking comes only from the stored field: nothing is said when it is unclear. */
+export function notesWithTucking(notes: string | null, tucked: WornFit['tucked'] | null): string | null {
+  const line = tucked === 'tucked' ? 'Worn tucked in.' : tucked === 'untucked' ? 'Worn untucked.' : null
+  return [notes?.trim(), line].filter(Boolean).join(' ') || null
+}
+
 /**
- * Fit notes for the named item only, from a worn photo (base64), or null. A failure is silent to the person and
+ * The reading for the named item only, from a worn photo (base64), or null. A failure is silent to the person and
  * logs a fixed reason only: never the photo, the model's text or anything about the user.
  */
-export async function makeFitNotes(imageBase64: string, item: FitNotesItem): Promise<string | null> {
+export async function makeFitNotes(imageBase64: string, item: FitNotesItem): Promise<FitReading | null> {
   try {
     const message = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 200,
+      max_tokens: 300,
       messages: [{
         role: 'user',
         content: [
@@ -55,9 +80,9 @@ export async function makeFitNotes(imageBase64: string, item: FitNotesItem): Pro
       logClaudeFailure('fit-notes', 'no text in reply')
       return null
     }
-    const notes = cleanFitNotes(content.text)
-    if (!notes) logClaudeFailure('fit-notes', 'no usable notes')
-    return notes
+    const reading = parseFitReading(content.text)
+    if (!reading) logClaudeFailure('fit-notes', 'no usable notes')
+    return reading
   } catch (err) {
     logClaudeError('fit-notes', err)
     return null

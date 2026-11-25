@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import sharp from 'sharp'
 import { fake, A, B } from '@/lib/__fixtures__/try-on-fake'
 
 vi.mock('@/lib/supabase/server', async () => {
@@ -761,27 +762,105 @@ describe('POST /api/outfits/try-on: Gemini (one request per outfit)', () => {
     expect(fashnRuns).toHaveLength(2)
   })
 
-  it('worn photos and fit notes go with the try-on request', async () => {
+  /** A real JPEG, so the crop can be measured. */
+  const photo = (width: number, height: number) => sharp({ create: { width, height, channels: 3, background: '#808080' } }).jpeg().toBuffer()
+  const sizeOf = async (data: string | undefined) => {
+    const m = await sharp(Buffer.from(data ?? '', 'base64')).metadata()
+    return { width: m.width, height: m.height }
+  }
+  async function seedWorn(fit: { notes?: string | null; worn_fit?: unknown }, id = TOP, bytes?: Uint8Array) {
+    const WORN = `${A}/worn-${id}-x.jpg`
+    Object.assign(fake.tables.wardrobe_items.find((i) => i.id === id) as object, { worn_photo_path: WORN, fit_notes: fit.notes ?? null, worn_fit: fit.worn_fit ?? null })
+    fake.buckets['try-on-photos'].set(WORN, bytes ?? new Uint8Array(await photo(200, 400)))
+  }
+
+  it('a worn photo goes as a crop of its item, never the whole photo, with the notes and the stored tucking', async () => {
     seed()
-    const WORN = `${A}/worn-${TOP}-x.jpg`
-    const WORN_BYTES = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 9, 9, 9])
-    Object.assign(fake.tables.wardrobe_items.find((i) => i.id === TOP) as object, { worn_photo_path: WORN, fit_notes: 'Boxy, hip length. Worn untucked.' })
-    fake.buckets['try-on-photos'].set(WORN, WORN_BYTES)
+    const original = await photo(200, 400)
+    await seedWorn({ notes: 'Boxy, hip length.', worn_fit: { box: { left: 0.25, top: 0.25, right: 0.75, bottom: 0.5 }, tucked: 'untucked' } }, TOP, new Uint8Array(original))
     const res = await post()
     expect(res.status).toBe(200)
     expect(geminiRuns).toHaveLength(1)
-    // person, top, bottoms, then the top's worn photo
+    // person, top, bottoms, then the crop of the top
     expect(geminiPictures()).toHaveLength(4)
-    expect(geminiPictures()[3].inline_data?.data).toBe(b64(WORN_BYTES))
+    const crop = geminiPictures()[3].inline_data
+    expect(crop?.data).not.toBe(b64(original))
+    expect(crop?.mime_type).toBe('image/jpeg')
+    // box 100 x 100 plus an 8% margin each side = 116 x 116
+    expect(await sizeOf(crop?.data)).toEqual({ width: 116, height: 116 })
     const text = geminiParts()[0].text as string
-    expect(text).toContain('picture 4 shows the same person wearing the garment in picture 2')
+    expect(text).toContain('picture 4 is a close-up of the garment in picture 2')
     expect(text).toContain('Fit notes for the garment in picture 2')
     expect(text).toContain('Boxy, hip length. Worn untucked.')
-    expect(text).not.toContain('picture 3 shows')
+    expect(text).not.toContain('picture 3 is a close-up')
     expect(JSON.stringify(geminiRuns[0].body)).not.toMatch(/https?:/)
     // still one picture, charged as before
     expect((await res.json()).charged_pictures).toBe(1)
     expect(charged()).toHaveLength(1)
+  })
+
+  it('tucking comes only from the stored field: tucked is said, unclear says nothing', async () => {
+    const box = { left: 0.25, top: 0.25, right: 0.75, bottom: 0.5 }
+    seed()
+    await seedWorn({ notes: 'Boxy.', worn_fit: { box, tucked: 'tucked' } })
+    await post()
+    expect(geminiParts()[0].text).toContain('"Boxy. Worn tucked in."')
+    fake.reset(); geminiRuns = []
+    seed()
+    await seedWorn({ notes: 'Boxy.', worn_fit: { box, tucked: 'unclear' } })
+    await post()
+    expect(geminiParts()[0].text).toContain('"Boxy."')
+    expect(geminiParts()[0].text).not.toMatch(/tucked in|untucked\./)
+  })
+
+  it('a worn photo with no box sends the notes only, no picture', async () => {
+    seed()
+    await seedWorn({ notes: 'Boxy, hip length.', worn_fit: { box: null, tucked: 'unclear' } })
+    expect((await post()).status).toBe(200)
+    expect(geminiPictures()).toHaveLength(3)
+    expect(geminiParts()[0].text).toContain('Boxy, hip length.')
+    expect(geminiParts()[0].text).not.toContain('close-up')
+    // a photo saved before boxes existed behaves the same: notes only
+    fake.reset(); geminiRuns = []
+    seed()
+    await seedWorn({ notes: 'Boxy, hip length.', worn_fit: null })
+    expect((await post()).status).toBe(200)
+    expect(geminiPictures()).toHaveLength(3)
+    expect(geminiParts()[0].text).toContain('Boxy, hip length.')
+  })
+
+  it('a photo that cannot be cut sends the notes only', async () => {
+    seed()
+    await seedWorn({ notes: 'Boxy.', worn_fit: { box: { left: 0.2, top: 0.2, right: 0.8, bottom: 0.8 }, tucked: 'unclear' } }, TOP, JPEG)
+    expect((await post()).status).toBe(200)
+    expect(geminiPictures()).toHaveLength(3)
+    expect(geminiParts()[0].text).toContain('Boxy.')
+  })
+
+  it('a bottom is cut above the ankle, so no shoes can be in its crop', async () => {
+    seed()
+    // trousers fill the lower 60% of a 100 x 1000 photo, box 0.4 to 1.0 (ankle at the bottom edge)
+    await seedWorn({ worn_fit: { box: { left: 0.1, top: 0.4, right: 0.9, bottom: 1 }, tucked: 'unclear' } }, BOTTOM, new Uint8Array(await photo(100, 1000)))
+    expect((await post()).status).toBe(200)
+    const crop = geminiPictures()[3].inline_data // person, top, bottoms, crop
+    // from 8% of the box above its top (352) to 90% of the way down it (940): the last 6% of the photo, where ankles and shoes are, is out. Width 80 + 8% each side = 93.
+    expect(await sizeOf(crop?.data)).toEqual({ width: 93, height: 588 })
+  })
+
+  it('shoes are not cut out of a shoe item', async () => {
+    seed({
+      pieces: [piece('White tee', TOP), piece('Blue jeans', BOTTOM), piece('Boots', SHOES)],
+      items: [
+        { id: TOP, category: 'tops', image_url: `${A}/top.jpg` },
+        { id: BOTTOM, category: 'bottoms', image_url: `${A}/bottom.jpg` },
+        { id: SHOES, category: 'shoes', image_url: `${A}/shoes.jpg` },
+      ],
+    })
+    await seedWorn({ worn_fit: { box: { left: 0.3, top: 0.9, right: 0.7, bottom: 1 }, tucked: 'unclear' } }, SHOES, new Uint8Array(await photo(100, 1000)))
+    expect((await post()).status).toBe(200)
+    const crop = geminiPictures()[4].inline_data // person, top, bottoms, shoes, crop
+    // the box is 100 tall at the very bottom: the whole box stays, with margin only above (the photo ends there)
+    expect((await sizeOf(crop?.data)).height).toBe(108) // 892 to the bottom of the photo
   })
 
   it('pieces without a worn photo behave as before', async () => {

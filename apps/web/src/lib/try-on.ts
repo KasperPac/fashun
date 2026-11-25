@@ -113,6 +113,8 @@ export interface OutfitPiece {
   /** The item's "photo of me wearing it" (an object path in the try-on bucket) and its fit notes, when it has them. */
   wornPhotoPath?: string | null
   fitNotes?: string | null
+  /** Where the item is in its worn photo and whether it is tucked (worn_fit), as stored. */
+  wornFit?: unknown
 }
 
 export interface PlannedStep {
@@ -130,6 +132,7 @@ export interface PlannedGarment {
   imageRef: string
   wornPhotoPath?: string | null
   fitNotes?: string | null
+  wornFit?: unknown
 }
 
 export interface SkippedPiece {
@@ -200,7 +203,7 @@ export function planTryOn(pieces: OutfitPiece[], provider: TryOnProvider = 'fash
     }
   }
 
-  const garments: PlannedGarment[] = chosen.map((c) => ({ kind: c.step, label: c.piece.label, imageRef: c.piece.imageRef as string, wornPhotoPath: c.piece.wornPhotoPath, fitNotes: c.piece.fitNotes }))
+  const garments: PlannedGarment[] = chosen.map((c) => ({ kind: c.step, label: c.piece.label, imageRef: c.piece.imageRef as string, wornPhotoPath: c.piece.wornPhotoPath, fitNotes: c.piece.fitNotes, wornFit: c.piece.wornFit }))
 
   if (!oneShot) {
     return { ok: true, steps: chosen.map((c) => ({ step: c.step, category: c.category })), garments, skipped }
@@ -210,7 +213,7 @@ export function planTryOn(pieces: OutfitPiece[], provider: TryOnProvider = 'fash
   for (const [list, kind] of [[outerwear, 'outerwear'], [shoes, 'shoes']] as const) {
     const [first, ...rest] = list
     if (first) {
-      if (first.imageRef) garments.push({ kind, label: first.label, imageRef: first.imageRef, wornPhotoPath: first.wornPhotoPath, fitNotes: first.fitNotes })
+      if (first.imageRef) garments.push({ kind, label: first.label, imageRef: first.imageRef, wornPhotoPath: first.wornPhotoPath, fitNotes: first.fitNotes, wornFit: first.wornFit })
       else skipped.push({ label: first.label, reason: 'not_drawn' })
     }
     for (const p of rest) skipped.push({ label: p.label, reason: 'covered' })

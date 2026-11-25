@@ -8,6 +8,8 @@ import { runImageTryOn, ImageTryOnError, ImageTryOnTimeoutError } from '@/lib/im
 import {
   chargePicture, chargedSpendByMonth, hasRoomForUnits, markPictureMade, releasePictures, reservePictures,
 } from '@/lib/try-on-ledger'
+import { notesWithTucking } from '@/lib/fit-notes'
+import { cropWornPhoto, parseWornFit } from '@/lib/worn-crop'
 import { hasAgreed } from '@/lib/try-on-photo-client'
 import { loadGarmentPhoto, loadPersonPhoto, TRY_ON_BUCKET } from '@/lib/try-on-images'
 import {
@@ -142,15 +144,15 @@ export async function POST(req: Request) {
   // Work out what to draw from the outfit's pieces and the user's own wardrobe.
   const stored = (Array.isArray(outfit.pieces) ? outfit.pieces : []) as StoredPiece[]
   const itemIds = [...new Set(stored.flatMap((p) => (typeof p.item_id === 'string' && p.item_id ? [p.item_id] : [])))]
-  const wardrobe = new Map<string, { category: string; image_url: string | null; worn_photo_path: string | null; fit_notes: string | null }>()
+  const wardrobe = new Map<string, { category: string; image_url: string | null; worn_photo_path: string | null; fit_notes: string | null; worn_fit: unknown }>()
   if (itemIds.length > 0) {
     const { data: items, error } = await supabase
       .from('wardrobe_items')
-      .select('id,category,image_url,worn_photo_path,fit_notes')
+      .select('id,category,image_url,worn_photo_path,fit_notes,worn_fit')
       .eq('user_id', user.id)
       .in('id', itemIds)
     if (error) return NextResponse.json({ error: 'Could not read the outfit' }, { status: 500 })
-    for (const i of items ?? []) wardrobe.set(i.id, { category: i.category, image_url: i.image_url, worn_photo_path: i.worn_photo_path, fit_notes: i.fit_notes })
+    for (const i of items ?? []) wardrobe.set(i.id, { category: i.category, image_url: i.image_url, worn_photo_path: i.worn_photo_path, fit_notes: i.fit_notes, worn_fit: i.worn_fit })
   }
   const pieces: OutfitPiece[] = stored.map((p) => {
     const itemId = typeof p.item_id === 'string' && p.item_id ? p.item_id : null
@@ -163,6 +165,7 @@ export async function POST(req: Request) {
       // Only the one-request provider uses worn photos and fit notes; FASHN gets today's request.
       wornPhotoPath: provider === 'gemini' ? found?.worn_photo_path ?? null : null,
       fitNotes: provider === 'gemini' ? found?.fit_notes ?? null : null,
+      wornFit: provider === 'gemini' ? found?.worn_fit ?? null : null,
     }
   })
 
@@ -185,10 +188,13 @@ export async function POST(req: Request) {
         { status: 500 },
       )
     }
-    // A worn photo that can't be read is left out: the piece is sent as if it had none.
-    const ownWorn = g.wornPhotoPath && g.wornPhotoPath.startsWith(`${user.id}/worn-`) ? g.wornPhotoPath : null
-    const worn = ownWorn ? await loadPersonPhoto(supabase, ownWorn) : null
-    garments.push({ ...img, worn, fitNotes: g.fitNotes?.trim() || null })
+    // Only a crop of the item itself is ever sent, never the whole worn photo. No box, or a photo that can't be
+    // read or cut, means the piece goes with its notes only.
+    const fit = parseWornFit(g.wornFit)
+    const ownWorn = fit?.box && g.wornPhotoPath && g.wornPhotoPath.startsWith(`${user.id}/worn-`) ? g.wornPhotoPath : null
+    const wornPhoto = ownWorn ? await loadPersonPhoto(supabase, ownWorn) : null
+    const worn = wornPhoto && fit?.box ? await cropWornPhoto(wornPhoto, fit.box, g.kind) : null
+    garments.push({ ...img, worn, fitNotes: notesWithTucking(g.fitNotes?.trim() || null, fit?.tucked ?? null) })
   }
 
   // The whole outfit must fit under this month's cap before the provider is called.
