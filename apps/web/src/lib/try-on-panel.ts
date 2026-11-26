@@ -21,6 +21,9 @@ export type PanelPlan =
   | { kind: 'ready'; images: 1 | 2; beside: BesidePiece[] }
   | { kind: 'missing'; title: string }
 
+/** Which provider draws the picture; the panel's plan follows what that provider draws. */
+export type PanelProvider = 'fashn' | 'gemini'
+
 const ONE_PIECE_WORDS: Record<string, string> = { dresses: 'dress', jumpsuits: 'jumpsuit' }
 
 function categoryLabel(category: string): string {
@@ -29,10 +32,11 @@ function categoryLabel(category: string): string {
 
 /**
  * Mirrors what the server will draw (see planTryOn): a dress or jumpsuit alone, otherwise the
- * first top and the first bottom. Everything else is listed beside the picture. A drawn piece
+ * first top and the first bottom. With Gemini (one picture) the first pair of shoes and the first
+ * outerwear piece are drawn too, when they have a photo. Everything else is listed beside the picture. A drawn piece
  * with no photo means nothing is sent, so the panel says what to add instead.
  */
-export function planPanel(pieces: PanelPiece[]): PanelPlan {
+export function planPanel(pieces: PanelPiece[], provider: PanelProvider = 'fashn'): PanelPlan {
   const sorted = sortPieces(pieces)
   const live = sorted.filter((p) => p.category !== null && !p.removed)
   const first = (pred: (c: string) => boolean) => live.find((p) => pred(p.category as string))
@@ -50,10 +54,15 @@ export function planPanel(pieces: PanelPiece[]): PanelPlan {
     return { kind: 'missing', title: `Add a photo of your ${noPhoto[0] === top ? 'top' : 'bottoms'} to try this on` }
   }
 
+  const addOns = provider === 'gemini'
+    ? (['outerwear', 'shoes'] as const)
+        .map((c) => first((cat) => cat === c))
+        .filter((p): p is PanelPiece => p !== undefined && p.imageUrl !== null)
+    : []
   const beside = live
-    .filter((p) => !drawn.includes(p))
+    .filter((p) => !drawn.includes(p) && !addOns.includes(p))
     .map((p) => ({ piece: p, categoryLabel: categoryLabel(p.category as string) }))
-  return { kind: 'ready', images: drawn.length === 2 ? 2 : 1, beside }
+  return { kind: 'ready', images: provider === 'fashn' && drawn.length === 2 ? 2 : 1, beside }
 }
 
 /** "Shoes and accessories aren't shown on you." / "Outerwear, shoes and bags aren't shown on you." null when nothing is beside. */

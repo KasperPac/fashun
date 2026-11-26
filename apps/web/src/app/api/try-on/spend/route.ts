@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServerClient, createServiceClient } from '@/lib/supabase/server'
 import { chargedSpendByMonth } from '@/lib/try-on-ledger'
-import { fromUnits, imagesToUnits, isTryOnOwner, readTryOnSettings, sydneyMonth, tryOnNow } from '@/lib/try-on'
+import { fromUnits, isTryOnOwner, readTryOnSettings, sydneyMonth, tryOnNow } from '@/lib/try-on'
 
 const notFound = () => NextResponse.json({ error: 'Not found' }, { status: 404 })
 
@@ -17,8 +17,8 @@ export async function GET() {
   const month = sydneyMonth(tryOnNow())
   const current = months.find((m) => m.month === month)
   const images = current?.images ?? 0
-  // Spend is the exact image count times the price: never rounded here. Only the screen rounds it, to the cent.
-  const spentUnits = priceUnits === null ? null : imagesToUnits(images, priceUnits)
+  // Spend is the exact sum of every row at the price it was made at: never rounded here. Only the screen rounds it, to the cent.
+  const spentUnits = priceUnits === null ? null : (current?.units ?? 0)
 
   return NextResponse.json({
     month,
@@ -33,7 +33,7 @@ export async function GET() {
       .map((m) => ({
         month: m.month,
         images: m.images,
-        spent_usd: priceUnits === null ? null : fromUnits(imagesToUnits(m.images, priceUnits)),
+        spent_usd: priceUnits === null ? null : fromUnits(m.units),
         pictures: m.pictures,
       })),
   })

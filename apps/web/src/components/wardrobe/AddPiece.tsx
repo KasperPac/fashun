@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { OCCASIONS, OCCASION_LABELS } from '@fashun/shared'
 import type { ColourSeason, OccasionTag, WardrobeCategory } from '@fashun/shared'
 import { supabase } from '@/lib/supabase/client'
-import { photoToJpegBase64 } from '@/lib/image-resize'
+import { photoToJpegBase64, WARDROBE_PHOTO_MAX_EDGE } from '@/lib/image-resize'
 import { Button } from '@/components/ui/Button'
 import { Notice, Toast } from '@/components/ui/Feedback'
 import { BottomSheet } from '@/components/ui/Overlays'
@@ -121,7 +121,7 @@ export default function AddPiece({ presets, returnTo, onSaved }: { presets: Pres
     const controller = new AbortController()
     abortRef.current = controller
     try {
-      const imageBase64 = await photoToJpegBase64(file)
+      const imageBase64 = await photoToJpegBase64(file, WARDROBE_PHOTO_MAX_EDGE)
       const res = await fetch('/api/wardrobe/process', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -212,7 +212,7 @@ export default function AddPiece({ presets, returnTo, onSaved }: { presets: Pres
     setAddPhotoError(null)
     setAddingPhoto(true)
     try {
-      const imageBase64 = await photoToJpegBase64(file)
+      const imageBase64 = await photoToJpegBase64(file, WARDROBE_PHOTO_MAX_EDGE)
       const res = await fetch('/api/wardrobe/process', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

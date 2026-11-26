@@ -14,7 +14,9 @@ import {
   LOAD_FAILED, checkPicture, createRunner, loadPanel, progressLines, reloadPicture as fetchPicture, whenOnline,
   type PanelApi, type PanelState, type Picture,
 } from '@/lib/try-on-panel-client'
+import { CONSENT_FAILED, recordConsent } from '@/lib/try-on-photo-client'
 import TryOnFrame from './TryOnFrame'
+import { PrivacyStep } from './TryOnPhotoSection'
 
 export type Phase = 'idle' | 'working' | 'failed' | 'lost'
 
@@ -56,10 +58,12 @@ export interface TryOnPanelViewProps {
   /** Called with the label line, which takes focus when a picture arrives. */
   onLabel?: (el: HTMLParagraphElement | null) => void
   announce?: string
+  /** Set when the person must agree to the privacy note before a picture is made. */
+  agree?: { busy: boolean; error: string | null; onAgree: () => void; onNotNow: () => void } | null
 }
 
 /** Everything the "On you" panel shows once its state has loaded (states 3b to 3i). */
-export function TryOnPanelView({ outfitName, plan, state, picture, phase, elapsedMs, onStart, onTryAgain, onCheck, notYet, imageBroken, onImageError, onLabel, announce }: TryOnPanelViewProps) {
+export function TryOnPanelView({ outfitName, plan, state, picture, phase, elapsedMs, onStart, onTryAgain, onCheck, notYet, imageBroken, onImageError, onLabel, announce, agree }: TryOnPanelViewProps) {
   const beside = plan.kind === 'ready' ? plan.beside : []
   const line = besideLine(beside)
   const paused = state.paused ? pausedTitle(state.resumeOn) ?? 'Try-on is paused' : null
@@ -121,7 +125,9 @@ export function TryOnPanelView({ outfitName, plan, state, picture, phase, elapse
       )}
 
       {!working && phase !== 'lost' && (
-        plan.kind === 'missing' ? (
+        agree ? (
+          <PrivacyStep busy={agree.busy} error={agree.error} onAgree={agree.onAgree} onNotNow={agree.onNotNow} />
+        ) : plan.kind === 'missing' ? (
           <Notice title={plan.title}>
             Tap the piece <span className="lg:hidden">above</span><span className="hidden lg:inline">on the left</span> to add its photo.
           </Notice>
@@ -154,14 +160,17 @@ export default function TryOnPanel({
   onAvailable?: (available: boolean) => void
   api?: PanelApi
 }) {
-  const plan = useMemo(() => planPanel(pieces), [pieces])
-  const images = plan.kind === 'ready' ? plan.images : 1
   const [attempt, setAttempt] = useState(0)
   const [state, setState] = useState<PanelState | null>(null)
+  // The first load asks as FASHN would (only FASHN reads the count); the answer names the provider the plan then follows.
+  const provider = state?.kind === 'ready' ? state.provider : 'fashn'
+  const plan = useMemo(() => planPanel(pieces, provider), [pieces, provider])
+  const images = useMemo(() => { const p = planPanel(pieces, 'fashn'); return p.kind === 'ready' ? p.images : 1 }, [pieces])
   const [picture, setPicture] = useState<Picture | null>(null)
   const [phase, setPhase] = useState<Phase>('idle')
   const [paused, setPaused] = useState<{ resumeOn: string | null } | null>(null)
   const [confirm, setConfirm] = useState(false)
+  const [agree, setAgree] = useState<{ regenerate: boolean; busy: boolean; error: string | null } | null>(null)
   const [elapsed, setElapsed] = useState(0)
   const [announce, setAnnounce] = useState('')
   const [arrived, setArrived] = useState(false)
@@ -205,6 +214,9 @@ export default function TryOnPanel({
         setPhase('idle')
         setArrived(true)
         setAnnounce('Your try-on is ready.')
+      } else if (r.kind === 'consent') {
+        setAgree({ regenerate, busy: false, error: null })
+        setPhase('idle')
       } else if (r.kind === 'paused') {
         setPaused({ resumeOn: r.resumeOn })
         setPhase('idle')
@@ -212,6 +224,14 @@ export default function TryOnPanel({
         setPhase(r.kind === 'lost' ? 'lost' : 'failed')
       }
     })
+  }
+
+  async function agreeAndRun() {
+    if (!agree) return
+    setAgree({ ...agree, busy: true, error: null })
+    if (!(await recordConsent({ fetch: (input, init) => api.fetch(String(input), init) }))) { setAgree({ ...agree, busy: false, error: CONSENT_FAILED }); return }
+    setAgree(null)
+    run(agree.regenerate)
   }
 
   // Only looks (a free read); never starts a new picture.
@@ -281,6 +301,7 @@ export default function TryOnPanel({
           notYet={notYet}
           onLabel={focusLabel}
           announce={announce}
+          agree={agree && { busy: agree.busy, error: agree.error, onAgree: () => { void agreeAndRun() }, onNotNow: () => setAgree(null) }}
         />
       )}
       <ConfirmDialog

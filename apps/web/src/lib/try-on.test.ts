@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import {
-  firstOfNextMonth, formatUsd, fromUnits, imagesToUnits, isTryOnOwner, planTryOn, readTryOnConfig, summariseSpend, sydneyMonth, toUnits, tryOnNow,
+  firstOfNextMonth, formatUsd, fromUnits, imagesToUnits, isTryOnOwner, planTryOn, readTryOnConfig, readTryOnProvider, summariseSpend, sydneyMonth, toUnits, tryOnNow, unitsByMonth,
   type OutfitPiece,
 } from './try-on'
 
@@ -134,5 +134,75 @@ describe('tryOnNow (preview-only test date)', () => {
     expect(Math.abs(tryOnNow().getTime() - Date.now())).toBeLessThan(1000)
     vi.stubEnv('TRY_ON_TEST_DATE', '')
     expect(Math.abs(tryOnNow().getTime() - Date.now())).toBeLessThan(1000)
+  })
+})
+
+describe('the provider switch and its price', () => {
+  it('is Gemini unless TRY_ON_PROVIDER is fashn', () => {
+    for (const v of [undefined, '', 'gemini', 'openai', 'fashn2']) {
+      vi.stubEnv('TRY_ON_PROVIDER', v ?? '')
+      expect(readTryOnProvider()).toBe('gemini')
+    }
+    for (const v of ['fashn', ' FASHN ']) {
+      vi.stubEnv('TRY_ON_PROVIDER', v)
+      expect(readTryOnProvider()).toBe('fashn')
+    }
+  })
+
+  it('prices a Gemini picture from the setting and a FASHN image at US$0.075 whatever it says', () => {
+    vi.stubEnv('TRY_ON_MONTHLY_CAP_USD', '7.50')
+    vi.stubEnv('TRY_ON_PRICE_USD', '0.045')
+    expect(readTryOnConfig('gemini')).toEqual({ capUnits: 75000, priceUnits: 450 })
+    expect(readTryOnConfig('fashn')).toEqual({ capUnits: 75000, priceUnits: 750 })
+    vi.stubEnv('TRY_ON_PRICE_USD', '')
+    expect(readTryOnConfig('gemini')).toBeNull()
+    expect(readTryOnConfig('fashn')).toBeNull()
+  })
+
+  it('adds each row at the price it was made at; rows without a price are FASHN images', () => {
+    const totals = unitsByMonth([
+      { month: '2026-11', price_units: null },
+      { month: '2026-11', price_units: 450 },
+      { month: '2026-11' },
+      { month: '2026-10', price_units: 450 },
+    ])
+    expect(totals.get('2026-11')).toBe(750 + 450 + 750)
+    expect(totals.get('2026-10')).toBe(450)
+  })
+})
+
+describe('planTryOn for the one-request provider', () => {
+  const ok = (plan: ReturnType<typeof planTryOn>) => {
+    if (!plan.ok) throw new Error('expected a plan')
+    return plan
+  }
+
+  it('is one outfit step carrying every drawn garment in a fixed order', () => {
+    const plan = ok(planTryOn([p('boots', 'shoes'), p('jeans', 'bottoms'), p('coat', 'outerwear'), p('tee', 'tops'), p('tote', 'bags'), p('belt', 'accessories')], 'gemini'))
+    expect(plan.steps).toEqual([{ step: 'outfit', category: null }])
+    expect(plan.garments.map((g) => [g.kind, g.label])).toEqual([['top', 'tee'], ['bottom', 'jeans'], ['outerwear', 'coat'], ['shoes', 'boots']])
+    expect(plan.skipped).toEqual([{ label: 'tote', reason: 'not_drawn' }, { label: 'belt', reason: 'not_drawn' }])
+  })
+
+  it('draws a dress or jumpsuit with shoes, and covers extra jackets and shoes', () => {
+    const plan = ok(planTryOn([p('dress', 'dresses'), p('tee', 'tops'), p('a', 'shoes'), p('b', 'shoes'), p('c', 'outerwear'), p('d', 'outerwear')], 'gemini'))
+    expect(plan.garments.map((g) => g.kind)).toEqual(['one-piece', 'outerwear', 'shoes'])
+    expect(plan.skipped).toEqual([
+      { label: 'tee', reason: 'covered' }, { label: 'd', reason: 'covered' }, { label: 'b', reason: 'covered' },
+    ])
+  })
+
+  it('skips an add-on with no photo but refuses when a core piece has none', () => {
+    const plan = ok(planTryOn([p('tee', 'tops'), p('boots', 'shoes', null), p('coat', 'outerwear', '')], 'gemini'))
+    expect(plan.garments.map((g) => g.kind)).toEqual(['top'])
+    expect(plan.skipped).toEqual([{ label: 'coat', reason: 'not_drawn' }, { label: 'boots', reason: 'not_drawn' }])
+    expect(planTryOn([p('tee', 'tops', null), p('boots', 'shoes')], 'gemini')).toMatchObject({ ok: false, code: 'MISSING_GARMENT_PHOTO', missing: ['tee'] })
+    expect(planTryOn([p('boots', 'shoes'), p('coat', 'outerwear')], 'gemini')).toMatchObject({ ok: false, code: 'NO_TRYABLE_PIECES' })
+  })
+
+  it('leaves the FASHN plan as it was: two steps, shoes and outerwear not drawn', () => {
+    const plan = ok(planTryOn([p('tee', 'tops'), p('jeans', 'bottoms'), p('boots', 'shoes'), p('coat', 'outerwear')]))
+    expect(plan.steps).toEqual([{ step: 'top', category: 'tops' }, { step: 'bottom', category: 'bottoms' }])
+    expect(plan.skipped.map((s) => s.reason)).toEqual(['not_drawn', 'not_drawn'])
   })
 })

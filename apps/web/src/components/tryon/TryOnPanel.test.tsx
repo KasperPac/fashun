@@ -15,7 +15,7 @@ function props(over: Partial<Omit<TryOnPanelViewProps, 'state'>> & { pieces?: Pa
   return {
     outfitName: 'Friday dinner',
     plan: planPanel(over.pieces ?? TOP_BOTTOM),
-    state: { kind: 'ready', hasPhoto: true, photoUrl: 'https://signed/me.jpg', picture: null, paused: false, resumeOn: null, ...over.state },
+    state: { kind: 'ready', hasPhoto: true, photoUrl: 'https://signed/me.jpg', picture: null, paused: false, resumeOn: null, provider: 'fashn', ...over.state },
     picture: over.picture ?? null,
     phase: over.phase ?? 'idle',
     elapsedMs: over.elapsedMs ?? 0,

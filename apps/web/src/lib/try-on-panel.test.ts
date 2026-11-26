@@ -38,6 +38,23 @@ describe('planPanel', () => {
     const plan = planPanel([p('A', 'tops'), p('B', 'tops'), p('Jeans', 'bottoms')])
     expect(plan.kind === 'ready' && plan.beside.map((b) => b.piece.label)).toEqual(['B'])
   })
+
+  it('with Gemini draws shoes and outerwear in one picture and names only the bag', () => {
+    const plan = planPanel([p('Tee', 'tops'), p('Jeans', 'bottoms'), p('Trainers', 'shoes'), p('Jacket', 'outerwear'), p('Tote', 'bags')], 'gemini')
+    expect(plan.kind === 'ready' && plan.images).toBe(1)
+    expect(plan.kind === 'ready' && besideLine(plan.beside)).toBe("Bags aren't shown on you.")
+  })
+
+  it('with Gemini lists an add-on without a photo, a second pair of shoes and accessories', () => {
+    const plan = planPanel([p('Tee', 'tops'), p('Trainers', 'shoes', false), p('Boots', 'shoes'), p('Watch', 'accessories')], 'gemini')
+    expect(plan.kind === 'ready' && plan.beside.map((b) => b.piece.label).sort()).toEqual(['Boots', 'Trainers', 'Watch'])
+  })
+
+  it('with FASHN still lists shoes and outerwear beside', () => {
+    const plan = planPanel([p('Tee', 'tops'), p('Jeans', 'bottoms'), p('Trainers', 'shoes'), p('Jacket', 'outerwear')], 'fashn')
+    expect(plan.kind === 'ready' && plan.images).toBe(2)
+    expect(plan.kind === 'ready' && besideLine(plan.beside)).toBe("Shoes and outerwear aren't shown on you.")
+  })
 })
 
 describe('besideLine', () => {

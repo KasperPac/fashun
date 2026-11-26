@@ -45,6 +45,7 @@ class Fake {
     chain.select = () => chain
     chain.update = (p: Row) => { op = 'update'; patch = p; return chain }
     chain.delete = () => { op = 'delete'; return chain }
+    chain.order = () => chain
     chain.eq = (c: string, v: unknown) => filter((r) => r[c] === v)
     chain.in = (c: string, v: unknown[]) => filter((r) => v.includes(r[c]))
     chain.not = (c: string, _op: string, v: unknown) => filter((r) => r[c] !== v)
@@ -79,7 +80,8 @@ class Fake {
             const off = opts?.offset ?? 0
             return { data: names.slice(off, off + (opts?.limit ?? 100)), error: null }
           },
-          createSignedUrl: async (path: string) =>
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars -- same signature as the real client
+          createSignedUrl: async (path: string, _expiresIn?: number) =>
             b.has(path) && mine(path)
               ? { data: { signedUrl: `https://signed.example/${name}/${path}` }, error: null }
               : { data: null, error: { message: 'not found' } },
@@ -96,21 +98,24 @@ class Fake {
     }
   }
 
-  /** Mirrors the SQL function try_on_reserve in 008_try_on.sql. */
+  /** Mirrors the SQL function try_on_reserve in 010_try_on_outfit_step.sql. */
   serviceClient() {
     return {
       from: (t: string) => this.from(t),
       rpc: async (name: string, args: Record<string, unknown>) => {
         this.rpcCalls.push({ name, ...args })
         const steps = args.p_steps as string[]
-        const spent = this.tables.try_on_ledger.filter((r) => r.month === args.p_month).length
-        if ((spent + steps.length) * Number(args.p_price_units) > Number(args.p_cap_units)) return { data: null, error: null }
+        // Each row counts at the price it was made at; rows from before prices were stored are FASHN images at 750.
+        const spent = this.tables.try_on_ledger
+          .filter((r) => r.month === args.p_month)
+          .reduce((sum, r) => sum + Number(r.price_units ?? 750), 0)
+        if (spent + steps.length * Number(args.p_price_units) > Number(args.p_cap_units)) return { data: null, error: null }
         const batch = crypto.randomUUID()
         const ids = steps.map((step) => {
           const id = crypto.randomUUID()
           this.tables.try_on_ledger.push({
             id, batch_id: batch, user_id: args.p_user, outfit_id: args.p_outfit, month: args.p_month, step,
-            status: 'reserved', picture_made: false,
+            status: 'reserved', picture_made: false, price_units: args.p_price_units,
           })
           return id
         })

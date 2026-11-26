@@ -4,6 +4,7 @@ import type { ColourSeason, WardrobeItem } from '@fashun/shared'
 import { BottomSheet } from '@/components/ui/Overlays'
 import { Button } from '@/components/ui/Button'
 import { ColourSwatch } from '@/components/ui/ColourSwatch'
+import { ItemWornPhotoSection, ItemWornPhotoSheets, useWornPhoto } from './ItemWornPhoto'
 import { colourName } from '@/lib/colour-names'
 import { CATEGORY_LABELS, isDarkOccasion, occasionColour, paletteLine } from '@/lib/wardrobe-view'
 
@@ -16,6 +17,7 @@ export default function ItemSheet({
   onClose,
   onEdit,
   onDelete,
+  onWornPhotoChange,
 }: {
   item: WardrobeItem | null
   season: ColourSeason | null
@@ -23,10 +25,15 @@ export default function ItemSheet({
   /** Omit both to show the piece read-only, e.g. from a saved outfit. */
   onEdit?: () => void
   onDelete?: () => void
+  /** Called after the item's worn photo is added, replaced or deleted. */
+  onWornPhotoChange?: (itemId: string, hasPhoto: boolean) => void
 }) {
+  const itemId = item?.id ?? null
+  const worn = useWornPhoto(itemId, item?.name ?? '', (has) => { if (itemId) onWornPhotoChange?.(itemId, has) })
   const palette = item ? paletteLine(item.colours, season) : null
   return (
-    <BottomSheet open={item !== null} title={item?.name ?? 'Item'} onClose={onClose} side>
+    <>
+    <BottomSheet open={item !== null && !worn.sheetOpen} title={item?.name ?? 'Item'} onClose={onClose} side>
       {item && (
         <div className="flex flex-col gap-4">
           <div className="flex aspect-[4/5] w-full items-center justify-center border-[1.5px] border-ink bg-tile">
@@ -85,6 +92,7 @@ export default function ItemSheet({
             </div>
           </dl>
           {palette && <p className="text-[15px] font-semibold">{palette}</p>}
+          <ItemWornPhotoSection ctl={worn} readOnly={!onEdit && !onDelete} />
           {(onEdit || onDelete) && (
             <div className="flex flex-col gap-3">
               {onEdit && <Button variant="secondary" onClick={onEdit}>Edit</Button>}
@@ -94,5 +102,7 @@ export default function ItemSheet({
         </div>
       )}
     </BottomSheet>
+    <ItemWornPhotoSheets ctl={worn} />
+    </>
   )
 }

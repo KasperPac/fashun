@@ -1,13 +1,28 @@
 import { formatUsd, toUnits } from '@/lib/try-on'
 
-/** The privacy note, word for word as agreed with the Product Owner (16 Nov 2026). */
+/** The privacy note the Product Owner signed off (KAS-700), version {@link PRIVACY_NOTE_VERSION}. Locked by the test "try-on privacy note matches the signed-off wording". */
 export const PRIVACY_NOTE =
-  'To show clothes on you, Fashun sends this photo and your clothing photos to FASHN, an outside try-on service. FASHN and the companies it works with, including some in the US and South-East Asia, use them only to make your picture. FASHN deletes them within a day and doesn\'t use them to train its AI. Fashun keeps your photo and your try-on pictures privately in your account until you delete them. You can delete them at any time under Profile.'
+  'To make your try-on picture, Fashun sends your photo, your clothing photos and any "photo of me wearing it" to Google, whose Gemini AI makes it. To write short fit notes, it also sends worn photos to Anthropic, whose Claude AI describes the clothes. Neither trains its AI on them. Google keeps them for 55 days and Anthropic for 30 days (longer if flagged for misuse), and either may process them in other countries. Fashun keeps your photos privately until you delete them: under Profile, or on the item page for a worn photo. Try-on is for people aged 18 and over.'
+
+/** Which privacy note a person agreed to. Agreeing to an earlier note (the FASHN one has no version) doesn't count: they agree again. */
+export const PRIVACY_NOTE_VERSION = 'gemini-2'
+
+/** True when the person has agreed to the current privacy note. */
+export function hasAgreed(profile: { try_on_consent_at?: string | null; try_on_consent_note?: string | null } | null | undefined): boolean {
+  return !!profile?.try_on_consent_at && profile.try_on_consent_note === PRIVACY_NOTE_VERSION
+}
+
+/** Where the person's own try-on photo lives; an item's worn photo is at {@link wornPhotoUrl}. */
+export const TRY_ON_PHOTO_URL = '/api/try-on/photo'
+
+/** The address of one wardrobe item's "photo of me wearing it". */
+export const wornPhotoUrl = (itemId: string) => `/api/wardrobe/${encodeURIComponent(itemId)}/worn-photo`
 
 export const UPLOAD_FAILED = "Couldn't add your photo. Check your connection and try again."
 export const BAD_PHOTO = "That file isn't a photo we can use. Choose a JPG or PNG photo."
 export const DELETE_FAILED = "Couldn't delete your photo. Try again."
 export const LOAD_FAILED = "Couldn't load your try-on photo."
+export const WORN_LOAD_FAILED = "Couldn't load your photo."
 export const CONSENT_FAILED = "Couldn't save that. Check your connection and try again."
 
 /** Long edge of the photo sent to the server, in px. */
@@ -16,7 +31,7 @@ export const PHOTO_MAX_EDGE = 1536
 export type PhotoState =
   | { kind: 'off' }
   | { kind: 'error' }
-  | { kind: 'ready'; photoUrl: string | null; consented: boolean }
+  | { kind: 'ready'; photoUrl: string | null; consented: boolean; fitNotes?: string | null }
 
 export interface PhotoApi {
   fetch: typeof fetch
@@ -25,15 +40,20 @@ export interface PhotoApi {
 }
 
 /** Reads the person's photo state. "off" when try-on is switched off (the section is then not shown). */
-export async function loadPhotoState(api: { fetch: (input: string) => Promise<Response> }): Promise<PhotoState> {
+export async function loadPhotoState(api: { fetch: (input: string) => Promise<Response> }, url = TRY_ON_PHOTO_URL): Promise<PhotoState> {
   try {
-    const res = await api.fetch('/api/try-on/photo')
+    const res = await api.fetch(url)
     if (res.status === 404) return { kind: 'off' }
     if (!res.ok) return { kind: 'error' }
     const json: unknown = await res.json()
     if (typeof json !== 'object' || json === null) return { kind: 'error' }
-    const { image_url, consented } = json as { image_url?: unknown; consented?: unknown }
-    return { kind: 'ready', photoUrl: typeof image_url === 'string' ? image_url : null, consented: consented === true }
+    const { image_url, consented, fit_notes } = json as { image_url?: unknown; consented?: unknown; fit_notes?: unknown }
+    return {
+      kind: 'ready',
+      photoUrl: typeof image_url === 'string' ? image_url : null,
+      consented: consented === true,
+      ...(typeof fit_notes === 'string' && fit_notes.trim() ? { fitNotes: fit_notes } : {}),
+    }
   } catch {
     return { kind: 'error' }
   }
@@ -65,7 +85,7 @@ export async function recordConsent(api: Pick<PhotoApi, 'fetch'>): Promise<boole
 export type UploadResult = { ok: true } | { ok: false; message: string }
 
 /** Shrinks the photo on the device, then adds or replaces it. */
-export async function uploadPhoto(file: File, api: PhotoApi): Promise<UploadResult> {
+export async function uploadPhoto(file: File, api: PhotoApi, url = TRY_ON_PHOTO_URL): Promise<UploadResult> {
   let blob: Blob
   try {
     blob = await api.resize(file)
@@ -75,7 +95,7 @@ export async function uploadPhoto(file: File, api: PhotoApi): Promise<UploadResu
   const form = new FormData()
   form.set('file', new File([blob], 'try-on.jpg', { type: 'image/jpeg' }))
   try {
-    const res = await api.fetch('/api/try-on/photo', { method: 'POST', body: form })
+    const res = await api.fetch(url, { method: 'POST', body: form })
     if (res.ok) return { ok: true }
     const json = (await res.json().catch(() => null)) as { code?: unknown } | null
     return { ok: false, message: json?.code === 'BAD_PHOTO' ? BAD_PHOTO : UPLOAD_FAILED }
@@ -84,10 +104,10 @@ export async function uploadPhoto(file: File, api: PhotoApi): Promise<UploadResu
   }
 }
 
-/** Deletes the photo and every try-on picture made from it. */
-export async function deletePhoto(api: Pick<PhotoApi, 'fetch'>): Promise<boolean> {
+/** Deletes the photo and every try-on picture made from it (or, with an item's worn-photo address, that one photo). */
+export async function deletePhoto(api: Pick<PhotoApi, 'fetch'>, url = TRY_ON_PHOTO_URL): Promise<boolean> {
   try {
-    return (await api.fetch('/api/try-on/photo', { method: 'DELETE' })).ok
+    return (await api.fetch(url, { method: 'DELETE' })).ok
   } catch {
     return false
   }

@@ -220,6 +220,7 @@ export type Database = {
           month: string
           outfit_id: string | null
           picture_made: boolean
+          price_units: number | null
           status: string
           step: string
           user_id: string | null
@@ -232,6 +233,7 @@ export type Database = {
           month: string
           outfit_id?: string | null
           picture_made?: boolean
+          price_units?: number | null
           status?: string
           step: string
           user_id?: string | null
@@ -244,6 +246,7 @@ export type Database = {
           month?: string
           outfit_id?: string | null
           picture_made?: boolean
+          price_units?: number | null
           status?: string
           step?: string
           user_id?: string | null
@@ -284,6 +287,7 @@ export type Database = {
           style_prefs: string[] | null
           suggested_styles: string[]
           try_on_consent_at: string | null
+          try_on_consent_note: string | null
           try_on_photo_url: string | null
         }
         Insert: {
@@ -304,6 +308,7 @@ export type Database = {
           style_prefs?: string[] | null
           suggested_styles?: string[] | null
           try_on_consent_at?: string | null
+          try_on_consent_note?: string | null
           try_on_photo_url?: string | null
         }
         Update: {
@@ -324,6 +329,7 @@ export type Database = {
           style_prefs?: string[] | null
           suggested_styles?: string[] | null
           try_on_consent_at?: string | null
+          try_on_consent_note?: string | null
           try_on_photo_url?: string | null
         }
         Relationships: []
@@ -345,6 +351,9 @@ export type Database = {
           store_url: string | null
           style_tags: string[] | null
           user_id: string
+          worn_photo_path: string | null
+          worn_fit: Json | null
+          fit_notes: string | null
         }
         Insert: {
           affiliate_url?: string | null
@@ -362,6 +371,9 @@ export type Database = {
           store_url?: string | null
           style_tags?: string[] | null
           user_id: string
+          worn_photo_path?: string | null
+          worn_fit?: Json | null
+          fit_notes?: string | null
         }
         Update: {
           affiliate_url?: string | null
@@ -379,6 +391,9 @@ export type Database = {
           store_url?: string | null
           style_tags?: string[] | null
           user_id?: string
+          worn_photo_path?: string | null
+          worn_fit?: Json | null
+          fit_notes?: string | null
         }
         Relationships: [
           {

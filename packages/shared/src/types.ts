@@ -74,6 +74,8 @@ export interface WardrobeItem {
   price?: number
   retailer?: string
   lastWornAt?: string
+  /** True when the item has a "photo of me wearing it". The path itself is never sent to the browser. */
+  hasWornPhoto?: boolean
   createdAt: string
 }
 
