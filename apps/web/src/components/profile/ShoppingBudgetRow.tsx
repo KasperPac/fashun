@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import type { BudgetTier, Department } from '@fashun/shared'
-import { budgetRowAriaLabel, budgetRowValue } from '@/lib/budget-view'
+import { budgetRowValue } from '@/lib/budget-view'
 
 /** Profile's "Shopping" section: one 48px row to the Shopping budget page. */
 export default function ShoppingBudgetRow({ tier, department }: { tier: BudgetTier | null; department: Department }) {
@@ -11,7 +11,6 @@ export default function ShoppingBudgetRow({ tier, department }: { tier: BudgetTi
         <li>
           <Link
             href="/profile/budget"
-            aria-label={budgetRowAriaLabel(tier, department)}
             className="flex min-h-12 w-full items-center justify-between gap-3 py-2 text-left"
           >
             <span className="font-display text-[13px] font-bold uppercase tracking-[1.5px] text-ink-2">Shopping budget</span>

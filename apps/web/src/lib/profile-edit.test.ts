@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { TRAITS, changeLabel, currentOptionValue, seasonSampleColours, seasonSavedMessage, toggleStyle } from './profile-edit'
+import { TRAITS, currentOptionValue, seasonSampleColours, seasonSavedMessage, toggleStyle } from './profile-edit'
 
 describe('trait options', () => {
   it('match what the profile API accepts', () => {
@@ -19,13 +19,6 @@ describe('currentOptionValue', () => {
     expect(currentOptionValue(TRAITS.hair, null)).toBeNull()
     expect(currentOptionValue(TRAITS.hair, '')).toBeNull()
     expect(currentOptionValue(TRAITS.hair, 'Purple')).toBeNull()
-  })
-})
-
-describe('changeLabel', () => {
-  it('says what is current', () => {
-    expect(changeLabel(TRAITS.hair, 'Dark brown')).toBe('Change hair colour, currently dark brown')
-    expect(changeLabel(TRAITS.eyes, null)).toBe('Change eye colour, currently not set')
   })
 })
 

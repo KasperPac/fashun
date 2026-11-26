@@ -75,6 +75,13 @@ describe('/api/wardrobe/[id]/worn-photo', () => {
     expect((await get(ITEM_A).then((r) => r.json())).image_url).toBeNull()
   })
 
+  it('worn photo link lasts 5 minutes', async () => {
+    await upload(ITEM_A)
+    fake.signedLives = []
+    expect((await get(ITEM_A).then((r) => r.json())).image_url).toBeTruthy()
+    expect(fake.signedLives).toEqual([300])
+  })
+
   it('worn photo needs try-on agreement first', async () => {
     fake.tables.users[0].try_on_consent_at = null
     const res = await upload(ITEM_A)

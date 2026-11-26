@@ -11,7 +11,7 @@ import {
 import { notesWithTucking } from '@/lib/fit-notes'
 import { cropWornPhoto, parseWornFit } from '@/lib/worn-crop'
 import { hasAgreed } from '@/lib/try-on-photo-client'
-import { loadGarmentPhoto, loadPersonPhoto, TRY_ON_BUCKET } from '@/lib/try-on-images'
+import { loadGarmentPhoto, loadPersonPhoto, TRY_ON_BUCKET, TRY_ON_LINK_SECONDS } from '@/lib/try-on-images'
 import {
   TRY_ON_LABEL, firstOfNextMonth, planTryOn, readTryOnConfig, readTryOnProvider, sydneyMonth, tryOnNow,
   type OutfitPiece,
@@ -21,7 +21,6 @@ import {
 // Either way leave room for reading the photos and saving the picture.
 export const maxDuration = 90
 
-const SIGNED_SECONDS = 3600
 
 const BodySchema = z.object({ outfit_id: z.string().uuid(), regenerate: z.boolean().optional() })
 const QuerySchema = z.object({
@@ -42,7 +41,7 @@ function off() {
 type ServerClient = Awaited<ReturnType<typeof createServerClient>>
 
 async function signedPicture(supabase: ServerClient, path: string): Promise<string | null> {
-  const { data, error } = await supabase.storage.from(TRY_ON_BUCKET).createSignedUrl(path, SIGNED_SECONDS)
+  const { data, error } = await supabase.storage.from(TRY_ON_BUCKET).createSignedUrl(path, TRY_ON_LINK_SECONDS)
   return error || !data ? null : data.signedUrl
 }
 

@@ -2,12 +2,11 @@ import { randomUUID } from 'crypto'
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
 import { tryOnEnabled } from '@/lib/paid-extras'
-import { TRY_ON_BUCKET } from '@/lib/try-on-images'
+import { TRY_ON_BUCKET, TRY_ON_LINK_SECONDS } from '@/lib/try-on-images'
 import { readPhotoUpload } from '@/lib/try-on-upload'
 import { PRIVACY_NOTE_VERSION, hasAgreed } from '@/lib/try-on-photo-client'
 
 const EXT: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }
-const SIGNED_SECONDS = 3600
 const PAGE = 100
 
 const off = () => NextResponse.json({ error: 'Try-on is not available', code: 'FEATURE_OFF' }, { status: 404 })
@@ -34,7 +33,7 @@ export async function GET() {
 
   const { data: profile } = await supabase.from('users').select('try_on_photo_url,try_on_consent_at,try_on_consent_note').eq('id', user.id).maybeSingle()
   if (!profile?.try_on_photo_url) return NextResponse.json({ image_url: null, consented: hasAgreed(profile) })
-  const { data, error } = await supabase.storage.from(TRY_ON_BUCKET).createSignedUrl(profile.try_on_photo_url, SIGNED_SECONDS)
+  const { data, error } = await supabase.storage.from(TRY_ON_BUCKET).createSignedUrl(profile.try_on_photo_url, TRY_ON_LINK_SECONDS)
   return NextResponse.json({ image_url: error || !data ? null : data.signedUrl, consented: hasAgreed(profile) })
 }
 

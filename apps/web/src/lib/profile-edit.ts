@@ -37,12 +37,6 @@ export function currentOptionValue(trait: TraitConfig, shown: string | null): st
   return trait.options.find((o) => o.label.toLowerCase() === shown.toLowerCase())?.value ?? null
 }
 
-/** aria-label for a trait row. */
-export function changeLabel(trait: TraitConfig, shown: string | null): string {
-  const value = shown ? shown.toLowerCase() : 'not set'
-  return `Change ${trait.spoken}, currently ${value}`
-}
-
 /** Style choices are multi-select with at least one kept. Returns the same list when the last one is removed. */
 export function toggleStyle(current: StylePref[], style: StylePref): StylePref[] {
   if (current.includes(style)) return current.length === 1 ? current : current.filter((s) => s !== style)

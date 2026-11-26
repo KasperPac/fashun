@@ -50,7 +50,8 @@ export function useWornPhoto(itemId: string | null, itemName: string, onChange?:
     if (!itemId) return
     let cancelled = false
     void loadPhotoState(api, wornPhotoUrl(itemId)).then((state) => { if (!cancelled) setLoaded({ itemId, state }) })
-    return () => { cancelled = true }
+    // Closing the sheet drops the link, so reopening the item always asks for a new one.
+    return () => { cancelled = true; setLoaded(null) }
   }, [itemId])
 
   const error = errorFor && errorFor.itemId === itemId ? errorFor.message : null
@@ -139,10 +140,14 @@ export function ItemWornPhotoSection({ ctl, readOnly }: { ctl: WornPhotoControl;
   const addRef = useRef<HTMLDivElement>(null)
   const { focusTarget, clearFocusTarget } = ctl
   useEffect(() => {
-    if (focusTarget === 'replace' && photoUrl) replaceRef.current?.querySelector('button')?.focus()
-    else if (focusTarget === 'add' && !photoUrl) addRef.current?.querySelector('button')?.focus()
-    else return
-    clearFocusTarget()
+    const target = focusTarget === 'replace' && photoUrl ? replaceRef : focusTarget === 'add' && !photoUrl ? addRef : null
+    if (!target) return
+    // One frame later: the confirm dialog closes in the same commit and would take focus back after this effect.
+    const frame = requestAnimationFrame(() => {
+      target.current?.querySelector('button')?.focus()
+      clearFocusTarget()
+    })
+    return () => cancelAnimationFrame(frame)
   }, [focusTarget, photoUrl, clearFocusTarget])
 
   if (!state || state.kind === 'off') return null

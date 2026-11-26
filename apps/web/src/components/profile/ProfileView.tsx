@@ -22,7 +22,6 @@ import { ConfirmDialog } from '@/components/ui/Overlays'
 import { SeasonSheet, StylesSheet, TraitSheet } from './ProfileSheets'
 import {
   TRAITS,
-  changeLabel,
   currentOptionValue,
   seasonSavedMessage,
   type TraitKey,
@@ -142,11 +141,11 @@ function Chevron() {
   )
 }
 
-/** A 48px tap target: label, current value, chevron. Opens the picker for that trait. */
-function TraitRow({ label, value, ariaLabel, onClick }: { label: string; value: string; ariaLabel: string; onClick: () => void }) {
+/** A 48px tap target: label, current value, chevron. Opens the picker for that trait. Its name is its visible text. */
+export function TraitRow({ label, value, onClick }: { label: string; value: string; onClick: () => void }) {
   return (
     <li className="border-b-[1.5px] border-ink last:border-b-0">
-      <button type="button" onClick={onClick} aria-label={ariaLabel} className="flex min-h-12 w-full items-center justify-between gap-3 py-2 text-left">
+      <button type="button" onClick={onClick} className="flex min-h-12 w-full items-center justify-between gap-3 py-2 text-left">
         <span className="font-display text-[13px] font-bold uppercase tracking-[1.5px] text-ink-2">{label}</span>
         <span className="flex items-center gap-2">
           <span className={`text-base font-medium ${value === NOT_SURE ? 'text-ink-2' : ''}`}>{value}</span>
@@ -354,14 +353,12 @@ export default function ProfileView({
                   key={key}
                   label={TRAITS[key].label}
                   value={traitLabel(shown[key])}
-                  ariaLabel={changeLabel(TRAITS[key], shown[key])}
                   onClick={() => open(key)}
                 />
               ))}
               <TraitRow
                 label="Season"
                 value={season ? SEASON_NAMES[season] : NOT_SURE}
-                ariaLabel={`Change season, currently ${season ? SEASON_NAMES[season] : 'not set'}`}
                 onClick={() => open('season')}
               />
             </ul>

@@ -15,6 +15,8 @@ class Fake {
   currentUser: string | null = A
   rpcCalls: Array<Record<string, unknown>> = []
   uploadError = false
+  /** The life (seconds) asked for by every signed link made since reset. */
+  signedLives: Array<number | undefined> = []
   /** How many updates to the ledger fail before they work again. */
   ledgerUpdateFailures = 0
 
@@ -24,6 +26,7 @@ class Fake {
     this.currentUser = A
     this.rpcCalls = []
     this.uploadError = false
+    this.signedLives = []
     this.ledgerUpdateFailures = 0
   }
 
@@ -80,11 +83,12 @@ class Fake {
             const off = opts?.offset ?? 0
             return { data: names.slice(off, off + (opts?.limit ?? 100)), error: null }
           },
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars -- same signature as the real client
-          createSignedUrl: async (path: string, _expiresIn?: number) =>
-            b.has(path) && mine(path)
+          createSignedUrl: async (path: string, expiresIn?: number) => {
+            this.signedLives.push(expiresIn)
+            return b.has(path) && mine(path)
               ? { data: { signedUrl: `https://signed.example/${name}/${path}` }, error: null }
-              : { data: null, error: { message: 'not found' } },
+              : { data: null, error: { message: 'not found' } }
+          },
         }
       },
     }
