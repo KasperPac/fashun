@@ -299,6 +299,17 @@ describe('POST /api/outfits/try-on: saved pictures', () => {
     expect(mockFetch).not.toHaveBeenCalled()
   })
 
+  it('saved try-on picture link lasts 5 minutes', async () => {
+    seed()
+    fake.signedLives = []
+    await post()
+    await post()
+    await GET(new Request(`http://localhost/api/outfits/try-on?outfit_id=${OUTFIT}`))
+    await post({ outfit_id: OUTFIT, regenerate: true })
+    expect(fake.signedLives.length).toBeGreaterThanOrEqual(4)
+    expect(fake.signedLives.every((s) => s === 300)).toBe(true)
+  })
+
   it('Try again warns first, then makes and charges a new picture', async () => {
     seed()
     await post()

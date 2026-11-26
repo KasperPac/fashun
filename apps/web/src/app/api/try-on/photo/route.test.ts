@@ -95,6 +95,13 @@ describe('/api/try-on/photo', () => {
     expect(fake.buckets['try-on-photos'].size).toBe(1)
   })
 
+  it('try-on photo link lasts 5 minutes', async () => {
+    await upload({ consent: true })
+    fake.signedLives = []
+    expect((await (await GET()).json()).image_url).toContain(`/${A}/`)
+    expect(fake.signedLives).toEqual([300])
+  })
+
   it('one user can never read another\'s try-on photo or pictures', async () => {
     await upload({ consent: true })
     const mine = await (await GET()).json()

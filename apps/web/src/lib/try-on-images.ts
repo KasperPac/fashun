@@ -6,6 +6,8 @@ import { isPubliclyFetchable } from '@/lib/ssrf'
 type ServerClient = Awaited<ReturnType<typeof createServerClient>>
 
 export const TRY_ON_BUCKET = 'try-on-photos'
+/** How long a private try-on link (try-on photo, worn photo, saved picture) opens, in seconds. */
+export const TRY_ON_LINK_SECONDS = 300
 const MAX_BYTES = 10 * 1024 * 1024
 
 export function mediaTypeFromBytes(bytes: Uint8Array): string {

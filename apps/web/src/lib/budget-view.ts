@@ -57,12 +57,6 @@ export function budgetRowValue(tier: BudgetTier | null, department: Department):
   return `${BUDGET_TIER_DEFINITIONS[tier].name} · ${DEPARTMENT_NAMES[department]}`
 }
 
-/** "Shopping budget, currently Mid, women's" / "Shopping budget, not set". */
-export function budgetRowAriaLabel(tier: BudgetTier | null, department: Department): string {
-  if (!tier) return 'Shopping budget, not set'
-  return `Shopping budget, currently ${BUDGET_TIER_DEFINITIONS[tier].name}, ${DEPARTMENT_NAMES[department].toLowerCase()}`
-}
-
 /** "A$40" */
 export function dollars(amount: number): string {
   return `A$${amount.toLocaleString('en-AU')}`

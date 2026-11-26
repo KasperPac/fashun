@@ -8,7 +8,6 @@ import {
 } from '@fashun/shared'
 import {
   budgetBackHref,
-  budgetRowAriaLabel,
   budgetRowValue,
   parseBudgetRow,
   tierPickedMessage,
@@ -65,11 +64,6 @@ describe('budget row and state', () => {
     expect(budgetRowValue('mid', 'womens')).toBe("Mid · Women's")
     expect(budgetRowValue('high-street', 'mens')).toBe("High street · Men's")
     expect(budgetRowValue('premium', 'both')).toBe('Premium · Both')
-  })
-
-  it('gives the row an accessible name', () => {
-    expect(budgetRowAriaLabel(null, 'both')).toBe('Shopping budget, not set')
-    expect(budgetRowAriaLabel('mid', 'womens')).toBe("Shopping budget, currently Mid, women's")
   })
 
   it('a user with no tier has a null tier and starts on Both', () => {

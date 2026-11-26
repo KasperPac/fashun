@@ -2,12 +2,11 @@ import { randomUUID } from 'crypto'
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
 import { tryOnEnabled } from '@/lib/paid-extras'
-import { TRY_ON_BUCKET } from '@/lib/try-on-images'
+import { TRY_ON_BUCKET, TRY_ON_LINK_SECONDS } from '@/lib/try-on-images'
 import { hasAgreed } from '@/lib/try-on-photo-client'
 import { readPhotoUpload } from '@/lib/try-on-upload'
 import { makeFitNotes } from '@/lib/fit-notes'
 
-const SIGNED_SECONDS = 3600
 
 type Context = { params: Promise<{ id: string }> }
 
@@ -39,7 +38,7 @@ export async function GET(_req: Request, { params }: Context) {
   const { data: profile } = await supabase.from('users').select('try_on_consent_at,try_on_consent_note').eq('id', user.id).maybeSingle()
   const consented = hasAgreed(profile)
   if (!isOwnWornPath(item.worn_photo_path, user.id)) return NextResponse.json({ image_url: null, fit_notes: null, consented })
-  const { data, error } = await supabase.storage.from(TRY_ON_BUCKET).createSignedUrl(item.worn_photo_path, SIGNED_SECONDS)
+  const { data, error } = await supabase.storage.from(TRY_ON_BUCKET).createSignedUrl(item.worn_photo_path, TRY_ON_LINK_SECONDS)
   return NextResponse.json({ image_url: error || !data ? null : data.signedUrl, fit_notes: item.fit_notes, consented })
 }
 
