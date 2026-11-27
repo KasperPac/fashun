@@ -611,7 +611,7 @@ function installGemini() {
       return new Promise((_, reject) => init?.signal?.addEventListener('abort', () => reject(new Error('aborted'))))
     }
     if (geminiMode === 'refuse' || geminiMode === 'hostile') {
-      return { ok: false, status: geminiMode === 'refuse' ? 429 : 500, json: async () => ({ error: { message: 'quota for person@example.com see https://evil.example Jane Doe' } }) }
+      return { ok: false, status: geminiMode === 'refuse' ? 429 : 500, json: async () => ({ error: { status: 'RESOURCE_EXHAUSTED', message: 'quota for person@example.com see https://evil.example key AIzaSyA1234567890abcdefghij' } }) }
     }
     if (geminiMode === 'no-picture') return { ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: 'sorry' }] } }] }) }
     return { ok: true, json: async () => ({ candidates: [{ content: { parts: [{ inlineData: { mimeType: 'image/png', data: b64(PNG) } }] } }] }) }
@@ -911,9 +911,12 @@ describe('POST /api/outfits/try-on: Gemini (one request per outfit)', () => {
       fake.reset(); mockFetch.mockClear()
       seed()
       fake.buckets['wardrobe-images'].delete(`${A}/bottom.jpg`)
+      const log = vi.spyOn(console, 'error').mockImplementation(() => {})
       const res = await post()
       expect(res.status).toBe(500)
       expect((await res.json()).code).toBe('IMAGE_UNAVAILABLE')
+      expect(log.mock.calls.map((c) => c.join(' '))).toEqual(['try-on failed: image_unavailable (garment photo: not_found)'])
+      log.mockRestore()
       expect(mockFetch).not.toHaveBeenCalled()
       expect(ledger()).toHaveLength(0)
     }
@@ -1006,11 +1009,11 @@ describe('POST /api/outfits/try-on: Gemini (one request per outfit)', () => {
     await post()
     const lines = log.mock.calls.map((c) => c.join(' '))
     expect(lines).toEqual([
-      'try-on failed: gemini_refused',
-      'try-on failed: gemini_timeout',
+      'try-on failed: gemini_refused (http 500 RESOURCE_EXHAUSTED: quota for [email] see [link] key [key])',
+      'try-on failed: gemini_timeout (timeout)',
       'try-on failed: storage_failed',
     ])
-    for (const secret of ['person@example.com', 'evil.example', 'Jane Doe', 'quota', A, 'photo-1', 'gemini-test-key', 'White tee', 'base64']) {
+    for (const secret of ['person@example.com', 'evil.example', 'AIzaSy', A, 'photo-1', 'gemini-test-key', 'White tee', 'base64']) {
       expect(lines.join('\n')).not.toContain(secret)
     }
     log.mockRestore()

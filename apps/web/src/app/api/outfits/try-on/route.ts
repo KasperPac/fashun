@@ -11,7 +11,7 @@ import {
 import { notesWithTucking } from '@/lib/fit-notes'
 import { cropWornPhoto, parseWornFit } from '@/lib/worn-crop'
 import { hasAgreed } from '@/lib/try-on-photo-client'
-import { loadGarmentPhoto, loadPersonPhoto, TRY_ON_BUCKET, TRY_ON_LINK_SECONDS } from '@/lib/try-on-images'
+import { loadGarmentPhoto, loadPersonPhoto, TRY_ON_BUCKET, TRY_ON_LINK_SECONDS, type PhotoFailure } from '@/lib/try-on-images'
 import {
   TRY_ON_LABEL, firstOfNextMonth, planTryOn, readTryOnConfig, readTryOnProvider, sydneyMonth, tryOnNow,
   type OutfitPiece,
@@ -30,8 +30,16 @@ const QuerySchema = z.object({
 })
 
 /** One fixed reason per failure. Never the error text, an address, a name or an email, which could hold personal data. */
-function logFailure(reason: 'fashn_refused' | 'fashn_timeout' | 'gemini_refused' | 'gemini_timeout' | 'unexpected' | 'storage_failed' | 'save_failed' | 'ledger_failed') {
-  console.error(`try-on failed: ${reason}`)
+function logFailure(
+  reason: 'fashn_refused' | 'fashn_timeout' | 'gemini_refused' | 'gemini_timeout' | 'unexpected' | 'storage_failed' | 'save_failed' | 'ledger_failed' | 'image_unavailable',
+  detail?: string,
+) {
+  console.error(detail ? `try-on failed: ${reason} (${detail})` : `try-on failed: ${reason}`)
+}
+
+/** Logs which kind of photo could not be read and why: never a path, a link or a user. */
+function photoFailed(kind: 'person' | 'garment' | 'worn', why: PhotoFailure | undefined) {
+  logFailure('image_unavailable', `${kind} photo: ${why ?? 'unknown'}`)
 }
 
 function off() {
@@ -174,14 +182,18 @@ export async function POST(req: Request) {
   }
 
   // Read every photo before reserving anything, so a bad photo costs nothing.
-  const person = await loadPersonPhoto(supabase, profile.try_on_photo_url)
+  let why: PhotoFailure | undefined
+  const person = await loadPersonPhoto(supabase, profile.try_on_photo_url, (r) => { why = r })
   if (!person) {
+    photoFailed('person', why)
     return NextResponse.json({ error: 'Could not read your try-on photo', code: 'IMAGE_UNAVAILABLE' }, { status: 500 })
   }
   const garments: Array<TryOnImage & { worn: TryOnImage | null; fitNotes: string | null }> = []
   for (const g of plan.garments) {
-    const img = await loadGarmentPhoto(supabase, g.imageRef)
+    why = undefined
+    const img = await loadGarmentPhoto(supabase, g.imageRef, (r) => { why = r })
     if (!img) {
+      photoFailed('garment', why)
       return NextResponse.json(
         { error: `Could not read the photo of your ${g.label}`, code: 'IMAGE_UNAVAILABLE' },
         { status: 500 },
@@ -191,7 +203,9 @@ export async function POST(req: Request) {
     // read or cut, means the piece goes with its notes only.
     const fit = parseWornFit(g.wornFit)
     const ownWorn = fit?.box && g.wornPhotoPath && g.wornPhotoPath.startsWith(`${user.id}/worn-`) ? g.wornPhotoPath : null
-    const wornPhoto = ownWorn ? await loadPersonPhoto(supabase, ownWorn) : null
+    why = undefined
+    const wornPhoto = ownWorn ? await loadPersonPhoto(supabase, ownWorn, (r) => { why = r }) : null
+    if (ownWorn && !wornPhoto) photoFailed('worn', why) // not fatal: the piece goes with its notes only
     const worn = wornPhoto && fit?.box ? await cropWornPhoto(wornPhoto, fit.box, g.kind) : null
     garments.push({ ...img, worn, fitNotes: notesWithTucking(g.fitNotes?.trim() || null, fit?.tucked ?? null) })
   }
@@ -254,6 +268,7 @@ export async function POST(req: Request) {
         : err instanceof FashnError ? 'fashn_refused'
         : err instanceof ImageTryOnError ? 'gemini_refused'
         : 'unexpected',
+      err instanceof ImageTryOnTimeoutError ? 'timeout' : err instanceof ImageTryOnError ? err.detail : undefined,
     )
     return NextResponse.json(
       {

@@ -14,7 +14,15 @@ const DEFAULT_BASE_URL = 'https://generativelanguage.googleapis.com'
  */
 export const GEMINI_TIMEOUT_MS = 65_000
 
-export class ImageTryOnError extends Error {}
+/**
+ * Gemini failed. The message is fixed; `detail` is a short, already-cleaned reason for the server log only
+ * (HTTP status and error status, block or finish reason, "network"). Never holds a picture, key or address.
+ */
+export class ImageTryOnError extends Error {
+  constructor(message: string, readonly detail?: string) {
+    super(message)
+  }
+}
 
 /** Gemini did not answer in time. A separate type so the log can name the reason without logging Gemini's text. */
 export class ImageTryOnTimeoutError extends ImageTryOnError {}
@@ -63,7 +71,29 @@ export function tryOnPrompt(kinds: GarmentKind[], extras: GarmentExtras[] = []):
 }
 
 interface GeminiPart { inlineData?: { mimeType?: string; data?: string }; inline_data?: { mime_type?: string; data?: string } }
-interface GeminiResponse { candidates?: Array<{ content?: { parts?: GeminiPart[] } }> }
+interface GeminiResponse {
+  candidates?: Array<{ content?: { parts?: GeminiPart[] }; finishReason?: string }>
+  promptFeedback?: { blockReason?: string }
+  error?: { status?: unknown; message?: unknown }
+}
+
+/** Gemini's own words for the log: no key-like tokens, addresses or emails, one line, about 200 characters. */
+export function cleanGeminiText(value: unknown): string {
+  if (typeof value !== 'string') return ''
+  return value
+    .replace(/https?:\/\/\S+/gi, '[link]')
+    .replace(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g, '[email]')
+    .replace(/AIza[\w-]{10,}/g, '[key]')
+    .replace(/[A-Za-z0-9_-]{24,}/g, '[key]')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 200)
+}
+
+/** A status or reason code such as RESOURCE_EXHAUSTED or IMAGE_SAFETY. Anything else is dropped. */
+function code(value: unknown): string {
+  return typeof value === 'string' && /^[A-Z][A-Z0-9_]{1,63}$/.test(value) ? value : ''
+}
 
 /** The address Gemini is called at: GEMINI_BASE_URL, or Google's own. */
 export function geminiBaseUrl(): string {
@@ -102,15 +132,21 @@ export async function runImageTryOn(args: {
         signal: controller.signal,
       })
     } catch {
-      throw new ImageTryOnError('Try-on request failed')
+      throw new ImageTryOnError('Try-on request failed', 'network')
     }
-    if (!res.ok) throw new ImageTryOnError('Try-on was refused')
     const json = (await res.json().catch(() => ({}))) as GeminiResponse
+    if (!res.ok) {
+      const status = code(json.error?.status)
+      const text = cleanGeminiText(json.error?.message)
+      throw new ImageTryOnError('Try-on was refused', `http ${res.status}${status ? ` ${status}` : ''}${text ? `: ${text}` : ''}`)
+    }
     for (const part of json.candidates?.[0]?.content?.parts ?? []) {
       const data = part.inlineData?.data ?? part.inline_data?.data
       if (data) return { mediaType: part.inlineData?.mimeType ?? part.inline_data?.mime_type ?? 'image/png', base64: data }
     }
-    throw new ImageTryOnError('Try-on returned no picture')
+    const block = code(json.promptFeedback?.blockReason)
+    const finish = code(json.candidates?.[0]?.finishReason)
+    throw new ImageTryOnError('Try-on returned no picture', `no picture: blockReason ${block || 'none'}, finishReason ${finish || 'none'}`)
   }
 
   try {
