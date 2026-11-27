@@ -262,13 +262,14 @@ export async function POST(req: Request) {
     // Pictures the provider did not return add nothing to spend.
     await releasePictures(service, reserved.slice(returned))
     const fromProvider = err instanceof FashnError || err instanceof ImageTryOnError
+    const detail = err instanceof ImageTryOnTimeoutError ? 'timeout' : err instanceof ImageTryOnError ? err.detail : undefined
     logFailure(
       err instanceof FashnTimeoutError ? 'fashn_timeout'
         : err instanceof ImageTryOnTimeoutError ? 'gemini_timeout'
         : err instanceof FashnError ? 'fashn_refused'
         : err instanceof ImageTryOnError ? 'gemini_refused'
         : 'unexpected',
-      err instanceof ImageTryOnTimeoutError ? 'timeout' : err instanceof ImageTryOnError ? err.detail : undefined,
+      detail,
     )
     return NextResponse.json(
       {
@@ -277,6 +278,8 @@ export async function POST(req: Request) {
           : 'Something went wrong. Try again later.',
         code: 'TRY_ON_FAILED',
         charged_pictures: returned,
+        // Temporary, test copy only: never sent from production.
+        ...(process.env.VERCEL_ENV === 'preview' && detail ? { debug_detail: detail } : {}),
       },
       { status: 502 },
     )

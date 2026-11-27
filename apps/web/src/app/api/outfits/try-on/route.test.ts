@@ -324,6 +324,35 @@ describe('POST /api/outfits/try-on: saved pictures', () => {
   })
 })
 
+describe('POST /api/outfits/try-on: debug_detail (preview only)', () => {
+  beforeEach(() => {
+    geminiRuns = []
+    vi.stubEnv('TRY_ON_PROVIDER', '')
+    vi.stubEnv('GEMINI_API_KEY', 'gemini-test-key')
+    vi.stubEnv('FASHN_API_KEY', '')
+    vi.stubEnv('TRY_ON_PRICE_USD', '0.045')
+    installGemini()
+  })
+
+  it('a refused Gemini call carries debug_detail on a preview build', async () => {
+    vi.stubEnv('VERCEL_ENV', 'preview')
+    seed(); geminiMode = 'refuse'
+    const res = await post()
+    expect(res.status).toBe(502)
+    const json = await res.json()
+    expect(typeof json.debug_detail).toBe('string')
+    expect(json.debug_detail).not.toMatch(/AIza|@|https?:/)
+  })
+
+  it('production answers carry no debug_detail', async () => {
+    vi.stubEnv('VERCEL_ENV', 'production')
+    seed(); geminiMode = 'refuse'
+    const res = await post()
+    expect(res.status).toBe(502)
+    expect('debug_detail' in (await res.json())).toBe(false)
+  })
+})
+
 describe('POST /api/outfits/try-on: failures add no spend', () => {
   it('FASHN refusal shows the failure message and charges nothing', async () => {
     seed()
